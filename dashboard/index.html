@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Smart Building Digital Twin Dashboard - Real-time AI-powered occupancy detection, energy management, and building automation monitoring">
+    <title>Smart Building Digital Twin — Live Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/dashboard/style.css">
+    <script>
+        // Prevent Flash of Incorrect Theme (FOIT)
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+</head>
+<body>
+
+    <!-- ================================================================== -->
+    <!-- HEADER -->
+    <!-- ================================================================== -->
+    <header id="main-header">
+        <div class="header-left">
+            <div class="logo-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+            </div>
+            <div>
+                <h1>Smart Building <span class="brand-accent">Digital Twin</span></h1>
+                <p class="subtitle">AI-Powered Occupancy &amp; Energy Intelligence</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <button id="theme-toggle" class="icon-button" aria-label="Toggle Theme">
+                <svg id="theme-icon-dark" class="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                <svg id="theme-icon-light" class="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            </button>
+            <div class="header-badge" id="sim-time-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span class="badge-label">Sim Time</span>
+                <span class="badge-value" id="sim-time-display">--:--:--</span>
+            </div>
+            <div class="header-badge" id="tick-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                <span class="badge-label">Updates</span>
+                <span class="badge-value" id="tick-count-display">0</span>
+            </div>
+            <div class="header-badge demo-badge" id="demo-mode-badge" style="display: none; background: #d29922; color: #0d1117; font-weight: 800; border:none;">
+                <span class="badge-label" style="color: #0d1117;">🚀 DEMO MODE</span>
+            </div>
+            <div class="header-badge connection-badge" id="connection-badge">
+                <span class="status-dot" id="connection-dot"></span>
+                <span id="connection-status">Connecting…</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ================================================================== -->
+    <!-- MAIN CONTENT -->
+    <!-- ================================================================== -->
+    <main id="dashboard-main">
+
+        <!-- ============================================================ -->
+        <!-- STATUS OVERLAY BANNERS (hidden by default, shown by JS) -->
+        <!-- ============================================================ -->
+        <div id="sim-waiting-overlay" class="status-overlay waiting" style="display: none;">
+            <div class="overlay-content">
+                <span class="overlay-icon">⏳</span>
+                <span class="overlay-title">Waiting for Simulation</span>
+                <span class="overlay-subtitle">The 3D simulation is not connected yet. Start it with <code>python run_system.py</code> or wait for auto-reconnection.</span>
+            </div>
+        </div>
+
+        <div id="stale-data-overlay" class="status-overlay stale" style="display: none;">
+            <div class="overlay-content">
+                <span class="overlay-icon">⚠️</span>
+                <span class="overlay-title">Stale Data</span>
+                <span class="overlay-subtitle">Simulation data has not been updated recently. The connection may have been lost.</span>
+            </div>
+        </div>
+
+        <div id="api-offline-overlay" class="status-overlay offline" style="display: none;">
+            <div class="overlay-content">
+                <span class="overlay-icon">🔌</span>
+                <span class="overlay-title">API Offline</span>
+                <span class="overlay-subtitle">Cannot reach the backend API server. Retrying automatically...</span>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- BUILDING OVERVIEW PANEL -->
+        <!-- ============================================================ -->
+        <section id="overview-section" class="dashboard-section">
+            <div class="section-header">
+                <h2>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                    Building Overview
+                </h2>
+            </div>
+            <div class="overview-grid">
+                <div class="overview-card" id="ov-total-rooms">
+                    <div class="ov-icon-wrap"><span class="ov-icon">🏢</span></div>
+                    <div class="ov-value" id="total-rooms">0</div>
+                    <div class="ov-label">Total Rooms</div>
+                </div>
+                <div class="overview-card accent-green" id="ov-occupied">
+                    <div class="ov-icon-wrap"><span class="ov-icon">👥</span></div>
+                    <div class="ov-value" id="occupied-rooms">0</div>
+                    <div class="ov-label">Occupied</div>
+                </div>
+                <div class="overview-card accent-slate" id="ov-empty">
+                    <div class="ov-icon-wrap"><span class="ov-icon">🚪</span></div>
+                    <div class="ov-value" id="empty-rooms">0</div>
+                    <div class="ov-label">Empty</div>
+                </div>
+                <div class="overview-card accent-amber" id="ov-power">
+                    <div class="ov-icon-wrap"><span class="ov-icon">⚡</span></div>
+                    <div class="ov-value" id="total-power">0<span class="ov-unit">W</span></div>
+                    <div class="ov-label">Total Power</div>
+                </div>
+                <div class="overview-card accent-blue" id="ov-energy">
+                    <div class="ov-icon-wrap"><span class="ov-icon">🔋</span></div>
+                    <div class="ov-value" id="total-energy">0<span class="ov-unit">Wh</span></div>
+                    <div class="ov-label">Cumulative Energy</div>
+                </div>
+                <div class="overview-card accent-purple" id="ov-model">
+                    <div class="ov-icon-wrap"><span class="ov-icon">🧠</span></div>
+                    <div class="ov-value"><span class="status-badge" id="model-status">--</span></div>
+                    <div class="ov-label">AI Model</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- ENERGY SAVINGS PANEL (NEW) -->
+        <!-- ============================================================ -->
+        <section id="energy-savings-section" class="dashboard-section">
+            <div class="section-header">
+                <h2>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    Energy Optimization
+                </h2>
+                <span class="section-subtitle savings-highlight" id="savings-pct-badge">-- % saved</span>
+            </div>
+            <div class="energy-savings-grid">
+                <div class="savings-card baseline-card" id="es-baseline">
+                    <div class="savings-card-header">
+                        <span class="savings-icon">🔥</span>
+                        <span class="savings-title">Baseline (No AI)</span>
+                    </div>
+                    <div class="savings-value" id="es-baseline-power">0 <span class="savings-unit">W</span></div>
+                    <div class="savings-sub" id="es-baseline-energy">0 Wh cumulative</div>
+                    <div class="savings-desc">Lights always ON, HVAC always NORMAL</div>
+                </div>
+                <div class="savings-card ai-card" id="es-ai">
+                    <div class="savings-card-header">
+                        <span class="savings-icon">🧠</span>
+                        <span class="savings-title">AI Optimized</span>
+                    </div>
+                    <div class="savings-value" id="es-ai-power">0 <span class="savings-unit">W</span></div>
+                    <div class="savings-sub" id="es-ai-energy">0 Wh cumulative</div>
+                    <div class="savings-desc">ML-based occupancy control</div>
+                </div>
+                <div class="savings-card saved-card" id="es-saved">
+                    <div class="savings-card-header">
+                        <span class="savings-icon">💚</span>
+                        <span class="savings-title">Energy Saved</span>
+                    </div>
+                    <div class="savings-value savings-green" id="es-saved-value">0 <span class="savings-unit">Wh</span></div>
+                    <div class="savings-pct-ring">
+                        <svg class="pct-ring" viewBox="0 0 80 80">
+                            <circle class="pct-ring-bg" cx="40" cy="40" r="34" />
+                            <circle class="pct-ring-fill" cx="40" cy="40" r="34" id="pct-ring-circle" stroke-dasharray="0 213.6" />
+                            <text x="40" y="44" class="pct-ring-text" id="pct-ring-text">0%</text>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- ROOM CARDS -->
+        <!-- ============================================================ -->
+        <section id="rooms-section" class="dashboard-section">
+            <div class="section-header">
+                <h2>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+                    Room Status
+                </h2>
+                <span class="section-subtitle" id="rooms-last-update">Last update: --</span>
+            </div>
+            <div class="rooms-grid" id="rooms-grid">
+                <!-- Room cards generated by JS -->
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- LIVE CHARTS -->
+        <!-- ============================================================ -->
+        <section id="charts-section" class="dashboard-section">
+            <div class="section-header">
+                <h2>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>
+                    Live Trends
+                </h2>
+            </div>
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Occupancy Probability</h3>
+                        <span class="chart-badge">%</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="chart-occupancy"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>CO₂ Levels</h3>
+                        <span class="chart-badge">ppm</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="chart-co2"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Power Usage</h3>
+                        <span class="chart-badge">W</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="chart-power"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>Cumulative Energy Savings</h3>
+                        <span class="chart-badge">Wh</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="chart-savings"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- EVENT LOG PANEL (NEW) -->
+        <!-- ============================================================ -->
+        <section id="events-section" class="dashboard-section">
+            <div class="section-header">
+                <h2>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    Live Event Log
+                </h2>
+                <span class="section-subtitle" id="event-count-badge">0 events</span>
+            </div>
+            <div class="event-log-container" id="event-log-container">
+                <div class="event-log-empty" id="event-log-empty">Waiting for events...</div>
+                <div class="event-log-list" id="event-log-list">
+                    <!-- Events rendered by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- SYSTEM STATUS + CONTROLS -->
+        <!-- ============================================================ -->
+        <section id="system-section" class="dashboard-section">
+            <div class="section-header">
+                <h2>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    System Status &amp; Controls
+                </h2>
+            </div>
+            <div class="system-grid">
+                <!-- Status Panel -->
+                <div class="system-card" id="system-status-card">
+                    <h3>System Health</h3>
+                    <div class="status-list">
+                        <div class="status-row">
+                            <span>🧠 AI Model</span>
+                            <span class="status-indicator" id="status-model">●</span>
+                        </div>
+                        <div class="status-row">
+                            <span>🌐 API Online</span>
+                            <span class="status-indicator" id="status-api">●</span>
+                        </div>
+                        <div class="status-row">
+                            <span>⚙️ Simulation</span>
+                            <span class="status-indicator" id="status-sim">●</span>
+                        </div>
+                        <div class="status-row">
+                            <span>📡 Connection</span>
+                            <span class="status-indicator" id="status-connection">●</span>
+                        </div>
+                        <div class="status-row">
+                            <span>📊 Data Status</span>
+                            <span class="status-text data-status-badge" id="status-data-freshness">WAITING</span>
+                        </div>
+                        <div class="status-row">
+                            <span>🕐 Last Update</span>
+                            <span class="status-text" id="status-last-update">--</span>
+                        </div>
+                        <div class="status-row">
+                            <span>⏱️ Update Interval</span>
+                            <span class="status-text" id="status-interval">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls Panel -->
+                <div class="system-card" id="system-controls-card">
+                    <h3>Simulation Controls</h3>
+                    <div class="controls-list">
+                        <div class="control-row">
+                            <button class="control-btn primary" id="btn-pause-resume" onclick="togglePauseResume()">
+                                <span id="btn-pause-icon">⏸</span>
+                                <span id="btn-pause-text">Pause</span>
+                            </button>
+                        </div>
+                        <div class="control-row">
+                            <label for="interval-slider">Update Interval</label>
+                            <div class="slider-group">
+                                <input type="range" id="interval-slider" min="0.5" max="10" step="0.5" value="2"
+                                       onchange="changeInterval(this.value)" oninput="document.getElementById('interval-display').textContent = parseFloat(this.value).toFixed(1) + 's'">
+                                <span id="interval-display">2.0s</span>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <label>Data Source</label>
+                            <div class="data-source-toggle">
+                                <button class="toggle-btn active" id="btn-sse" onclick="switchToSSE()">SSE Stream</button>
+                                <button class="toggle-btn" id="btn-poll" onclick="switchToPolling()">Polling</button>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <button class="control-btn danger" id="btn-reset-energy" onclick="resetEnergy()">
+                                🔄 Reset Energy Counters
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ================================================================== -->
+    <!-- FOOTER -->
+    <!-- ================================================================== -->
+    <footer id="main-footer">
+        <p>Smart Building Digital Twin • AI-Powered Occupancy Detection • Real-Time Energy Management • Domain-Adapted ML Pipeline</p>
+    </footer>
+
+    <script src="/dashboard/app.js"></script>
+</body>
+</html>

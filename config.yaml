@@ -1,0 +1,122 @@
+# Smart Building Energy Management Simulation Configuration
+# ==========================================================
+
+simulation:
+  time_step_seconds: 60          # Simulation time step (seconds)
+  duration_days: 30              # Total simulation duration (days)
+  start_date: "2024-01-15"       # Simulation start date
+  random_seed: 42                # For reproducibility
+
+building:
+  name: "SmartOfficeBuilding"
+  zones:
+    - name: "Office"
+      area_m2: 200
+      volume_m3: 600
+      occupancy_max: 25
+      lighting_baseline_watts: 2000
+      plug_load_baseline_watts: 1500
+      thermal:
+        R_wall: 0.004              # Thermal resistance (K/W) - wall to outdoor
+        R_internal: 0.008          # Internal resistance
+        C_zone: 5000000            # Thermal capacitance (J/K)
+        C_wall: 2000000            # Wall capacitance
+      
+    - name: "MeetingRoom"
+      area_m2: 50
+      volume_m3: 150
+      occupancy_max: 12
+      lighting_baseline_watts: 500
+      plug_load_baseline_watts: 400
+      thermal:
+        R_wall: 0.006
+        R_internal: 0.012
+        C_zone: 1500000
+        C_wall: 600000
+      
+    - name: "Corridor"
+      area_m2: 80
+      volume_m3: 240
+      occupancy_max: 5
+      lighting_baseline_watts: 400
+      plug_load_baseline_watts: 100
+      thermal:
+        R_wall: 0.005
+        R_internal: 0.010
+        C_zone: 2000000
+        C_wall: 800000
+
+hvac:
+  cooling_capacity_watts: 15000    # Max cooling power per zone
+  heating_capacity_watts: 12000    # Max heating power per zone
+  cop_cooling: 3.5                 # Coefficient of performance (cooling)
+  cop_heating: 4.0                 # Coefficient of performance (heating)
+  setpoint_min: 18.0               # Minimum setpoint (°C)
+  setpoint_max: 26.0               # Maximum setpoint (°C)
+  fan_power_watts: 200             # Fan power consumption
+
+lighting:
+  efficacy_lm_per_watt: 100        # LED efficacy
+  daylight_max_lux: 800            # Maximum daylight contribution
+  target_lux_occupied: 400         # Target illumination when occupied
+  target_lux_unoccupied: 50        # Target illumination when unoccupied
+
+occupancy:
+  workday_start_hour: 8            # Work start time
+  workday_end_hour: 18             # Work end time
+  weekend_probability: 0.1         # Probability of weekend occupancy
+  meeting_probability: 0.3         # Probability of meeting room usage
+  corridor_base_traffic: 0.2       # Base corridor traffic fraction
+
+weather:
+  mode: "synthetic"                # "synthetic" or "csv"
+  csv_path: ""                     # Path to weather CSV if mode is "csv"
+  base_temp_c: 15.0                # Annual average temperature
+  daily_amplitude_c: 8.0           # Daily temperature swing
+  seasonal_amplitude_c: 12.0       # Seasonal temperature swing
+  cloud_cover_variability: 0.3     # Cloud cover randomness
+
+sensors:
+  temperature:
+    noise_std: 0.2                 # Temperature sensor noise (°C)
+    sampling_rate_seconds: 60      # Sampling rate
+  illumination:
+    noise_std: 10.0                # Lux sensor noise
+    sampling_rate_seconds: 60
+  occupancy:
+    false_positive_rate: 0.02      # Occupancy sensor error rates
+    false_negative_rate: 0.05
+
+comfort:
+  temp_target_min: 22.0            # Comfort temperature range (°C)
+  temp_target_max: 24.0
+  lux_target_min: 300              # Comfort illumination range (lux)
+  lux_target_max: 500
+  temp_penalty_weight: 10.0        # Penalty weights for comfort violations
+  lux_penalty_weight: 0.1
+
+optimizer:
+  energy_weight: 1.0               # Weight for energy cost
+  comfort_weight: 5.0              # Weight for comfort violation
+  switching_weight: 0.5            # Weight for control switching penalty
+  setpoint_change_threshold: 0.5   # Threshold for counting setpoint changes
+  dimming_change_threshold: 0.1    # Threshold for dimming changes
+
+controller:
+  baseline:
+    comfort_setpoint: 23.0         # Target setpoint when occupied
+    unoccupied_setpoint_cooling: 26.0
+    unoccupied_setpoint_heating: 18.0
+    comfort_lux: 400
+    
+  mpc:
+    horizon_steps: 30              # Look-ahead horizon (steps)
+    candidate_setpoints: [20, 22, 23, 24, 26]  # Discrete action candidates
+    candidate_dimming: [0.0, 0.3, 0.5, 0.7, 1.0]
+    prediction_noise: 0.1          # Prediction uncertainty factor
+
+output:
+  log_dir: "output/logs"
+  plot_dir: "output/plots"
+  csv_filename: "simulation_log.csv"
+  summary_filename: "summary_metrics.json"

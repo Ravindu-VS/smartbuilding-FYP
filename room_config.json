@@ -1,0 +1,114 @@
+{
+  "building": {
+    "name": "Smart Office Building",
+    "description": "4-Room Office Layout with Door Connectivity",
+    "layout_type": "2x2_grid",
+    "version": "v2.0"
+  },
+  "rooms": [
+    {
+      "room_id": 0,
+      "name": "Office A",
+      "zone_type": "office",
+      "position": {
+        "x": -8,
+        "y": -8,
+        "z": 0
+      },
+      "dimensions": {
+        "width": 6,
+        "depth": 6,
+        "height": 3
+      },
+      "max_occupancy": 4,
+      "doors": {
+        "right": true,
+        "front": true
+      },
+      "thermal": {
+        "thermal_mass_j_k": 50000,
+        "u_value_w_m2k": 0.3,
+        "infiltration_rate_ach": 0.5,
+        "solar_gain_factor": 0.3
+      }
+    },
+    {
+      "room_id": 1,
+      "name": "Kitchen",
+      "zone_type": "kitchen",
+      "position": {
+        "x": 0,
+        "y": -8,
+        "z": 0
+      },
+      "dimensions": {
+        "width": 6,
+        "depth": 6,
+        "height": 3
+      },
+      "max_occupancy": 4,
+      "doors": {
+        "left": true,
+        "front": true
+      },
+      "thermal": {
+        "thermal_mass_j_k": 50000,
+        "u_value_w_m2k": 0.3,
+        "infiltration_rate_ach": 0.5,
+        "solar_gain_factor": 0.3
+      }
+    },
+    {
+      "room_id": 2,
+      "name": "Meeting Room",
+      "zone_type": "meeting",
+      "position": {
+        "x": -8,
+        "y": 0,
+        "z": 0
+      },
+      "dimensions": {
+        "width": 6,
+        "depth": 6,
+        "height": 3
+      },
+      "max_occupancy": 8,
+      "doors": {
+        "right": true,
+        "back": true
+      },
+      "thermal": {
+        "thermal_mass_j_k": 55000,
+        "u_value_w_m2k": 0.3,
+        "infiltration_rate_ach": 0.5,
+        "solar_gain_factor": 0.3
+      }
+    },
+    {
+      "room_id": 3,
+      "name": "Bathroom",
+      "zone_type": "bathroom",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "dimensions": {
+        "width": 6,
+        "depth": 6,
+        "height": 3
+      },
+      "max_occupancy": 2,
+      "doors": {
+        "left": true,
+        "back": true
+      },
+      "thermal": {
+        "thermal_mass_j_k": 45000,
+        "u_value_w_m2k": 0.35,
+        "infiltration_rate_ach": 0.8,
+        "solar_gain_factor": 0.2
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+﻿============================================================
+  Module Import Verification
+============================================================
+[OK] Config: baseline=ON/NORMAL, log=output/logs/system.log
+[OK] Logger: 3 events in buffer
+     [ENERGY] Test energy event
+python.exe : Traceback (most 
+recent call last):
+At line:1 char:1
++ & "g:\Final Year Project 
+Smart Building\Project\.venv\
+Scripts\python. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo          
+: N    otSpecified: 
+(Traceback (mo    st recent 
+call last)::Strin    g) [], 
+RemoteException
+    + FullyQualifiedErrorId 
+: N    ativeCommandError
+ 
+  File "G:\Final Year 
+Project Smart Building\Projec
+t\output\_verify_modules.py",
+ line 25, in <module>
+    print(f"     
+[{e['category']}] 
+{e['message']}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\enco
+dings\cp1252.py", line 19, 
+in encode
+    return codecs.charmap_enc
+ode(input,self.errors,encodin
+g_table)[0]
+           ~~~~~~~~~~~~~~~~~~
+~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^
+UnicodeEncodeError: 
+'charmap' codec can't encode 
+character '\u2192' in 
+position 24: character maps 
+to <undefined>

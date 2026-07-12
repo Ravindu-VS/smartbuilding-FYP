@@ -1,0 +1,16 @@
+# Smart Building Energy Management and 3D Simulation
+# Python dependencies
+
+# Core dependencies (existing)
+numpy>=1.20.0
+pyyaml>=5.4
+matplotlib>=3.4.0
+
+# Panda3D 3D Visualization (Phase 1+)
+panda3d>=1.10.13
+
+# Future dependencies (commented out for now)
+# fastapi>=0.100.0       # Phase 7: Hardware integration API
+# paho-mqtt>=1.6.1       # Phase 7: MQTT hardware communication
+# tensorflow>=2.12.0     # Phase 6: ML model integration
+# sqlalchemy>=2.0.0      # Data storage

@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Data files (too large for git)
+*.pkl
+*.db
+*.sqlite3
+Dataset/Citylearn/
+Dataset/Unified/
+
+# Output artifacts
+output/logs/
+output/plots/
+output/metrics/
+output/integration_logs/
+output/smart_building.db
+
+# Temp files
+extract_pptx.py
+*.tmp
+*.bak
+
+# Large archives
+*.zip
+
+# Node modules (if any)
+node_modules/
+
+# Gemini agent files
+.gemini/
