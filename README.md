@@ -24,16 +24,19 @@ code on 19 October 2026; numbers are from the test runs listed in
 
 ## 2. Run it (Windows)
 
-**One click:** double-click `run_local.bat` in this folder. It starts the edge brain on
-port 8001, the Next.js twin on port 3000, and opens http://localhost:3000.
+**One click:** double-click `run_local.bat` in this folder. It checks the Python venv and the
+dashboard packages (installs them if missing), starts the edge brain on port 8001 and the
+Next.js twin on port 3000 in their own windows, waits until both answer, opens
+http://localhost:3000 and prints this PC's IP address for the ESP32's `server_url`.
+`run_local.bat test` also starts the test sender (shown as TEST SENDER, not as the board).
+Close the two server windows to stop everything.
 
 **Two terminals:**
 
 ```cmd
 :: Terminal 1 — edge brain (simulator + AI + API), port 8001
 cd /d "G:\projects\Final Year Project Smart Building\Project"
-.\.venv\Scripts\activate
-python raspberry_pi\edge_brain.py
+.venv\Scripts\python.exe raspberry_pi\edge_brain.py
 
 :: Terminal 2 — Next.js 3D digital twin, port 3000
 cd /d "G:\projects\Final Year Project Smart Building\Project\dashboard\fyp-research-twin"
