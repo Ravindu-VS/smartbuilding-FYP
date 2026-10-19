@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { hardwareRoom, useBuildingStore } from '../../store/useBuildingStore';
+import { backendIsCurrent, hardwareRoom, useBuildingStore } from '../../store/useBuildingStore';
 import { EDGE_URL, useNow } from '../../hooks/useSSE';
+import { fx, isNum } from '../../lib/format';
 
 /**
  * Office A (the hardware room). Shows the ESP32's readings only while the edge
@@ -10,11 +11,10 @@ import { EDGE_URL, useNow } from '../../hooks/useSSE';
  * no values. The decision shown is the one the edge brain sent back to the board.
  */
 
-const fmt = (v: number | null | undefined, digits: number) =>
-  v === null || v === undefined || Number.isNaN(v) ? '—' : v.toFixed(digits);
+const fmt = (v: unknown, digits: number) => fx(v, digits);
 
 function ago(seconds: number | null) {
-  if (seconds === null) return '—';
+  if (!isNum(seconds)) return '—';
   if (seconds < 60) return `${seconds.toFixed(1)} s ago`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
   return `${(seconds / 3600).toFixed(1)} h ago`;
@@ -22,12 +22,16 @@ function ago(seconds: number | null) {
 
 export default function HardwareLivePanel() {
   const room = useBuildingStore((s) => hardwareRoom(s));
-  const hw = useBuildingStore((s) => s.hardware);
-  const link = useBuildingStore((s) => s.link);
+  const current = useBuildingStore((s) => backendIsCurrent(s.system));
+  const hwRaw = useBuildingStore((s) => s.hardware);
+  const linkRaw = useBuildingStore((s) => s.link);
+  // An older edge brain (different data format) counts as no usable link
+  const hw = current ? hwRaw : null;
+  const link = current ? linkRaw : { ...linkRaw, connected: false, error: linkRaw.connected ? 'older edge brain version on port 8001' : linkRaw.error };
   const now = useNow(500);
 
   // Age of the board's last reading now = age when the server sent it + time since we received it
-  const ageNow = hw && hw.age_s !== null && link.lastMessageAt !== null
+  const ageNow = hw && isNum(hw.age_s) && link.lastMessageAt !== null
     ? hw.age_s + Math.max(0, now - link.lastMessageAt) / 1000
     : null;
 
@@ -108,10 +112,10 @@ export default function HardwareLivePanel() {
         <div className="text-[10px] uppercase text-slate-500 font-bold mb-2 tracking-widest">Edge AI (Random Forest)</div>
         <div className="flex justify-between text-[11px] mb-1">
           <span className="text-slate-400">Occupancy probability</span>
-          <span className="font-bold text-white" data-testid="hw-prob">{ai ? `${(ai.occupancy_probability * 100).toFixed(1)}%` : '—'}</span>
+          <span className="font-bold text-white" data-testid="hw-prob">{ai && isNum(ai.occupancy_probability) ? fx(ai.occupancy_probability * 100, 1, '%') : '—'}</span>
         </div>
         <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-          <div className="h-full rounded-full bg-indigo-500 transition-all duration-500" style={{ width: `${ai ? Math.min(100, ai.occupancy_probability * 100) : 0}%` }} />
+          <div className="h-full rounded-full bg-indigo-500 transition-all duration-500" style={{ width: `${ai && isNum(ai.occupancy_probability) ? Math.min(100, ai.occupancy_probability * 100) : 0}%` }} />
         </div>
         <div className="text-[10px] text-slate-500 mt-1">{ai ? `Predicted: ${ai.predicted_occupancy ? 'occupied' : 'empty'}${ai.method !== 'random_forest' ? ` (${ai.method})` : ''}` : 'No prediction without board data'}</div>
       </div>
@@ -134,7 +138,7 @@ export default function HardwareLivePanel() {
         <div>
           <div className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">Board power</div>
           <div className="text-sm font-bold text-white" data-testid="hw-power">
-            {power !== null ? `${power.toFixed(2)} W measured (INA226)` : live ? 'not measured (no INA226 reading)' : '—'}
+            {isNum(power) ? `${power.toFixed(2)} W measured (INA226)` : live ? 'not measured (no INA226 reading)' : '—'}
           </div>
         </div>
       </div>
@@ -149,7 +153,7 @@ export default function HardwareLivePanel() {
 
       <div className="px-4 py-2 bg-slate-950/50 rounded-b-xl flex items-center justify-between text-[10px] text-slate-500 font-mono">
         <span data-testid="hw-age">Last reading: {link.connected ? ago(ageNow) : '—'}</span>
-        <span>{hw && link.connected ? `${hw.readings_received} readings${hw.mean_interval_s ? ` · every ${hw.mean_interval_s.toFixed(1)} s` : ''}` : ''}</span>
+        <span>{hw && link.connected ? `${hw.readings_received ?? '—'} readings${isNum(hw.mean_interval_s) ? ` · every ${hw.mean_interval_s.toFixed(1)} s` : ''}` : ''}</span>
       </div>
     </div>
   );

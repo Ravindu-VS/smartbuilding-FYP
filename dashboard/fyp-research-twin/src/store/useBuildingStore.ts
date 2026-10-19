@@ -60,6 +60,16 @@ export const useBuildingStore = create<BuildingStore>((set) => ({
   setTwinSync: (report) => set({ twinSync: report }),
 }));
 
+/**
+ * True when the payload comes from the current edge brain (raspberry_pi/edge_brain.py of
+ * 19 Oct 2026 or later). An older edge brain still running on port 8001 sends a different
+ * format without board status; the dashboard must not show that as live data.
+ */
+export function backendIsCurrent(system: SystemState | null | undefined): boolean {
+  return !!system && typeof system.hardware_room_id === 'string'
+    && typeof system.sim_estimated_power_watts === 'number' && !!system.hardware;
+}
+
 export function hardwareRoom(state: { rooms: Record<string, RoomState>; system: SystemState | null }) {
   const id = state.system?.hardware_room_id;
   return id ? state.rooms[id] : undefined;

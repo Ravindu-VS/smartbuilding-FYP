@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { EDGE_URL, useNow, useSSE } from '../hooks/useSSE';
-import { useBuildingStore } from '../store/useBuildingStore';
+import { backendIsCurrent, useBuildingStore } from '../store/useBuildingStore';
+import { fx, isNum } from '../lib/format';
 import VanillaTwinWrapper from '../components/3d/VanillaTwinWrapper';
 import HardwareLivePanel from '../components/hardware/HardwareLivePanel';
 import { Cpu, Server, Clock } from 'lucide-react';
@@ -39,9 +40,10 @@ export default function Dashboard() {
   const link = useBuildingStore((s) => s.link);
   const twinSync = useBuildingStore((s) => s.twinSync);
 
-  const live = link.connected;
+  const oldBackend = link.connected && system !== null && !backendIsCurrent(system);
+  const live = link.connected && !oldBackend;
   const msgAgeMs = link.lastMessageAt !== null ? Math.max(0, now - link.lastMessageAt) : null;
-  const boardValue = !live ? 'unknown' : !hw || !hw.connected ? 'NOT CONNECTED' : hw.real_board ? 'CONNECTED' : 'TEST SENDER';
+  const boardValue = oldBackend ? 'unknown' : !live ? 'unknown' : !hw || !hw.connected ? 'NOT CONNECTED' : hw.real_board ? 'CONNECTED' : 'TEST SENDER';
   const acc = system?.ai_accuracy_simulated;
   const sys = live ? system : null;
 
@@ -55,7 +57,7 @@ export default function Dashboard() {
           <span className="text-slate-500 text-xs hidden xl:inline">Office A: real ESP32 sensors · 25 rooms simulated</span>
         </div>
         <div className="flex items-center gap-3 text-xs font-mono">
-          <Pill ok={live} label={<><Server size={12} className="inline mr-1" />Edge brain</>} value={live ? 'LIVE' : 'NOT CONNECTED'} testId="link-status" />
+          <Pill ok={live} label={<><Server size={12} className="inline mr-1" />Edge brain</>} value={oldBackend ? 'OLD VERSION' : live ? 'LIVE' : 'NOT CONNECTED'} testId="link-status" />
           <Pill ok={live && !!hw?.connected && !!hw?.real_board} warn={live && !!hw?.connected && !hw?.real_board}
             label={<><Cpu size={12} className="inline mr-1" />ESP32</>} value={boardValue} testId="header-board-status" />
           <div className="px-2 py-1 bg-slate-800 rounded border border-slate-700 flex gap-2 items-center">
@@ -66,6 +68,14 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      {oldBackend && (
+        <div className="shrink-0 px-6 py-2 bg-red-950/70 border-b border-red-800 text-red-200 text-sm" data-testid="old-backend">
+          An older edge brain is answering on port 8001 (its data has no board status, so it is not shown).
+          Close every &quot;Edge Brain&quot; window (or run <code className="text-red-100">netstat -ano | findstr :8001</code> and
+          <code className="text-red-100"> taskkill /PID &lt;pid&gt; /F</code>), then start <code className="text-red-100">run_local.bat</code> again.
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden min-h-0">
 
@@ -94,15 +104,15 @@ export default function Dashboard() {
 
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-3">
             <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Building now</h2>
-            <Row k="Rooms with data" v={sys ? `${sys.rooms_with_data} / ${sys.total_rooms}` : '—'} testId="rooms-with-data" />
-            <Row k="Predicted occupied" v={sys ? `${sys.occupied_rooms}` : '—'} />
-            <Row k="Power, 25 sim. rooms" v={sys ? `${(sys.sim_estimated_power_watts / 1000).toFixed(1)} kW` : '—'} />
-            <Row k="Energy since start" v={sys ? `${(sys.sim_cumulative_energy_wh / 1000).toFixed(1)} kWh` : '—'} />
-            <Row k="Office A power" v={sys ? (sys.hardware_measured_power_watts !== null ? `${sys.hardware_measured_power_watts.toFixed(2)} W` : 'not measured') : '—'} />
-            <Row k="AI accuracy (sim. rooms)" v={sys && acc && acc.accuracy !== null ? `${(acc.accuracy * 100).toFixed(1)}%` : '—'} testId="ai-accuracy" />
+            <Row k="Rooms with data" v={sys && isNum(sys.rooms_with_data) ? `${sys.rooms_with_data} / ${sys.total_rooms}` : '—'} testId="rooms-with-data" />
+            <Row k="Predicted occupied" v={sys ? fx(sys.occupied_rooms, 0) : '—'} />
+            <Row k="Power, 25 sim. rooms" v={sys && isNum(sys.sim_estimated_power_watts) ? fx(sys.sim_estimated_power_watts / 1000, 1, ' kW') : '—'} />
+            <Row k="Energy since start" v={sys && isNum(sys.sim_cumulative_energy_wh) ? fx(sys.sim_cumulative_energy_wh / 1000, 1, ' kWh') : '—'} />
+            <Row k="Office A power" v={sys ? (isNum(sys.hardware_measured_power_watts) ? fx(sys.hardware_measured_power_watts, 2, ' W') : 'not measured') : '—'} />
+            <Row k="AI accuracy (sim. rooms)" v={sys && acc && isNum(acc.accuracy) ? fx(acc.accuracy * 100, 1, '%') : '—'} testId="ai-accuracy" />
             <p className="text-[10px] text-slate-500 mt-2 leading-snug">
               Simulated-room power uses assumed watts per action (estimates, not measurements). AI accuracy compares the
-              model&apos;s prediction with the simulator&apos;s true occupancy{acc ? ` over ${acc.room_ticks.toLocaleString()} room-ticks` : ''}.
+              model&apos;s prediction with the simulator&apos;s true occupancy{acc && isNum(acc.room_ticks) ? ` over ${acc.room_ticks.toLocaleString()} room-ticks` : ''}.
               No energy-saving figure is shown: the live demo has no baseline to compare with.
             </p>
           </div>
@@ -117,8 +127,8 @@ export default function Dashboard() {
 
           <div className="mt-auto p-3 bg-slate-900 border-t border-slate-800/50">
             <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Sync status</h2>
-            <Row k="Edge brain stream" v={live ? 'connected' : `not connected${link.error ? ` (${link.error})` : ''}`} testId="sync-stream" />
-            <Row k="Last update received" v={msgAgeMs !== null ? `${(msgAgeMs / 1000).toFixed(1)} s ago` : '—'} testId="sync-age" />
+            <Row k="Edge brain stream" v={oldBackend ? 'old edge brain version' : live ? 'connected' : `not connected${link.error ? ` (${link.error})` : ''}`} testId="sync-stream" />
+            <Row k="Last update received" v={msgAgeMs !== null ? fx(msgAgeMs / 1000, 1, ' s ago') : '—'} testId="sync-age" />
             <Row k="Updates received" v={link.messages.toLocaleString()} />
             <Row k="Simulation loop" v={sys ? (sys.data_stale ? 'stalled' : 'running') : '—'} />
             <Row k="Rooms found in 3D model" v={twinSync ? `${twinSync.matched} / ${twinSync.received}` : '—'} testId="sync-3d" />

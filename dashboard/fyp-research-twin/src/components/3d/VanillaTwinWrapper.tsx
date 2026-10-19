@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef } from 'react';
-import { useBuildingStore } from '../../store/useBuildingStore';
+import { backendIsCurrent, useBuildingStore } from '../../store/useBuildingStore';
 import { TwinSyncReport } from '../../types/building';
 
 /**
@@ -15,6 +15,7 @@ export default function VanillaTwinWrapper() {
   const raw = useBuildingStore((s) => s.raw);
   const linkConnected = useBuildingStore((s) => s.link.connected);
   const linkError = useBuildingStore((s) => s.link.error);
+  const current = useBuildingStore((s) => backendIsCurrent(s.system));
   const setTwinSync = useBuildingStore((s) => s.setTwinSync);
 
   const post = useCallback((msg: unknown) => {
@@ -23,18 +24,20 @@ export default function VanillaTwinWrapper() {
 
   const sendState = useCallback(() => {
     const { raw: payload } = useBuildingStore.getState();
-    if (payload) {
+    // Payloads from an older edge brain are not forwarded (no board status in them)
+    if (payload && backendIsCurrent(payload.system)) {
       post({ type: 'SYNC_STATE', rooms: payload.rooms, system: payload.system, hardware: payload.hardware, seq: payload.seq });
     }
   }, [post]);
 
   const sendLink = useCallback(() => {
-    const { link } = useBuildingStore.getState();
-    post({ type: 'LINK_STATUS', ok: link.connected, detail: link.error ?? '' });
+    const { link, system } = useBuildingStore.getState();
+    const old = link.connected && system !== null && !backendIsCurrent(system);
+    post({ type: 'LINK_STATUS', ok: link.connected && !old, detail: old ? 'an older edge brain version is running on port 8001' : (link.error ?? '') });
   }, [post]);
 
   useEffect(() => { sendState(); }, [raw, sendState]);
-  useEffect(() => { sendLink(); }, [linkConnected, linkError, sendLink]);
+  useEffect(() => { sendLink(); }, [linkConnected, linkError, current, sendLink]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {

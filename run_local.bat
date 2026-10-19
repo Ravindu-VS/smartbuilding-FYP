@@ -30,6 +30,23 @@ if not exist "dashboard\fyp-research-twin\node_modules" (
   popd
 )
 
+rem An old Edge Brain or dashboard still running keeps its port, and the new one
+rem then cannot start (the browser would show the old one). Offer to stop it.
+for %%P in (8001 3000) do (
+  set "PIDS="
+  for /f "tokens=5" %%a in ('netstat -ano ^| findstr /r /c:":%%P .*LISTENING"') do set "PIDS=!PIDS! %%a"
+  if defined PIDS (
+    echo Port %%P is already in use by process!PIDS! ^(probably an old Edge Brain or dashboard window^).
+    choice /c YN /m "Stop it now"
+    if errorlevel 2 (
+      echo Close that window, then run this again.
+      pause & exit /b 1
+    )
+    for %%k in (!PIDS!) do taskkill /PID %%k /F >nul 2>&1
+    timeout /t 1 /nobreak >nul
+  )
+)
+
 echo [1/3] Starting the edge brain on port 8001...
 start "Edge Brain - port 8001" cmd /k ".venv\Scripts\python.exe raspberry_pi\edge_brain.py"
 
