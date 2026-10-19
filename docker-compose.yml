@@ -1,0 +1,200 @@
+version: '3.8'
+
+services:
+  # ═══════════════════════════════════════════════════════════════════════
+  # CORE BACKEND
+  # ═══════════════════════════════════════════════════════════════════════
+
+  backend:
+    build: .
+    container_name: smart_building_backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - MQTT_BROKER=mosquitto
+      - WSO2_AM_URL=https://wso2am:8243
+      - WSO2_MI_URL=http://wso2mi:8290
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_started
+      mosquitto:
+        condition: service_started
+    volumes:
+      - ./models:/app/models
+      - ./docs:/app/docs
+    networks:
+      - building_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Legacy Flask backend (preserved for backward compatibility)
+  backend-legacy:
+    build: .
+    container_name: smart_building_legacy
+    command: python smart_building_api_flask.py
+    ports:
+      - "8001:8001"
+    environment:
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - MQTT_BROKER=mosquitto
+    depends_on:
+      - redis
+      - postgres
+      - mosquitto
+    networks:
+      - building_net
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # NEXT.JS DASHBOARD
+  # ═══════════════════════════════════════════════════════════════════════
+
+  dashboard:
+    build: ./dashboard/3d-twin
+    container_name: smart_building_dashboard
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NEXT_PUBLIC_WS_URL=ws://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - building_net
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # WSO2 MICRO INTEGRATOR
+  # ═══════════════════════════════════════════════════════════════════════
+
+  wso2mi:
+    image: wso2/wso2mi:latest
+    container_name: smart_building_mi
+    ports:
+      - "8290:8290"   # HTTP passthrough
+      - "8253:8253"   # HTTPS passthrough
+      - "9164:9164"   # Management API
+    volumes:
+      - ./wso2/mi/synapse-configs/api:/home/wso2carbon/wso2mi-4.2.0/repository/deployment/server/synapse-configs/default/api
+      - ./wso2/mi/synapse-configs/endpoints:/home/wso2carbon/wso2mi-4.2.0/repository/deployment/server/synapse-configs/default/endpoints
+      - ./wso2/mi/synapse-configs/sequences:/home/wso2carbon/wso2mi-4.2.0/repository/deployment/server/synapse-configs/default/sequences
+      - ./wso2/mi/synapse-configs/inbound-endpoints:/home/wso2carbon/wso2mi-4.2.0/repository/deployment/server/synapse-configs/default/inbound-endpoints
+    depends_on:
+      - mosquitto
+      - backend
+    networks:
+      - building_net
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # WSO2 STREAMING INTEGRATOR (BI)
+  # ═══════════════════════════════════════════════════════════════════════
+
+  wso2si:
+    image: wso2/wso2si:latest
+    container_name: smart_building_si
+    ports:
+      - "8280:8280"   # HTTP receiver
+      - "8281:8281"   # Anomaly receiver
+      - "8282:8282"   # Occupancy receiver
+      - "9443:9443"   # Management console
+    volumes:
+      - ./wso2/bi/siddhi-apps:/home/wso2carbon/wso2si-7.0.0/deployment/siddhi-files
+    depends_on:
+      - backend
+    networks:
+      - building_net
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # WSO2 API MANAGER
+  # ═══════════════════════════════════════════════════════════════════════
+
+  wso2am:
+    image: wso2/wso2am:latest
+    container_name: smart_building_am
+    ports:
+      - "8243:8243"   # Gateway HTTPS
+      - "8280:8280"   # Gateway HTTP (if not conflicting with SI)
+      - "9444:9443"   # Publisher/DevPortal Console
+    environment:
+      - PROFILE=default
+    depends_on:
+      - backend
+    networks:
+      - building_net
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # WSO2 IDENTITY SERVER
+  # ═══════════════════════════════════════════════════════════════════════
+
+  wso2is:
+    image: wso2/wso2is:latest
+    container_name: smart_building_is
+    ports:
+      - "9443:9443"   # Management Console & OAuth2/OIDC endpoints
+    volumes:
+      - ./wso2/is/deployment.toml:/home/wso2carbon/wso2is-6.1.0/repository/conf/deployment.toml
+    networks:
+      - building_net
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # INFRASTRUCTURE SERVICES
+  # ═══════════════════════════════════════════════════════════════════════
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mqtt_broker
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - building_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: smart_building_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - building_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: smart_building_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: adminpassword
+      POSTGRES_DB: smartbuilding
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - building_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d smartbuilding"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  building_net:
+    driver: bridge

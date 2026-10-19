@@ -498,6 +498,147 @@ def api_sse_stream():
 
 
 # =============================================================================
+# HARDWARE SENSOR ENDPOINTS (ESP32 Integration)
+# =============================================================================
+# ESP32 → POST /api/hardware/sensor-data → sensor_gateway
+#       → hardware_room_manager → state_manager → SSE → Dashboard → Three.js
+
+@app.route('/api/hardware/sensor-data', methods=['POST'])
+def receive_hardware_sensor_data():
+    """
+    Receive sensor data from ESP32 hardware.
+    
+    Expected JSON payload:
+    {
+        "room_id": "f2_office_a",
+        "temperature": 26.4,
+        "humidity": 62,
+        "co2": 520,
+        "lux": 340,
+        "occupancy_probability": 0.94,
+        "edge_inference_time_ms": 12,
+        "pir_motion": 1
+    }
+    """
+    try:
+        from hardware.sensor_gateway import process_incoming_sensor_data
+        
+        payload = request.get_json(force=True)
+        if not payload:
+            return jsonify({"error": "No JSON payload"}), 400
+        
+        success = process_incoming_sensor_data(payload)
+        
+        if success:
+            logger.info(f"LIVE HARDWARE DATA received: room={payload.get('room_id')} "
+                       f"temp={payload.get('temperature')} "
+                       f"prob={payload.get('occupancy_probability')}")
+            
+            # If the payload came from edge AI, it already contains the actuation decisions!
+            if payload.get("source") == "edge_ai":
+                hvac_act = payload.get("hvac_action", "ECO")
+                light_act = payload.get("light_action", "OFF")
+                dimming = 1.0 if light_act == "ON" else (0.5 if light_act == "DIM" else 0.0)
+            else:
+                # Compute closed-loop AI control actions for physical actuators (Cloud Fallback)
+                occ_prob = float(payload.get('occupancy_probability', 0.1))
+                if occ_prob >= 0.60:
+                    hvac_act = "NORMAL"
+                    light_act = "ON"
+                    dimming = 1.0
+                elif occ_prob >= 0.20:
+                    hvac_act = "LOW"
+                    light_act = "DIM"
+                    dimming = 0.5
+                else:
+                    hvac_act = "ECO"
+                    light_act = "OFF"
+                    dimming = 0.0
+
+            return jsonify({
+                "status": "ok",
+                "message": "Sensor data accepted",
+                "room_id": payload.get("room_id"),
+                "source": payload.get("source", "hardware"),
+                "hvac_action": hvac_act,
+                "light_action": light_act,
+                "dimming_level": dimming,
+                "timestamp": datetime.now().isoformat()
+            }), 200
+        else:
+            return jsonify({"error": "Invalid sensor data"}), 400
+            
+    except Exception as e:
+        logger.error(f"Hardware sensor endpoint error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/hardware/status', methods=['GET'])
+def get_hardware_status():
+    """
+    Get the current status of all hardware-connected rooms.
+    Used by the dashboard Hardware Debug Panel.
+    """
+    try:
+        from hardware.hardware_room_manager import hardware_manager
+        
+        hw_states = hardware_manager.get_all_hardware_states()
+        mqtt_connected = False
+        try:
+            from hardware.mqtt_client import mqtt_client
+            mqtt_connected = mqtt_client.connected
+        except Exception:
+            pass
+        
+        rooms_status = {}
+        for room_id, hw_state in hw_states.items():
+            room_data = {}
+            if _live_service:
+                full_state = _live_service.state_manager.get_current_state()
+                for room in full_state.get("rooms", []):
+                    if room.get("room_id") == room_id:
+                        room_data = room
+                        break
+            
+            last_update = hw_state.get("last_update", 0)
+            staleness = time.time() - last_update if last_update > 0 else -1
+            
+            rooms_status[room_id] = {
+                "source": "hardware",
+                "is_live": True,
+                "staleness_seconds": round(staleness, 1),
+                "is_stale": staleness > 30,
+                "raw_sensors": {
+                    "temperature": hw_state.get("temperature"),
+                    "humidity": hw_state.get("humidity"),
+                    "co2": hw_state.get("co2"),
+                    "lux": hw_state.get("lux"),
+                },
+                "edge_ai": {
+                    "occupancy_probability": hw_state.get("occupancy_probability"),
+                    "source": "ESP32_EDGE",
+                },
+                "ai_decision": room_data.get("control", {}),
+                "energy": room_data.get("energy", {}),
+                "last_update_iso": (
+                    datetime.fromtimestamp(last_update).isoformat()
+                    if last_update > 0 else None
+                ),
+            }
+        
+        return jsonify({
+            "hardware_rooms": rooms_status,
+            "mqtt_connected": mqtt_connected,
+            "total_hardware_rooms": len(hw_states),
+            "timestamp": datetime.now().isoformat(),
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Hardware status endpoint error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
 # DASHBOARD SERVING
 # =============================================================================
 
@@ -792,6 +933,235 @@ def api_database_stats():
         return jsonify(db.get_database_stats())
     except Exception as e:
         logger.error(f"Database stats error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+# =============================================================================
+# HARDWARE-IN-THE-LOOP (HITL) ENDPOINTS
+# =============================================================================
+
+@app.route('/api/hardware/sensors', methods=['POST'])
+def api_hardware_sensors():
+    """Receive raw sensor data from physical IoT hardware (ESP32)."""
+    try:
+        from hardware.sensor_gateway import process_incoming_sensor_data
+        
+        payload = request.get_json()
+        if not payload:
+            return jsonify({"error": "No JSON payload provided"}), 400
+            
+        success = process_incoming_sensor_data(payload)
+        
+        if success:
+            return jsonify({"status": "ok", "message": "Sensor data ingested successfully"}), 200
+        else:
+            return jsonify({"error": "Failed to process sensor data"}), 400
+            
+    except ImportError as e:
+        logger.error(f"Hardware module not available: {e}")
+        return jsonify({"error": "Hardware-in-the-Loop module not installed"}), 501
+    except Exception as e:
+        logger.error(f"Hardware sensor error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/hardware/actuators/<room_id>', methods=['GET'])
+def api_hardware_actuators(room_id):
+    """Allow physical hardware to poll its latest actuator decisions."""
+    if _live_service is None:
+        return jsonify({"error": "Integration service not running"}), 503
+        
+    try:
+        state_mgr = _live_service._state_manager
+        full_state = state_mgr.get_full_state()
+        
+        for room in full_state.get("rooms", []):
+            if room.get("room_id") == room_id:
+                # Return the device state decisions
+                return jsonify({
+                    "status": "ok",
+                    "room_id": room_id,
+                    "timestamp": full_state.get("timestamp"),
+                    "actuators": room.get("device_state", {})
+                })
+                
+        return jsonify({"error": f"Room {room_id} not found in state manager"}), 404
+        
+    except Exception as e:
+        logger.error(f"Hardware actuator error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
+# WEB DASHBOARDS
+# =============================================================================
+
+@app.route('/3d-twin')
+def serve_3d_twin():
+    """Serve the 3D Digital Twin dashboard."""
+    return send_from_directory('dashboard/3d-twin', 'index.html')
+
+@app.route('/3d-twin/<path:path>')
+def serve_3d_twin_static(path):
+    """Serve static files for the 3D Digital Twin."""
+    return send_from_directory('dashboard/3d-twin', path)
+# =============================================================================
+# WSO2 ENTERPRISE API GATEWAY v1 ENDPOINTS
+# =============================================================================
+
+@app.route('/api/v1/sensors', methods=['POST'])
+def api_v1_sensors():
+    """Ingest sensor telemetry from WSO2 Micro Integrator (MQTT to REST)."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON payload provided"}), 400
+
+        # Extract topic from header/payload
+        topic = data.get("topic", "")
+        telemetry = data.get("telemetry", {})
+
+        # Topic format: building/{b_id}/floor/{f_id}/room/{r_id}/sensor
+        # e.g., smartbuilding/sensors/f2_office_a or building/A/floor/2/room/office_a/sensor
+        room_id = data.get("room_id")
+        if not room_id and topic:
+            parts = topic.split("/")
+            # Handle standard MQTT topic format: building/A/floor/2/room/office_a/sensor
+            if len(parts) >= 6:
+                room_id = f"f{parts[3]}_{parts[5]}"  # Standardize to f2_office_a format
+            elif len(parts) >= 3:
+                room_id = parts[-1]  # Standardize smartbuilding/sensors/f2_office_a
+
+        if not room_id:
+            return jsonify({"error": "Missing room identifier"}), 400
+
+        # Prepare normalized payload
+        payload = {
+            "room_id": room_id,
+            "temperature": telemetry.get("temperature", 24.0),
+            "humidity": telemetry.get("humidity", 50.0),
+            "co2": telemetry.get("co2", 400.0),
+            "lux": telemetry.get("lux", 0.0)
+        }
+
+        from hardware.sensor_gateway import process_incoming_sensor_data
+        success = process_incoming_sensor_data(payload)
+
+        if success:
+            return jsonify({"status": "success", "room_id": room_id, "message": "Telemetry ingested via WSO2 successfully"}), 200
+        else:
+            return jsonify({"error": "Failed to process telemetry payload"}), 500
+
+    except Exception as e:
+        logger.error(f"WSO2 Telemetry ingestion error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/v1/buildings', methods=['GET'])
+def api_v1_buildings():
+    """Retrieve room layouts and building structural metadata."""
+    try:
+        config_path = os.path.join(PROJECT_ROOT, "room_config.json")
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                config_data = json.load(f)
+            return jsonify(config_data), 200
+        else:
+            # Fallback mock configuration if file is missing
+            return jsonify({
+                "building": {"name": "Smart Office Building", "version": "v2.0"},
+                "rooms": []
+            }), 200
+    except Exception as e:
+        logger.error(f"WSO2 get buildings error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/v1/energy', methods=['GET'])
+def api_v1_energy():
+    """Retrieve building energy meters and optimization summaries."""
+    if _live_service is None:
+        return jsonify({"error": "Integration service not running"}), 503
+
+    try:
+        summary = _live_service.state_manager.get_system_summary()
+        return jsonify({
+            "timestamp": datetime.now().isoformat(),
+            "total_power_watts": summary.get("total_power_watts", 0.0),
+            "total_cumulative_energy_wh": summary.get("total_cumulative_energy_wh", 0.0),
+            "baseline_energy_wh": summary.get("baseline_energy_wh", 0.0),
+            "ai_energy_wh": summary.get("ai_energy_wh", 0.0),
+            "energy_saved_wh": summary.get("energy_saved_wh", 0.0),
+            "percentage_saved": summary.get("percentage_saved", 0.0),
+            "hvac_power_watts": summary.get("hvac_power_watts", 0.0),
+            "lighting_power_watts": summary.get("lighting_power_watts", 0.0),
+            "plug_power_watts": summary.get("plug_power_watts", 0.0),
+            "comfort_score": summary.get("comfort_score", 0.0)
+        }), 200
+    except Exception as e:
+        logger.error(f"WSO2 get energy metrics error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/v1/optimization', methods=['GET', 'POST'])
+def api_v1_optimization():
+    """Get or update multi-objective optimization cost weights (alpha, beta, gamma)."""
+    if _live_service is None:
+        return jsonify({"error": "Integration service not running"}), 503
+
+    try:
+        state_mgr = _live_service.state_manager
+        if request.method == 'POST':
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "No JSON payload provided"}), 400
+
+            alpha = data.get("alpha")
+            beta = data.get("beta")
+            gamma = data.get("gamma")
+
+            state_mgr.set_optimization_weights(alpha, beta, gamma)
+            weights = state_mgr.get_optimization_weights()
+
+            return jsonify({
+                "status": "success",
+                "message": "Optimization weights adapted successfully",
+                "weights": weights
+            }), 200
+        else:
+            weights = state_mgr.get_optimization_weights()
+            return jsonify({"weights": weights}), 200
+
+    except Exception as e:
+        logger.error(f"WSO2 optimization weighting error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/v1/assistant', methods=['POST'])
+def api_v1_assistant():
+    """Smart Building Assistant chatbot endpoint."""
+    try:
+        data = request.get_json()
+        if not data or "message" not in data:
+            return jsonify({"error": "Missing 'message' in request body"}), 400
+
+        user_message = data["message"]
+
+        state_mgr = None
+        db = None
+        if _live_service is not None:
+            state_mgr = _live_service.state_manager
+            db = _live_service.db_persistence
+
+        from ai.assistant.llm_engine import BuildingAssistant
+        assistant = BuildingAssistant(state_manager=state_mgr, database=db)
+        result = assistant.generate_response(user_message)
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        logger.error(f"AI Assistant endpoint error: {e}")
         return jsonify({"error": str(e)}), 500
 
 

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WSO2 Micro Integrator 4.2.0
+  Sensor Ingestion Sequence
+  
+  Flow: MQTT message from ESP32 → Validate → Transform → Forward to FastAPI Backend
+-->
+<sequence name="SensorIngestionSequence" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <!-- Step 1: Log incoming raw MQTT message -->
+    <log level="custom">
+        <property name="Step" value="[1/5] Received sensor telemetry from IoT Edge Node"/>
+        <property expression="$trp:mqtt.topic" name="MQTT_Topic"/>
+    </log>
+
+    <!-- Step 2: Extract MQTT topic for room identification -->
+    <property expression="$trp:mqtt.topic" name="MQTT_TOPIC" scope="default" type="STRING"/>
+
+    <!-- Step 3: Validate sensor data ranges -->
+    <filter xpath="fn:number(json-eval($.temperature)) &gt; -20 and fn:number(json-eval($.temperature)) &lt; 60">
+        <then>
+            <log level="custom">
+                <property name="Step" value="[2/5] Temperature validation passed"/>
+            </log>
+        </then>
+        <else>
+            <log level="custom">
+                <property name="Step" value="[2/5] WARNING: Temperature out of valid range [-20, 60]"/>
+            </log>
+            <!-- Still forward but flag the anomaly -->
+        </else>
+    </filter>
+
+    <!-- Step 4: Transform raw JSON into Enterprise schema for FastAPI Backend -->
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "topic": "$1",
+                "room_id": "$2",
+                "telemetry": {
+                    "temperature": $3,
+                    "humidity": $4,
+                    "co2": $5,
+                    "lux": $6
+                },
+                "source": "hardware",
+                "timestamp": "$7"
+            }
+        </format>
+        <args>
+            <arg evaluator="xml" expression="$ctx:MQTT_TOPIC"/>
+            <arg evaluator="json" expression="$.room_id"/>
+            <arg evaluator="json" expression="$.temperature"/>
+            <arg evaluator="json" expression="$.humidity"/>
+            <arg evaluator="json" expression="$.co2"/>
+            <arg evaluator="json" expression="$.lux"/>
+            <arg evaluator="json" expression="$.timestamp"/>
+        </args>
+    </payloadFactory>
+
+    <log level="custom">
+        <property name="Step" value="[3/5] Payload transformed to Enterprise schema"/>
+    </log>
+
+    <!-- Step 5: Set Content-Type header for REST call -->
+    <property name="messageType" value="application/json" scope="axis2"/>
+    <property name="ContentType" value="application/json" scope="axis2"/>
+
+    <!-- Step 6: Forward transformed payload to FastAPI Backend -->
+    <call>
+        <endpoint key="BackendSensorAPIEndpoint"/>
+    </call>
+
+    <log level="custom">
+        <property name="Step" value="[4/5] Forwarded to FastAPI Backend"/>
+        <property expression="json-eval($.status)" name="BackendStatus"/>
+    </log>
+
+    <!-- Step 7: Check if anomaly detection should be triggered -->
+    <filter xpath="fn:number(json-eval($.co2)) &gt; 1000">
+        <then>
+            <log level="custom">
+                <property name="Step" value="[5/5] HIGH CO2 ALERT - Triggering anomaly sequence"/>
+            </log>
+            <sequence key="AlertNotificationSequence"/>
+        </then>
+        <else>
+            <log level="custom">
+                <property name="Step" value="[5/5] Sensor ingestion complete - No alerts"/>
+            </log>
+        </else>
+    </filter>
+</sequence>

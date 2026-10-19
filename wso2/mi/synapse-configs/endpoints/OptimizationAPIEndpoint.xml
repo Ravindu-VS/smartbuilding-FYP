@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- WSO2 Micro Integrator 4.2.0 - Optimization API Endpoint -->
+<endpoint name="OptimizationAPIEndpoint" xmlns="http://ws.apache.org/ns/synapse">
+    <address uri="http://localhost:8000/optimization">
+        <timeout>
+            <duration>15000</duration>
+            <responseAction>fault</responseAction>
+        </timeout>
+        <suspendOnFailure>
+            <initialDuration>2000</initialDuration>
+            <progressionFactor>2.0</progressionFactor>
+            <maximumDuration>60000</maximumDuration>
+        </suspendOnFailure>
+    </address>
+</endpoint>

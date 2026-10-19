@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WSO2 Micro Integrator 4.2.0
+  Energy Optimization Sequence
+  
+  Multi-step mediation flow:
+  1. Receive sensor data
+  2. Call occupancy prediction
+  3. Call energy optimizer
+  4. Return optimization action
+-->
+<sequence name="EnergyOptimizationSequence" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <log level="custom">
+        <property name="Step" value="[EnergyOpt] Starting energy optimization workflow"/>
+    </log>
+
+    <!-- Step 1: Store original payload -->
+    <property expression="json-eval($)" name="ORIGINAL_PAYLOAD" scope="default" type="STRING"/>
+
+    <!-- Step 2: Call AI Occupancy Prediction -->
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "Temperature": $1,
+                "Humidity": $2,
+                "Light": $3,
+                "CO2": $4
+            }
+        </format>
+        <args>
+            <arg evaluator="json" expression="$.telemetry.temperature"/>
+            <arg evaluator="json" expression="$.telemetry.humidity"/>
+            <arg evaluator="json" expression="$.telemetry.lux"/>
+            <arg evaluator="json" expression="$.telemetry.co2"/>
+        </args>
+    </payloadFactory>
+
+    <property name="messageType" value="application/json" scope="axis2"/>
+
+    <call>
+        <endpoint>
+            <address uri="http://localhost:8000/ai/occupancy/all"/>
+        </endpoint>
+    </call>
+
+    <property expression="json-eval($.occupancy_prediction)" name="OCC_PRED" scope="default"/>
+
+    <log level="custom">
+        <property name="Step" value="[EnergyOpt] Occupancy prediction received"/>
+        <property expression="$ctx:OCC_PRED" name="Occupancy"/>
+    </log>
+
+    <!-- Step 3: Call Optimization Action -->
+    <payloadFactory media-type="json">
+        <format>{}</format>
+        <args/>
+    </payloadFactory>
+
+    <property name="HTTP_METHOD" value="POST" scope="axis2"/>
+    <call>
+        <endpoint key="OptimizationAPIEndpoint"/>
+    </call>
+
+    <log level="custom">
+        <property name="Step" value="[EnergyOpt] Optimization action computed"/>
+        <property expression="json-eval($.controller_type)" name="Controller"/>
+    </log>
+</sequence>

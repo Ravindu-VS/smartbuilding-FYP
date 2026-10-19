@@ -1,0 +1,97 @@
+/*
+ * WSO2 Streaming Integrator 7.0.0
+ * Energy Optimization Siddhi Application
+ *
+ * Real-time energy event processing using sliding window analysis.
+ * Triggers optimization workflow when energy thresholds are exceeded.
+ *
+ * Input:  SensorDataStream (from MQTT via MI)
+ * Output: EnergyAlertStream (to MI AlertNotificationSequence)
+ *         EnergyAggregateStream (to Dashboard via HTTP)
+ */
+
+@App:name("EnergyOptimizationApp")
+@App:description("Real-time energy monitoring and optimization triggering for Smart Building")
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- INPUT STREAMS
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- Raw sensor data from MQTT (via WSO2 MI HTTP callback or direct MQTT source)
+@source(type='http', receiver.url='http://0.0.0.0:8280/energy/stream',
+        @map(type='json'))
+define stream SensorDataStream (
+    room_id string,
+    temperature double,
+    humidity double,
+    co2 double,
+    lux double,
+    power_watts double,
+    timestamp string
+);
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- OUTPUT STREAMS
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- High energy consumption alerts
+@sink(type='http', publisher.url='http://localhost:8000/ai/anomalies',
+      @map(type='json'))
+define stream EnergyAlertStream (
+    room_id string,
+    avg_power double,
+    max_power double,
+    alert_type string,
+    severity string,
+    message string,
+    detected_at string
+);
+
+-- Aggregated energy metrics for dashboard (5-minute windows)
+@sink(type='log', prefix='[EnergyAggregate]')
+define stream EnergyAggregateStream (
+    window_start string,
+    total_avg_power double,
+    total_max_power double,
+    active_rooms long,
+    energy_efficiency_score double
+);
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- PROCESSING QUERIES
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- Query 1: 5-minute sliding window energy aggregation per room
+@info(name='RoomEnergyWindow')
+from SensorDataStream#window.timeBatch(5 min)
+select
+    room_id,
+    avg(power_watts) as avg_power,
+    max(power_watts) as max_power,
+    count() as sample_count
+group by room_id
+insert into RoomEnergyWindowStream;
+
+-- Query 2: Detect high energy consumption (power > 5000W sustained)
+@info(name='HighEnergyAlert')
+from RoomEnergyWindowStream[avg_power > 5000.0]
+select
+    room_id,
+    avg_power,
+    max_power,
+    'high_energy_consumption' as alert_type,
+    'high' as severity,
+    str:concat('Room ', room_id, ' averaging ', str:replaceFirst(convert(avg_power, 'string'), '(\\d+\\.\\d{1}).*', '$1'), 'W over 5-min window') as message,
+    time:currentTimestamp() as detected_at
+insert into EnergyAlertStream;
+
+-- Query 3: Building-wide energy aggregation (5-minute totals)
+@info(name='BuildingEnergyAggregate')
+from SensorDataStream#window.timeBatch(5 min)
+select
+    time:currentTimestamp() as window_start,
+    avg(power_watts) as total_avg_power,
+    max(power_watts) as total_max_power,
+    distinctCount(room_id) as active_rooms,
+    ifThenElse(avg(power_watts) > 0, (1.0 - (avg(power_watts) / 10000.0)) * 100.0, 100.0) as energy_efficiency_score
+insert into EnergyAggregateStream;

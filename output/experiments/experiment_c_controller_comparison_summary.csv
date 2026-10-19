@@ -1,0 +1,5 @@
+Controller,Energy (kWh),Comfort Score,HVAC Runtime %,Light Runtime %,Accuracy,Precision,Recall,F1 Score,Floor 0 kWh,Floor 1 kWh,Floor 2 kWh,Floor 3 kWh,Floor 4 kWh
+Baseline (Always-On),398.4,0.7204,100.0,100.0,0.5341,0.5341,1.0,0.6963,93.36,68.88,120.0,63.36,52.8
+Schedule-Based,230.66,0.691,56.4,56.4,0.7746,0.7736,0.8171,0.7948,55.2,38.09,64.8,39.14,33.43
+CO2 Threshold,229.46,0.6825,36.3,36.3,0.7627,0.9084,0.6181,0.7356,58.87,46.81,66.99,29.02,27.77
+ML Occupancy (Random Forest),310.24,0.6934,100.0,100.0,0.5341,0.5341,1.0,0.6963,83.52,52.09,78.76,51.27,44.6

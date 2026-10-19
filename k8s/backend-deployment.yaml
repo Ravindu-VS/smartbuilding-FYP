@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: smart-building-backend:latest
+        imagePullPolicy: Never # using local image for now
+        ports:
+        - containerPort: 8001
+        envFrom:
+        - configMapRef:
+            name: building-configmap
+        - secretRef:
+            name: building-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 8001
+      targetPort: 8001

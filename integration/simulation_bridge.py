@@ -142,35 +142,18 @@ class SimulationBridge:
             logger.info("  Mode: DISCONNECTED (waiting for simulation)")
 
     def _init_headless_engine(self):
-        """Create a headless SimulationEngine instance."""
-        from simulation.engine import SimulationEngine
+        """Create a headless MultiFloorSimulator instance."""
+        from integration.multi_floor_simulator import MultiFloorSimulator
 
-        engine_config = {
-            "speed_factor": self._config.get(
-                "speed_factor", SIMULATION_SPEED_FACTOR
-            ),
-            "advanced_physics": self._config.get("advanced_physics", True),
-            "sensors": self._config.get("sensors", {}),
-            "occupancy": self._config.get("occupancy", {}),
-            "decisions": self._config.get("decisions", {}),
-            "hardware": {"type": "logging"},
-        }
-
-        self._engine = SimulationEngine(engine_config)
-        self._inject_custom_schedules()
+        speed_factor = self._config.get("speed_factor", SIMULATION_SPEED_FACTOR)
+        self._engine = MultiFloorSimulator(speed_factor=speed_factor, seed=42)
         logger.info(
-            f"  SimulationEngine created with {len(self._engine.room_ids)} rooms"
+            f"  MultiFloorSimulator created with 26 rooms"
         )
 
     def _inject_custom_schedules(self):
-        """Inject custom occupancy schedules for bathroom and kitchen."""
-        if self._engine is None:
-            return
-        scheduler = self._engine.occupancy_scheduler
-        if "bathroom" not in scheduler.zone_schedules:
-            scheduler.zone_schedules["bathroom"] = BATHROOM_OCCUPANCY_SCHEDULE
-        if "kitchen" not in scheduler.zone_schedules:
-            scheduler.zone_schedules["kitchen"] = KITCHEN_OCCUPANCY_SCHEDULE
+        """No-op for MultiFloorSimulator as it uses building_config schedules."""
+        pass
 
     # =========================================================================
     # CORE API: Step + Read
@@ -192,7 +175,7 @@ class SimulationBridge:
         if self._mode == "headless":
             if self._engine is not None:
                 try:
-                    self._engine.update(dt)
+                    self._engine.step(dt)
                 except Exception as e:
                     logger.error(f"Headless simulation step failed: {e}")
                     self._connection_failed = True
@@ -261,11 +244,60 @@ class SimulationBridge:
             List of standardized room state dicts. Empty if disconnected.
         """
         if self._mode == "external":
-            return self._get_rooms_from_ipc()
+            rooms = self._get_rooms_from_ipc()
         elif self._mode == "headless":
-            return self._get_rooms_from_engine()
+            rooms = self._get_rooms_from_engine()
         else:
-            return []  # Disconnected
+            rooms = []  # Disconnected
+            
+        # Hardware-in-the-Loop Injection
+        try:
+            from hardware.hardware_room_manager import hardware_manager
+            from integration.building_config import BUILDING_CONFIG
+            from integration.config import compute_humidity_ratio
+            
+            # Find hardware rooms from config
+            hw_rooms = []
+            for floor in BUILDING_CONFIG["floors"]:
+                for r in floor.get("rooms", []):
+                    if r.get("data_source") == "hardware":
+                        hw_rooms.append(r["room_id"])
+            
+            # Patch room data
+            for room in rooms:
+                rid = room.get("room_id")
+                if rid in hw_rooms:
+                    room["source"] = "hardware"
+                    hw_state = hardware_manager.get_room_state(rid)
+                    if hw_state:
+                        # Override physics with physical sensors
+                        temp = hw_state.get("temperature", room.get("temperature", 24.0))
+                        hum = hw_state.get("humidity", room.get("humidity", 50.0))
+                        co2 = hw_state.get("co2", room.get("co2", 400.0))
+                        lux = hw_state.get("lux", room.get("light", 0.0))
+                        
+                        room["temperature"] = temp
+                        room["humidity"] = hum
+                        room["co2"] = co2
+                        room["light"] = lux
+                        
+                        # Update the sensors dictionary for ML
+                        if "sensors" in room:
+                            room["sensors"]["Temperature"] = temp
+                            room["sensors"]["Humidity"] = hum
+                            room["sensors"]["CO2"] = co2
+                            room["sensors"]["Light"] = lux
+                            room["sensors"]["HumidityRatio"] = compute_humidity_ratio(temp, hum)
+                            
+                        if "occupancy_probability" in hw_state:
+                            room["occupancy_probability"] = hw_state["occupancy_probability"]
+                else:
+                    room["source"] = "simulation"
+                    
+        except ImportError:
+            pass
+            
+        return rooms
 
     def _get_rooms_from_ipc(self) -> List[Dict[str, Any]]:
         """Read room states from the external IPC state file."""
@@ -295,31 +327,37 @@ class SimulationBridge:
         return rooms_data
 
     def _get_rooms_from_engine(self) -> List[Dict[str, Any]]:
-        """Read room states from the headless engine (same as original)."""
+        """Read room states from the headless MultiFloorSimulator."""
         if self._engine is None:
             return []
 
         try:
-            engine_state = self._engine.get_state()
+            rooms_data = self._engine.get_all_room_states()
+            
+            # Create a mock engine state for the API
+            self._cached_engine_state = {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "time": self._engine.simulation_time_str,
+                "rooms": {}
+            }
+            
+            # The MultiFloorSimulator handles its own mapping
+            # Just add the missing int_id from the legacy map if needed
+            from integration.building_config import get_legacy_room_mapping
+            legacy_map = get_legacy_room_mapping()
+            reverse_legacy = {v: k for k, v in legacy_map.items()}
+            
+            for r in rooms_data:
+                r["int_id"] = reverse_legacy.get(r["room_id"], -1)
+                
+            self._cached_rooms = rooms_data
+            return rooms_data
+            
         except Exception as e:
             logger.error(f"Failed to get engine state: {e}")
             self._connection_failed = True
             self._last_error = str(e)
             return []
-
-        self._cached_engine_state = engine_state
-
-        rooms_data = []
-        for int_id, room_state in engine_state.get("rooms", {}).items():
-            try:
-                mapped = self._map_room_state(int_id, room_state, engine_state)
-                rooms_data.append(mapped)
-            except Exception as e:
-                logger.warning(f"Failed to map room {int_id}: {e}")
-                continue
-
-        self._cached_rooms = rooms_data
-        return rooms_data
 
     def _map_room_state(
         self, int_id: int, room: dict, engine_state: dict
@@ -388,24 +426,19 @@ class SimulationBridge:
 
     def _apply_control_to_engine(self, room_id: str, control: Dict[str, Any]):
         """Apply control directly to the headless engine."""
-        int_id = ROOM_ID_REVERSE.get(room_id)
-        if int_id is None:
-            return
-
-        room = self._engine.state.get("rooms", {}).get(int_id)
-        if room is None:
-            return
-
         try:
             light_action = control.get("light_action", "OFF")
-            room["light_on"] = LIGHT_ACTION_TO_SIM.get(light_action, False)
-
             hvac_action = control.get("hvac_action", "ECO")
-            hvac_sim = HVAC_ACTION_TO_SIM.get(
-                hvac_action, {"hvac_mode": "off", "hvac_speed": 0.0}
+
+            sim_light = LIGHT_ACTION_TO_SIM.get(light_action, False)
+            hvac_cfg = HVAC_ACTION_TO_SIM.get(hvac_action, {"hvac_mode": "off", "hvac_speed": 0.0})
+
+            self._engine.apply_control(
+                room_id,
+                sim_light,
+                hvac_cfg["hvac_mode"],
+                hvac_cfg["hvac_speed"]
             )
-            room["hvac_mode"] = hvac_sim["hvac_mode"]
-            room["hvac_speed"] = hvac_sim["hvac_speed"]
         except Exception as e:
             logger.warning(f"Failed to apply control to room {room_id}: {e}")
 

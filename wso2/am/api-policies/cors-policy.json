@@ -1,0 +1,23 @@
+{
+  "policyName": "SmartBuildingCORS",
+  "description": "CORS policy for Smart Building Dashboard and external clients",
+  "corsConfiguration": {
+    "accessControlAllowOrigins": [
+      "http://localhost:3000",
+      "http://localhost:8000",
+      "https://dashboard.smartbuilding.com"
+    ],
+    "accessControlAllowMethods": [
+      "GET", "POST", "PUT", "DELETE", "OPTIONS"
+    ],
+    "accessControlAllowHeaders": [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept"
+    ],
+    "accessControlAllowCredentials": true,
+    "accessControlMaxAge": 3600,
+    "corsConfigurationEnabled": true
+  }
+}

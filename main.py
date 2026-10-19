@@ -146,6 +146,9 @@ def setup_controller(controller_type: str, config: Dict,
             hvac_system=hvac,
             lighting_system=lighting
         )
+    elif controller_type == 'ppo':
+        from control.ppo_controller import PPOController
+        return PPOController(config)
     else:
         return BaselineRuleController(config['controller'])
 
@@ -594,7 +597,7 @@ Examples:
     )
     parser.add_argument(
         '--controller', type=str, default='baseline',
-        choices=['baseline', 'mpc'],
+        choices=['baseline', 'mpc', 'ppo'],
         help='Controller type (default: baseline)'
     )
     parser.add_argument(

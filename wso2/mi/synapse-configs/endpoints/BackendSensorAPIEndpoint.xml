@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- WSO2 Micro Integrator 4.2.0 - Backend Sensor API Endpoint -->
+<endpoint name="BackendSensorAPIEndpoint" xmlns="http://ws.apache.org/ns/synapse">
+    <address uri="http://localhost:8000/sensors/ingest">
+        <timeout>
+            <duration>5000</duration>
+            <responseAction>fault</responseAction>
+        </timeout>
+        <suspendOnFailure>
+            <initialDuration>1000</initialDuration>
+            <progressionFactor>2.0</progressionFactor>
+            <maximumDuration>30000</maximumDuration>
+        </suspendOnFailure>
+        <markForSuspension>
+            <retriesBeforeSuspension>3</retriesBeforeSuspension>
+        </markForSuspension>
+    </address>
+</endpoint>

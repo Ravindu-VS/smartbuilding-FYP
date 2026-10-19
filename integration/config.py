@@ -7,6 +7,22 @@ Contains room mappings, energy parameters, control tuning, and system defaults.
 
 from typing import Dict, Any
 import math
+import os
+
+# =============================================================================
+# ENVIRONMENT CONFIGURATION
+# =============================================================================
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
+POSTGRES_USER = os.getenv("POSTGRES_USER", "admin")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "adminpassword")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "smartbuilding")
+
+WSO2_AM_URL = os.getenv("WSO2_AM_URL", "https://localhost:8243")
+MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 
 # =============================================================================
 # ROOM MAPPING
@@ -149,8 +165,8 @@ MAX_HISTORY_POINTS = 300
 # Flask API port
 API_PORT = 8001
 
-# API host
-API_HOST = "127.0.0.1"
+# API host (0.0.0.0 allows incoming connections from ESP32 on WiFi network)
+API_HOST = "0.0.0.0"
 
 # Model path (relative to project root)
 MODEL_PATH = "models/final_unified_occupancy_pipeline.pkl"
@@ -160,10 +176,10 @@ OUTPUT_DIR = "output"
 LOG_DIR = "output/integration_logs"
 
 # Auto-open the dashboard in the default browser on startup
-AUTO_OPEN_BROWSER = True
+AUTO_OPEN_BROWSER = False
 
 # Dashboard URL (computed from host/port)
-DASHBOARD_URL = f"http://{API_HOST}:{API_PORT}/dashboard"
+DASHBOARD_URL = f"http://{API_HOST}:{API_PORT}/3d-twin"
 
 # =============================================================================
 # TWO-WAY IPC CONFIGURATION (Panda3D ↔ Backend)

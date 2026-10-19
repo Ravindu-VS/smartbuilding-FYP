@@ -84,6 +84,15 @@ def run_backend_server(is_demo: bool = False):
         set_live_service(live_service)
         live_service.start()
         
+        # 3b. Start MQTT client for ESP32 hardware integration
+        try:
+            from hardware.mqtt_client import mqtt_client
+            mqtt_client.start()
+            logger.info("✓ MQTT Client started for ESP32 hardware integration")
+        except Exception as mqtt_err:
+            logger.warning(f"MQTT Client not started (non-fatal): {mqtt_err}")
+
+        
         # 4. Open browser if configured
         if AUTO_OPEN_BROWSER:
             def open_browser():
@@ -96,7 +105,7 @@ def run_backend_server(is_demo: bool = False):
         logger.info(f"Starting API Server on {API_HOST}:{API_PORT}")
         # Disable Werkzeug's default startup banner for cleaner logs
         logging.getLogger('werkzeug').setLevel(logging.ERROR)
-        app.run(host=API_HOST, port=API_PORT, debug=False, use_reloader=False)
+        app.run(host=API_HOST, port=API_PORT, debug=False, use_reloader=False, threaded=True)
 
     except Exception as e:
         logger.error(f"Backend Server failed: {e}", exc_info=True)
@@ -167,10 +176,13 @@ def main():
     # Give the backend a small head start so the API is up when the sim starts
     time.sleep(1.0)
 
-    # Start Panda3D on the main thread (required by OpenGL/Panda3D)
-    run_panda3d_simulation(is_demo)
-
-    # If Panda3D closes (or fails), wait briefly and clean up
+    # Run in pure headless mode (powering the Three.js dashboard)
+    logger.info("Running in Headless Simulation Mode (Three.js Dashboard Active)...")
+    try:
+        while not stop_event.is_set():
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        pass
     logger.info("Main simulation thread ended. Cleaning up...")
     stop_event.set()
     try:

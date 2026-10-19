@@ -123,19 +123,20 @@ class OccupancyInferenceService:
         # Validate and prepare features
         features_array = self._prepare_features(sensor_data)
 
-        # Build a DataFrame with proper column names for the pipeline
-        features_df = pd.DataFrame([features_array], columns=REQUIRED_FEATURES)
-
         # If we have a separate scaler (legacy models), apply manual imputation + scaling
-        if self.scaler:
-            features_array = np.nan_to_num(features_array, nan=0.0)
-            features_array = self.scaler.transform([features_array])[0]
-            occupancy_pred = self.model.predict([features_array])[0]
-            occupancy_prob = self.model.predict_proba([features_array])[0][1]
-        else:
-            # Unified pipeline handles imputation + scaling internally
-            occupancy_pred = self.model.predict(features_df)[0]
-            occupancy_prob = self.model.predict_proba(features_df)[0][1]
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if self.scaler:
+                features_array = np.nan_to_num(features_array, nan=0.0)
+                features_array = self.scaler.transform([features_array])[0]
+                occupancy_pred = self.model.predict([features_array])[0]
+                occupancy_prob = self.model.predict_proba([features_array])[0][1]
+            else:
+                # Unified pipeline handles imputation + scaling internally
+                # Use 2D numpy array directly to avoid pandas DataFrame overhead for single-row inference
+                occupancy_pred = self.model.predict([features_array])[0]
+                occupancy_prob = self.model.predict_proba([features_array])[0][1]
 
         # Calculate confidence
         confidence = max(occupancy_prob, 1 - occupancy_prob)
@@ -155,7 +156,7 @@ class OccupancyInferenceService:
         }
 
         # Log inference
-        logger.info(f"Inference: Probability={occupancy_prob:.4f}, Prediction={occupancy_pred}, "
+        logger.debug(f"Inference: Probability={occupancy_prob:.4f}, Prediction={occupancy_pred}, "
                    f"Missing={missing_count}/{len(REQUIRED_FEATURES)}")
 
         return InferenceResult(
@@ -200,17 +201,44 @@ class OccupancyInferenceService:
 
     def batch_predict(self, sensor_data_list: List[Dict]) -> List[InferenceResult]:
         """
-        Make predictions for multiple sensor readings.
-
-        Args:
-            sensor_data_list: List of sensor data dictionaries
-
-        Returns:
-            List of InferenceResult objects
+        Make predictions for multiple sensor readings in a vectorized way.
         """
-        logger.info(f"Making batch predictions for {len(sensor_data_list)} samples")
-        results = [self.predict(data) for data in sensor_data_list]
-        logger.info(f"✓ Batch prediction complete")
+        logger.debug(f"Making batch predictions for {len(sensor_data_list)} samples")
+        
+        # Prepare all features
+        features_list = [self._prepare_features(data) for data in sensor_data_list]
+        features_df = pd.DataFrame(features_list, columns=REQUIRED_FEATURES)
+        
+        # Predict all at once
+        if self.scaler:
+            features_array = np.nan_to_num(features_list, nan=0.0)
+            features_array = self.scaler.transform(features_array)
+            occupancy_preds = self.model.predict(features_array)
+            occupancy_probs = self.model.predict_proba(features_array)[:, 1]
+        else:
+            occupancy_preds = self.model.predict(features_df)
+            occupancy_probs = self.model.predict_proba(features_df)[:, 1]
+            
+        results = []
+        for i, data in enumerate(sensor_data_list):
+            prob = occupancy_probs[i]
+            pred = occupancy_preds[i]
+            conf = max(prob, 1 - prob)
+            
+            missing_values = {feat: data.get(feat) is None for feat in REQUIRED_FEATURES}
+            missing_count = sum(missing_values.values())
+            
+            results.append(InferenceResult(
+                occupancy_probability=float(prob),
+                occupancy_prediction=int(pred),
+                confidence=float(conf),
+                missing_values=missing_values,
+                missing_count=missing_count,
+                missing_percentage=float(100 * missing_count / len(REQUIRED_FEATURES)),
+                input_features={feat: data.get(feat) for feat in REQUIRED_FEATURES},
+                diagnostics={'decision': 'OCCUPIED' if prob >= self.threshold else 'EMPTY'}
+            ))
+            
         return results
 
     def get_confidence_metrics(self, results: List[InferenceResult]) -> Dict:

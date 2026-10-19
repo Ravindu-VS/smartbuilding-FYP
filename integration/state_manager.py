@@ -19,15 +19,23 @@ from typing import Dict, List, Any, Optional
 from dataclasses import asdict
 from collections import deque
 
+try:
+    import redis
+    import json
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+
 # Ensure project root is on path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from integration.config import (
-    ROOM_ID_MAP, ROOM_CONTROL_TUNING, MAX_HISTORY_POINTS,
+    ROOM_ID_MAP, MAX_HISTORY_POINTS,
     MODEL_PATH, ROOM_DISPLAY_NAMES,
 )
+from integration.building_config import BUILDING_CONFIG, get_room_control_tuning
 from integration.energy_estimator import EnergyEstimator
 from integration.energy_optimizer import EnergyOptimizer
 from integration.logger import SystemLogger
@@ -95,12 +103,29 @@ class StateManager:
         # ML inference service and controller (loaded once)
         self._inference_service = None
         self._controller = None
+        
+        # Optimization weights for multi-objective cost (alpha, beta, gamma)
+        self.optimization_weights = {"alpha": 1.0, "beta": 5.0, "gamma": 0.5}
+        
+        # Multi-Floor Agent Hierarchy
+        from agents.building_agent import BuildingAgent
+        self._building_agent = BuildingAgent(BUILDING_CONFIG, self._inference_service)
 
         # Reference to simulation bridge for closed-loop feedback
         self._bridge = None
 
         # Load model
         self._load_model()
+
+        # Initialize Redis client if configured
+        self.redis_client = None
+        redis_host = os.environ.get("REDIS_HOST")
+        if redis_host and REDIS_AVAILABLE:
+            try:
+                self.redis_client = redis.Redis(host=redis_host, port=6379, db=0, socket_timeout=1.0)
+                logger.info(f"✓ StateManager connected to Redis cache at {redis_host}")
+            except Exception as e:
+                logger.warning(f"StateManager failed to connect to Redis: {e}")
 
         self._sys_logger.log_system("StateManager initialized", sim_time=self._health.get("simulation_time"))
         logger.info("✓ StateManager initialized")
@@ -174,6 +199,45 @@ class StateManager:
                 self._health["data_stale"] = False  # Fresh data just arrived
                 logger.debug(f"StateManager: Received simulation time = {sim_time}")
 
+        from hardware.hardware_room_manager import hardware_manager
+
+        # Prepare building_sensor_data for BuildingAgent
+        building_sensor_data = {}
+        for raw in raw_rooms:
+            f_id = raw.get("floor_id", 0)
+            r_id = raw["room_id"]
+            if f_id not in building_sensor_data:
+                building_sensor_data[f_id] = {}
+            
+            # --- HARDWARE INJECTION ---
+            hw_state = hardware_manager.get_room_state(r_id)
+            if hw_state:
+                # Override simulation sensors with physical reality
+                for k, v in hw_state.items():
+                    if k not in ["id", "source", "last_update", "occupancy_probability"]:
+                        # Handle titlecase variations
+                        if k.title() in raw["sensors"]:
+                            raw["sensors"][k.title()] = v
+                        else:
+                            raw["sensors"][k] = v
+                
+                # Specifically extract edge AI prediction if it exists
+                if "occupancy_probability" in hw_state:
+                    raw["sensors"]["edge_occupancy_probability"] = hw_state["occupancy_probability"]
+                
+                raw["source"] = "hardware"
+            
+            # Fix ML causal confusion: remove artificial light before passing to ML
+            sensors_for_model = raw["sensors"].copy()
+            if raw.get("device_state", {}).get("light_on", False):
+                sensors_for_model["Light"] = max(0, sensors_for_model["Light"] - 400.0)
+                
+            building_sensor_data[f_id][r_id] = sensors_for_model
+            
+        # Run BuildingAgent to get all decisions
+        agent_decisions = self._building_agent.step(building_sensor_data)
+        decision_map = {d["room_id"]: d for d in agent_decisions}
+
         total_power = 0.0
 
         for raw in raw_rooms:
@@ -185,13 +249,13 @@ class StateManager:
                 self._energy.register_room(room_id, room_type)
                 self._optimizer.register_room(room_id, room_type)
 
-                # 1. ML Inference
-                ai_result = self._run_inference(raw["sensors"])
-
-                # 2. Control Decision (room-aware)
-                control_result = self._run_control(
-                    raw["sensors"], room_type, ai_result
-                )
+                agent_decision = decision_map.get(room_id)
+                if agent_decision:
+                    ai_result = agent_decision["ai"]
+                    control_result = agent_decision["control"]
+                else:
+                    ai_result = {"predicted_occupancy": 0, "occupancy_probability": 0.0}
+                    control_result = {"light_action": "ON", "hvac_action": "NORMAL", "control_mode": "FALLBACK"}
 
                 # 2b. CLOSED-LOOP FEEDBACK: Apply control back to simulation
                 if self._bridge is not None:
@@ -245,6 +309,8 @@ class StateManager:
                 room_state = {
                     "room_id": room_id,
                     "room_type": room_type,
+                    "floor_id": raw.get("floor_id", 2),
+                    "source": raw.get("source", "simulation"),
                     "display_name": raw.get("display_name", room_id),
                     "timestamp": sim_time if sim_time else raw.get("timestamp", ""),
                     "sensors": raw["sensors"],
@@ -303,6 +369,16 @@ class StateManager:
             self._health["simulation_active"] = True
             self._health["total_power_watts"] = round(total_power, 1)
 
+            # Sync to Redis cache if active
+            if self.redis_client:
+                try:
+                    for r_id, r_state in self._rooms.items():
+                        self.redis_client.set(f"room:{r_id}", json.dumps(r_state))
+                    self.redis_client.set("health", json.dumps(self._health))
+                    self.redis_client.set("system_summary", json.dumps(self._get_system_summary_internal()))
+                except Exception as ex:
+                    logger.warning(f"StateManager: Redis sync failed: {ex}")
+
     def _run_inference(self, sensors: Dict[str, float]) -> Dict[str, Any]:
         """
         Run ML inference on sensor data.
@@ -355,7 +431,7 @@ class StateManager:
         prob = ai_result.get("occupancy_probability", 0.0)
 
         # Get room-specific thresholds
-        tuning = ROOM_CONTROL_TUNING.get(room_type, ROOM_CONTROL_TUNING["office"])
+        tuning = get_room_control_tuning(room_type)
         empty_thresh = tuning["empty_threshold"]
         occupied_thresh = tuning["occupied_threshold"]
 
@@ -388,13 +464,30 @@ class StateManager:
         Get current state of all rooms.
 
         Returns:
-            Dict with rooms list and timestamp.
+            Dict with floors list and timestamp.
         """
         with self._lock:
-            rooms = list(self._rooms.values())
+            # Group rooms by floor
+            floors = []
+            for floor_config in BUILDING_CONFIG["floors"]:
+                floor_data = {
+                    "floor_id": floor_config["floor_id"],
+                    "name": floor_config["name"],
+                    "rooms": []
+                }
+                for room_cfg in floor_config["rooms"]:
+                    if room_cfg["room_id"] in self._rooms:
+                        floor_data["rooms"].append(self._rooms[room_cfg["room_id"]])
+                
+                # Compute floor-level energy
+                floor_power = sum(r.get("energy", {}).get("estimated_power_watts", 0.0) for r in floor_data["rooms"])
+                floor_data["total_power_watts"] = round(floor_power, 1)
+                
+                floors.append(floor_data)
+                
             return {
                 "timestamp": self._health.get("last_update", ""),
-                "rooms": rooms,
+                "floors": floors,
                 "system": self._get_system_summary_internal(),
             }
 
@@ -554,3 +647,19 @@ class StateManager:
                 "stale": self._health.get("data_stale", False),
                 "last_update": self._health.get("last_simulation_update", None),
             }
+
+    def get_optimization_weights(self) -> Dict[str, float]:
+        """Retrieve current optimization weights (alpha, beta, gamma)."""
+        with self._lock:
+            return self.optimization_weights.copy()
+
+    def set_optimization_weights(self, alpha: Optional[float], beta: Optional[float], gamma: Optional[float]):
+        """Update optimization weights dynamically."""
+        with self._lock:
+            if alpha is not None:
+                self.optimization_weights["alpha"] = float(alpha)
+            if beta is not None:
+                self.optimization_weights["beta"] = float(beta)
+            if gamma is not None:
+                self.optimization_weights["gamma"] = float(gamma)
+            logger.info(f"Optimization weights updated: {self.optimization_weights}")

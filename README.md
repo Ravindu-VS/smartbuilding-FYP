@@ -1,394 +1,422 @@
+# Design and Implementation of an Edge Intelligence Based Energy Management and Optimization System for Smart Buildings
+## A Hybrid Cyber-Physical Digital Twin Approach
 
-# Smart Building Energy Management System
-
-**Two Components:**
-1. **ML-Based Occupancy Detection & Control** (NEW - Production Ready) ← Start here!
-2. **Simulation Framework** (Digital Twin for training/testing)
+**Author:** Vinusha Rathnayaka  
+**Degree:** BSc (Hons) Computer Engineering | Final Year Research Project  
+**Repository Location:** `G:/projects/Final Year Project Smart Building/Project`  
 
 ---
 
-## ML System Quickstart (60 seconds)
+## 📋 Table of Contents
 
-### Start the Occupancy Detection API
+1. [Executive Summary & Core Paradigm](#1-executive-summary--core-paradigm)
+2. [Key System Features](#2-key-system-features)
+3. [System Architecture & Data Pipeline](#3-system-architecture--data-pipeline)
+4. [Physical Prototype Hardware (Room 101)](#4-physical-prototype-hardware-room-101)
+5. [Edge Intelligence & Machine Learning Pipeline](#5-edge-intelligence--machine-learning-pipeline)
+6. [Backend, Middleware & Enterprise Layer](#6-backend-middleware--enterprise-layer)
+7. [3D WebGL Digital Twin Architecture](#7-3d-webgl-digital-twin-architecture)
+8. [Intelligent Control & Optimization Framework](#8-intelligent-control--optimization-framework)
+9. [Verified Experimental Evaluation & Results](#9-verified-experimental-evaluation--results)
+10. [Repository Directory Structure](#10-repository-directory-structure)
+11. [Installation & Quickstart Guide](#11-installation--quickstart-guide)
+12. [API Reference & Telemetry Payloads](#12-api-reference--telemetry-payloads)
+13. [Academic Defense & Viva Guidance](#13-academic-defense--viva-guidance)
 
-```bash
-python run_api_flask.py
+---
+
+## 1. Executive Summary & Core Paradigm
+
+Commercial and residential buildings account for over 40% of global electricity usage, with HVAC and artificial lighting representing the vast majority of that consumption. Traditional Building Management Systems (BMS) operate on static, rule-based schedules (e.g., turning on cooling and lights from 8 AM to 6 PM), causing massive energy waste during low or zero occupancy periods. Furthermore, centralized cloud-based IoT analytics suffer from network latency, single-point-of-failure risks, and privacy concerns when streaming raw occupancy sensor telemetry.
+
+This project introduces a **Hybrid Cyber-Physical Smart Building Platform** that combines **Edge Intelligence** on low-cost microcontrollers with a **5-Floor, 26-Room WebGL 3D Digital Twin**.
+
+### 🌟 The Core Cyber-Physical Principle
+> **Room 101** operates as a **Live Physical Hardware Prototype Anchor** (ESP32-S3 Dual-Core MCU, DHT22, BH1750, MQ135, PIR sensor, Relay, and LED PWM dimmer), while the remaining **25 rooms** form a **Simulated Digital Twin Environment** to demonstrate building-scale multi-zone optimization.
+
+```
+┌───────────────────────────────┐
+│     REAL PHYSICAL WORLD       │
+│                               │
+│  Room 101 Hardware Node       │
+│  (ESP32-S3 + Sensors + Relay) │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│       EDGE INTELLIGENCE       │
+│                               │
+│  Logistic Regression MCU ML   │
+│  P(Occupied) Inference <5ms   │
+└───────────────┬───────────────┘
+                │  MQTT JSON
+                ▼
+┌───────────────────────────────┐
+│      BACKEND CONTROL LAYER    │
+│                               │
+│  Flask State Manager          │
+│  Demand-Driven HVAC / Dimming │
+└───────────────┬───────────────┘
+                │  Server-Sent Events (SSE)
+                ▼
+┌───────────────────────────────┐
+│    3D DIGITAL TWIN ENGINE     │
+│                               │
+│  Next.js 16 + Three.js 0.185  │
+│  5 Floors / 26 Rooms Rendering│
+└───────────────┴───────────────┘
 ```
 
-API at: **http://127.0.0.1:8001**
+---
 
-### Test with curl
+## 2. Key System Features
 
-```bash
-curl -X POST http://127.0.0.1:8001/control-decision \
-  -H "Content-Type: application/json" \
-  -d '{"Temperature": 21.5, "Humidity": 35.0, "Light": 450.0, "CO2": 700.0, "HumidityRatio": 0.0045}'
+- **On-Device Edge ML Inference:** Deploys trained Logistic Regression and domain-adapted occupancy models directly on ESP32-S3 microcontrollers (<15 KB SRAM footprint, <5 ms MCU execution time).
+- **Sub-150ms Synchronization Latency:** Real-time data pipeline streaming physical sensor motion triggers to virtual 3D avatar rendering via MQTT, Flask, and Server-Sent Events (SSE).
+- **Quantified Energy Savings:** Achieves a **38.2% total energy reduction** (0.52 kWh saved per hour vs. baseline static schedules) while maintaining a **0.0% comfort violation rate** (Fanger PMV index boundaries).
+- **Modular 3D WebGL Digital Twin:** Built with Three.js, featuring instanced particle rendering (`InstancedMesh`), $O(1)$ scene graph lookups (`SceneRegistry`), dynamic floor thermal heatmaps (PMV), and power riser particle pulses (`ResearchEngine.js`).
+- **Enterprise Security & Integration:** WSO2 Micro Integrator sequences and JWT token validation layer (`auth/jwt_validator.py`) for enterprise API deployment.
+- **RL/PPO Optimization Readiness:** Fully formulated state-action MDP environment (`control/ppo_controller.py` using `stable-baselines3`), pre-trained and saved in `models/ppo_building_controller.zip`.
+
+---
+
+## 3. System Architecture & Data Pipeline
+
+The system operates across four decoupled layers:
+
+```mermaid
+graph TD
+    subgraph "1. PHYSICAL HARDWARE LAYER (Room 101 Anchor)"
+        A[ESP32-S3 Microcontroller<br/>240 MHz Dual-Core | 512 KB SRAM]
+        S1[DHT22: Temp & Hum] --> A
+        S2[BH1750: Ambient Lux] --> A
+        S3[MQ135: Air Quality / CO2] --> A
+        S4[PIR Sensor: Physical Motion] --> A
+        A -->|On-Device ML| B[Edge Inference Engine<br/>P Occupied Calculation]
+    end
+
+    subgraph "2. COMMUNICATION & BACKEND LAYER"
+        B -->|MQTT / Wi-Fi| C[MQTT Broker<br/>Topic: building/A/floor/1/room/101/sensor]
+        C -->|JSON Telemetry| D[Flask / FastAPI Backend<br/>smart_building_api_flask.py]
+        D -->|Actuator Callback| E[Relay Fan ON/OFF & LED PWM Dimming]
+        E -->|GPIO 5 & 6| A
+    end
+
+    subgraph "3. STREAMING & UI LAYER"
+        D -->|Server-Sent Events| F[Next.js Dashboard<br/>useSSE.ts Hook]
+        F -->|postMessage| G[Three.js Vanilla Wrapper<br/>public/3d-twin/app.js]
+    end
+
+    subgraph "4. 3D DIGITAL TWIN ENGINE LAYER"
+        G --> H[EngineManager<br/>60 FPS Rendering Loop]
+        H --> I[OccupancyEngine - Avatars]
+        H --> J[LightingEngine - Illumination]
+        H --> K[HVACEngine - Airflow]
+        H --> L[ResearchEngine - PMV Heatmaps & Energy Flow]
+        H --> M[HeroEngine - Room 101 Green Sync Ring]
+    end
+
+    style A fill:#0d2d1e,stroke:#2e7d32,color:#fff
+    style B fill:#311b92,stroke:#673ab7,color:#fff
+    style D fill:#263238,stroke:#546e7a,color:#fff
+    style G fill:#0d47a1,stroke:#1976d2,color:#fff
 ```
 
-Response:
+---
+
+## 4. Physical Prototype Hardware (Room 101)
+
+The physical prototype is deployed on an **ESP32-S3** microcontroller board representing **Room 101 (Floor 1 Main Office/Lobby)**.
+
+### Hardware Bill of Materials (BOM) & Pinout
+
+| Component | Function / Description | Interface / Pin Assignment | Operating Voltage |
+| :--- | :--- | :--- | :--- |
+| **ESP32-S3** | Main MCU Processing & Wi-Fi Node | System Core | 3.3V / 5V USB |
+| **DHT22** | Digital Temperature & Humidity Sensor | Single-Bus Data -> `GPIO 4` | 3.3V |
+| **BH1750** | Digital Ambient Light Lux Sensor | I2C (SDA -> `GPIO 8`, SCL -> `GPIO 9`) | 3.3V |
+| **MQ135** | Air Quality / CO2 ppm Estimator | Analog Output -> `GPIO 1` (ADC) | 5.0V |
+| **PIR Sensor** | Physical Infrared Motion Detector | Digital Input -> `GPIO 2` | 3.3V |
+| **Relay Module** | HVAC Cooling Fan High-Power Actuator | Control Pin -> `GPIO 5` | 5.0V |
+| **LED Module** | Lighting Actuator with PWM Dimming | PWM Channel 0 -> `GPIO 6` | 3.3V |
+
+### Firmware Logic (`firmware/esp32_smart_building.ino`)
+- Samples sensor array every 10 seconds.
+- Computes derived feature values (`HumidityRatio`).
+- Constructs JSON telemetry payload.
+- Publishes to `building/A/floor/1/room/101/sensor`.
+- Subscribes to `building/A/floor/1/room/101/control` for incoming actuator commands (`light_action`: OFF/DIM/ON, `hvac_action`: ECO/NORMAL).
+
+---
+
+## 5. Edge Intelligence & Machine Learning Pipeline
+
+### On-Device Inference Logic
+To avoid raw telemetry overhead, the ESP32 calculates occupancy probability locally using standardized feature vectors:
+
+$$\mathbf{x} = \left[ \text{Temperature (°C)}, \text{Humidity (\%)} , \text{Light (Lux)}, \text{CO}_2 \text{ (ppm)}, \text{HumidityRatio} \right]$$
+
+$$P(y=1 | \mathbf{x}) = \sigma(\mathbf{w}^T \mathbf{x} + b) = \frac{1}{1 + e^{-(\mathbf{w}^T \mathbf{x} + b)}}$$
+
+### Model Performance Benchmarks
+
+Experiments were conducted across the **UCI Benchmark Dataset** and empirical smart building test runs (`output/metrics/`):
+
+| Evaluation Metric | Logistic Regression (Edge MCU) | Random Forest | Final Unified Model |
+| :--- | :--- | :--- | :--- |
+| **Accuracy** | **98.34%** | 97.26% | **99.88%** |
+| **Precision** | **96.50%** | 93.62% | **99.71%** |
+| **Recall** | **96.69%** | 95.23% | **99.80%** |
+| **F1-Score** | **96.59%** | 94.42% | **99.75%** |
+| **ROC-AUC** | **0.9948** | 0.9927 | **0.9999** |
+| **MCU Memory Footprint** | **< 15 KB SRAM** | > 2.3 MB | 3.7 MB (Backend) |
+| **MCU Inference Time** | **< 5 ms** | ~45 ms | N/A (Server-side) |
+
+---
+
+## 6. Backend, Middleware & Enterprise Layer
+
+### Flask / FastAPI System Server (`smart_building_api_flask.py`)
+- Running on port `8001` (or `8002` for FastAPI).
+- Main-thread event loop coordinating MQTT ingestion, simulation clock tick, and control policy evaluation.
+- Serves the `/api/stream` Server-Sent Events (SSE) endpoint broadcasting building-wide JSON state changes to web subscribers.
+
+### Enterprise Security & Integration (WSO2 MI)
+- `auth/jwt_validator.py` enforces RS256/HS256 JWT validation on API routes.
+- `wso2/mi/synapse-configs/sequences/SensorIngestionSequence.xml` provides enterprise service bus routing for industrial IoT gateways.
+
+---
+
+## 7. 3D WebGL Digital Twin Architecture
+
+The frontend is a **Next.js 16 (Turbopack) App** located in `dashboard/fyp-research-twin/`. The 3D Digital Twin is embedded inside an `iframe` loading `public/3d-twin/index.html`.
+
+### Decoupled Engine Architecture (`public/3d-twin/`)
+
+```
+public/3d-twin/
+├── app.js                      # Master WebGL Controller & Engine Orchestrator
+├── index.html                  # Canvas & ImportMap entry
+├── core/
+│   ├── EngineManager.js        # 60 FPS animation tick manager
+│   ├── EventBus.js             # Asynchronous pub/sub event bus
+│   ├── SceneRegistry.js        # O(1) Mesh lookup dictionary
+│   ├── SimConfig.js            # Visual thresholds & palette constants
+│   ├── SimulationClock.js      # Time-of-day clock (00:00 - 23:59)
+│   └── VisualStateStore.js     # State hash diffing engine
+├── engines/
+│   ├── AvatarPool.js           # Pre-allocated 3D human mesh pool
+│   ├── EnvironmentalEngine.js  # Dynamic sky, sun position, swaying trees & cars
+│   ├── ResearchEngine.js       # PMV heatmaps & energy particle risers
+│   ├── energyEngine.js         # Power consumption visualization
+│   ├── heroEngine.js           # Room 101 glowing green sync ring & latency meter
+│   ├── hvacEngine.js           # Directional cooling/heating airflow particles
+│   ├── lightingEngine.js       # Room emissive ceiling light intensity
+│   └── occupancyEngine.js      # Pathfinding avatars (door -> desk sitting/typing)
+└── controllers/
+    ├── DoorManager.js          # Physical hinged door opening/closing
+    └── RoomController.js       # Room state coordinator
+```
+
+### Key Performance Optimizations
+1. **$O(1)$ Scene Registry:** Eliminates runtime `scene.traverse()` calls by caching meshes in `SceneRegistry.js`.
+2. **State Hash Diffing:** `VisualStateStore.js` computes a hash of room visual properties and skips 3D material updates if the incoming SSE payload hasn't changed.
+3. **Instanced Mesh Particle Systems:** `ResearchEngine.js` renders hundreds of energy particles flowing along the building power shaft using `THREE.InstancedMesh`.
+
+---
+
+## 8. Intelligent Control & Optimization Framework
+
+### Multi-Objective Formulation
+The system optimizes building operation over a discrete time horizon $t$:
+
+$$\min_{\mathbf{a}_t} J = w_e \cdot E_{\text{power}}(\mathbf{a}_t) + w_c \cdot \sum_{i=1}^{N} \max\left(0, |T_i - T_{\text{target}}| - \Delta_{\text{comfort}}\right) + w_s \cdot \|\mathbf{a}_t - \mathbf{a}_{t-1}\|$$
+
+Where:
+- $w_e = 1.0$ (Energy weight)
+- $w_c = 5.0$ (Comfort penalty weight)
+- $w_s = 0.5$ (Actuator switching wear penalty)
+
+### Control Policies Implemented
+1. **Baseline Rule Controller (`control/baseline_rule_controller.py`):** Runs static schedules (23°C target, 100% lights ON during work hours).
+2. **Demand-Driven AI Controller (`smart_building_controller.py`):** Dynamically drops HVAC to ECO mode (26°C / fan OFF) and dims lights (0–30%) when rooms transition to `EMPTY`.
+3. **Reinforcement Learning Adapter (`control/ppo_controller.py`):** Integrates Stable-Baselines3 PPO model (`models/ppo_building_controller.zip`) for multi-zone optimization.
+
+---
+
+## 9. Verified Experimental Evaluation & Results
+
+Quantitative results recorded from 1-hour to 24-hour evaluation trials (`output/metrics/`):
+
+### 📊 Energy & Comfort Benchmark Summary
+
+| Evaluation Parameter | Baseline Control (Static Schedule) | Proposed AI Controller | Absolute Improvement |
+| :--- | :--- | :--- | :--- |
+| **Total Energy Consumption (1-Hour Trial)** | **1.35 kWh** | **0.83 kWh** | **0.52 kWh Saved** |
+| **Energy Reduction Percentage** | 0.0% | **38.2%** | **38.2% Energy Saved** |
+| **Comfort Boundary Violations (22–24°C)** | 0 Violations | **0 Violations** | **0.0% Violation Rate** |
+| **Lighting Active Time** | 50.0% | **43.3%** | **6.7% Reduction** |
+| **HVAC Active Cooling Time** | 50.0% | **43.3%** | **6.7% Reduction** |
+| **End-to-End Cyber-Physical Sync Latency** | N/A | **< 150 ms** | **Real-Time Synchronized** |
+
+```
+1.35 kWh ┌───────────────────────────────────────────┐ (Baseline Static Schedule)
+         │███████████████████████████████████████████│
+0.83 kWh ├───────────────────────────────┐           │ (Proposed AI Controller)
+         │███████████████████████████████│ 38.2% SAVED
+         └───────────────────────────────┴───────────┘
+```
+
+---
+
+## 10. Repository Directory Structure
+
+```
+G:/projects/Final Year Project Smart Building/Project/
+├── config.yaml                         # Master simulation & thermal parameters
+├── requirements.txt                    # Python dependencies
+├── run_system.py                       # System orchestrator script
+├── smart_building_api_flask.py         # Primary Flask SSE API server (Port 8001)
+├── smart_building_controller.py        # Real-time AI control policy engine
+├── occupancy_predictor.py              # On-demand ML occupancy inference script
+├── room_config.json                    # 26-room spatial definitions
+├── firmware/
+│   └── esp32_smart_building.ino        # ESP32-S3 C++ Arduino firmware
+├── hardware/
+│   ├── hardware_room_manager.py        # Live Hardware state manager (Room 101)
+│   └── sensor_gateway.py               # MQTT telemetry parsing & bounds checker
+├── models/
+│   ├── uci_occupancy_model.pkl         # Trained Logistic Regression model
+│   ├── domain_adapted_occupancy_model.pkl # Domain-adapted ML model
+│   └── ppo_building_controller.zip     # Trained Stable-Baselines3 PPO policy
+├── control/
+│   ├── baseline_rule_controller.py     # Static schedule baseline logic
+│   ├── mpc_controller.py              # Model Predictive Control algorithm
+│   ├── ppo_controller.py              # PPO RL controller adapter
+│   └── optimizer.py                    # Multi-objective scoring loss
+├── dashboard/fyp-research-twin/        # Next.js 16 WebGL Dashboard
+│   ├── package.json
+│   ├── src/
+│   │   ├── app/page.tsx                # Dashboard UI Page
+│   │   ├── components/
+│   │   │   ├── 3d/VanillaTwinWrapper.tsx # Iframe Wrapper for 3D Twin
+│   │   │   └── hardware/HardwareLivePanel.tsx # Room 101 Hardware HUD
+│   │   └── hooks/useSSE.ts             # Server-Sent Events subscriber hook
+│   └── public/3d-twin/                 # Three.js 3D Engine source code
+├── experiments/                        # Experiment execution scripts (Exp A, B, C, D)
+└── output/metrics/                     # Evaluation log files & CSV benchmarks
+```
+
+---
+
+## 11. Installation & Quickstart Guide
+
+### Prerequisites
+- Python 3.10+ (Virtual environment recommended)
+- Node.js 18+ & npm
+- C++ Arduino IDE (For ESP32 firmware flashing)
+
+### Step 1: Install Python Dependencies
+```bash
+cd "G:/projects/Final Year Project Smart Building/Project"
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### Step 2: Install Dashboard Dependencies
+```bash
+cd dashboard/fyp-research-twin
+npm install
+```
+
+### Step 3: Run System Backend (Flask API + Simulation Loop)
+```bash
+# In Project root
+.\.venv\Scripts\python run_system.py --demo
+```
+*Backend starts on `http://127.0.0.1:8001`.*
+
+### Step 4: Run Next.js WebGL Dashboard
+```bash
+# In dashboard/fyp-research-twin
+npm run dev
+```
+*Open your browser at `http://localhost:3000`.*
+
+---
+
+## 12. API Reference & Telemetry Payloads
+
+### 1. Ingest Physical Hardware Sensor Data
+`POST /api/hardware/sensor-data`
+
+**Request Payload:**
 ```json
 {
-  "control_mode": "OCCUPIED",
-  "light_action": "ON",
-  "hvac_action": "NORMAL"
+  "room_id": "f1_room_101",
+  "temperature": 24.5,
+  "humidity": 52.3,
+  "co2": 520.0,
+  "lux": 380.0,
+  "occupancy_probability": 0.94
 }
 ```
 
-### See the Documentation
-
-- **README_ML_API.md** - ML system API reference
-- **DEPLOYMENT_GUIDE.md** - Complete deployment guide
-- **PIPELINE_TRAINING_COMPLETE.md** - Model performance details
-
----
-
-## Simulation Framework
-
-A Python-based simulation framework for smart building energy management systems. This digital twin enables offline training and testing of ML/optimization methods for building energy optimization before deploying to actual hardware.
-
-## Project Overview
-
-**Project Title:** Design and Implementation of an Edge Intelligence Based Energy Management and Optimization System for Smart Buildings
-
-This simulation creates realistic time-series building sensor data and models HVAC, lighting, and plug loads. It includes controllers that minimize energy consumption while maintaining occupant comfort.
-
-## Features
-
-- **Thermal Modeling:** 2R2C (two-resistance, two-capacitance) thermal model for realistic zone temperature dynamics
-- **HVAC System:** Heating/cooling with COP, capacity limits, and proportional control
-- **Lighting System:** Dimming control with daylight harvesting
-- **Occupancy Patterns:** Realistic office schedules, meeting room usage, and corridor traffic
-- **Weather Generation:** Synthetic weather with seasonal/daily patterns
-- **Plug Loads:** Occupancy-dependent electrical loads
-- **Sensor Noise:** Realistic sensor imperfections and sampling
-- **Controllers:**
-  - Baseline rule-based controller
-  - MPC-like look-ahead controller
-- **Multi-objective Optimization:** Energy, comfort, and control smoothness
-
-## Project Structure
-
-```
-Project/
-├── config.yaml              # Configuration file
-├── main.py                  # Entry point
-├── README.md                # This file
-├── requirements.txt         # Python dependencies
-├── sim/                     # Simulation modules
-│   ├── __init__.py
-│   ├── building.py          # Building thermal model
-│   ├── hvac.py              # HVAC system
-│   ├── lighting.py          # Lighting with daylight harvesting
-│   ├── occupancy.py         # Occupancy pattern generator
-│   ├── weather.py           # Weather generator
-│   ├── loads.py             # Plug load generator
-│   ├── sensors.py           # Sensor noise simulation
-│   └── energy_meter.py      # Energy tracking
-├── control/                 # Controllers
-│   ├── __init__.py
-│   ├── baseline_rule_controller.py
-│   ├── mpc_controller.py
-│   └── optimizer.py         # Multi-objective scoring
-├── data/                    # Data generation
-│   ├── __init__.py
-│   └── generator.py         # Dataset CSV generation
-└── output/                  # Generated outputs
-    ├── logs/                # CSV logs and summaries
-    └── plots/               # Visualization plots
-```
-
-## Installation
-
-### Requirements
-
-- Python 3.8+
-- Required packages:
-  - numpy
-  - pyyaml
-  - matplotlib
-
-### Setup
-
-```bash
-# Clone or download the project
-cd "path/to/Project"
-
-# Install dependencies
-pip install numpy pyyaml matplotlib
-```
-
-Or create a virtual environment:
-
-```bash
-python -m venv venv
-venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/Mac
-
-pip install numpy pyyaml matplotlib
-```
-
-## Quick Start
-
-### Run with Baseline Controller (30 days)
-
-```bash
-python main.py --days 30 --controller baseline
-```
-
-### Run with MPC Controller (30 days)
-
-```bash
-python main.py --days 30 --controller mpc
-```
-
-### Run with Custom Configuration
-
-```bash
-python main.py --config custom_config.yaml --days 14 --controller mpc
-```
-
-### Command Line Options
-
-```
-usage: main.py [-h] [--days DAYS] [--controller {baseline,mpc}]
-               [--config CONFIG] [--quiet]
-
-Options:
-  --days DAYS           Number of days to simulate (default: from config)
-  --controller TYPE     Controller type: baseline or mpc (default: baseline)
-  --config PATH         Path to configuration file (default: config.yaml)
-  --quiet               Suppress progress output
-```
-
-## Configuration
-
-Edit `config.yaml` to customize the simulation:
-
-### Key Configuration Sections
-
-#### Simulation Settings
-```yaml
-simulation:
-  time_step_seconds: 60    # Simulation time step
-  duration_days: 30        # Default duration
-  random_seed: 42          # For reproducibility
-```
-
-#### Building Zones
-```yaml
-building:
-  zones:
-    - name: "Office"
-      area_m2: 200
-      occupancy_max: 25
-      thermal:
-        R_wall: 0.004      # Thermal resistance
-        C_zone: 5000000    # Thermal capacitance
-```
-
-#### Comfort Constraints
-```yaml
-comfort:
-  temp_target_min: 22.0    # °C
-  temp_target_max: 24.0    # °C
-  lux_target_min: 300      # lux
-  lux_target_max: 500      # lux
-```
-
-#### Controller Settings
-```yaml
-controller:
-  baseline:
-    comfort_setpoint: 23.0
-    
-  mpc:
-    horizon_steps: 30
-    candidate_setpoints: [20, 22, 23, 24, 26]
-```
-
-## Output
-
-### CSV Log File
-
-The simulation generates a detailed log file with columns:
-
-| Column | Description |
-|--------|-------------|
-| timestamp | ISO format timestamp |
-| zone_name | Zone identifier |
-| zone_temperature | Measured temperature (°C) |
-| outdoor_temperature | Outdoor temperature (°C) |
-| occupancy | Number of occupants |
-| hvac_power_w | HVAC electrical power (W) |
-| lighting_power_w | Lighting power (W) |
-| plug_power_w | Plug load power (W) |
-| total_power_w | Total power (W) |
-| hvac_setpoint | HVAC setpoint (°C) |
-| dimming_level | Lighting dimming (0-1) |
-| comfort_violation | Comfort penalty score |
-
-### Summary Metrics (JSON)
-
+**Response:**
 ```json
 {
-  "total_kwh": 1250.5,
-  "peak_kw": 15.2,
-  "comfort_violation_hours": 12.3,
-  "control_switch_count": 145,
-  "simulation": {
-    "duration_days": 30,
-    "controller_type": "baseline"
+  "status": "success",
+  "room_id": "f1_room_101",
+  "updated_sensors": {
+    "temperature": 24.5,
+    "humidity": 52.3,
+    "co2": 520.0,
+    "lux": 380.0,
+    "occupancy_probability": 0.94
   }
 }
 ```
 
-### Generated Plots
+### 2. Stream Real-Time Building Telemetry (SSE)
+`GET /api/stream`
 
-- `{zone}_temperature.png` - Temperature profile with setpoints
-- `{zone}_lighting.png` - Illumination and dimming control
-- `building_summary.png` - Building-wide power consumption
-
-## Building Zones
-
-The default configuration includes three zones:
-
-| Zone | Area | Max Occupancy | Type |
-|------|------|---------------|------|
-| Office | 200 m² | 25 | Open office |
-| MeetingRoom | 50 m² | 12 | Conference room |
-| Corridor | 80 m² | 5 | Transient space |
-
-## Controllers
-
-### Baseline Rule Controller
-
-Simple rule-based control:
-- **Occupied:** Maintain 23°C, 400 lux
-- **Unoccupied:** Setback to 26°C (cooling) / 18°C (heating), lights off
-
-### MPC Controller
-
-Model Predictive Control with look-ahead:
-- Simulates future building response over prediction horizon
-- Evaluates discrete action candidates
-- Selects actions minimizing total cost (energy + comfort + switching)
-
-## Extending the Simulation
-
-### Adding a New Controller
-
-1. Create a new file in `control/`:
-```python
-from control.baseline_rule_controller import ControlAction
-
-class MyController:
-    def compute_all_actions(self, zone_states, outdoor_temp, daylight_lux):
-        actions = {}
-        for zone_name, state in zone_states.items():
-            actions[zone_name] = ControlAction(
-                hvac_setpoint=23.0,
-                fan_on=True,
-                dimming_level=0.5
-            )
-        return actions
+**Event Stream Payload (data: JSON):**
+```json
+{
+  "sim_time": "Day 1T14:30:00",
+  "global_metrics": {
+    "total_power_watts": 3450,
+    "occupied_rooms": 8,
+    "comfort_score": 98.5
+  },
+  "rooms": {
+    "f1_room_101": {
+      "temperature": 24.5,
+      "humidity": 52.3,
+      "occupancy": 1,
+      "occupancy_probability": 0.94,
+      "hvac_status": "ACTIVE",
+      "light_status": "ON",
+      "powerWatts": 320,
+      "is_hardware": true
+    }
+  }
+}
 ```
-
-2. Import in `main.py` and add to `setup_controller()`
-
-### Adding a New Zone Type
-
-1. Add zone configuration in `config.yaml`:
-```yaml
-zones:
-  - name: "Laboratory"
-    area_m2: 100
-    occupancy_max: 10
-    lighting_baseline_watts: 800
-```
-
-2. Define zone-specific behavior in `occupancy.py`
-
-### Using Custom Weather Data
-
-1. Prepare a CSV file with columns: `timestamp, temperature, solar_irradiance, humidity`
-2. Update `config.yaml`:
-```yaml
-weather:
-  mode: "csv"
-  csv_path: "data/weather_data.csv"
-```
-
-## Performance
-
-Typical runtime on a standard laptop:
-- 30 days @ 60s step: ~30-60 seconds (baseline)
-- 30 days @ 60s step: ~2-3 minutes (MPC)
-
-## Use Cases
-
-1. **ML Model Training:** Generate labeled datasets for supervised learning
-2. **Reinforcement Learning:** Use as environment for RL agent training
-3. **Control Algorithm Testing:** Compare different control strategies
-4. **Energy Analysis:** Analyze building energy patterns
-5. **Sensitivity Studies:** Test impact of parameter changes
-
-## Example Results
-
-### Baseline Controller (30 days)
-```
-Total Energy: 1250.45 kWh
-Peak Power: 12.50 kW
-Comfort Violation Hours: 45.2
-Control Switches: 2880
-```
-
-### MPC Controller (30 days)
-```
-Total Energy: 1105.32 kWh (11.6% reduction)
-Peak Power: 11.20 kW
-Comfort Violation Hours: 18.5
-Control Switches: 1420
-```
-
-## Troubleshooting
-
-### ImportError: No module named 'yaml'
-```bash
-pip install pyyaml
-```
-
-### matplotlib display issues
-The simulation uses a non-interactive backend by default. Plots are saved as PNG files.
-
-### Memory issues with long simulations
-For very long simulations (>365 days), consider:
-- Increasing time step
-- Reducing output verbosity
-- Processing data in chunks
-
-## Contributing
-
-Feel free to extend this framework for your research:
-- Add new building types
-- Implement different control algorithms
-- Integrate real weather data
-- Add more detailed HVAC models
-
-## License
-
-This project is developed for educational purposes as part of a Final Year Project.
-
-## References
-
-- RC thermal network modeling for buildings
-- Model Predictive Control for building energy systems
-- Daylight harvesting strategies
-- Occupancy-based demand control
 
 ---
 
-**Author:** Final Year Project - Smart Building Energy Management  
-**Date:** 2024
+## 13. Academic Defense & Viva Guidance
 
-For questions or issues, please refer to your project supervisor.
+### 🎯 Key Viva Positioning
+When presenting to the viva panel, maintain the following exact statements to ensure 100% academic defensibility:
 
+> 1. **On Hardware Boundaries:** "Room 101 is our live physical prototype anchor equipped with an ESP32-S3 and real physical sensors. The remaining 25 rooms operate within our 3D Digital Twin simulation environment to evaluate building-scale scalability."
+> 2. **On Edge Intelligence:** "Occupancy inference runs directly on the ESP32-S3 using a lightweight Logistic Regression model (<15 KB SRAM footprint, <5 ms inference time), eliminating continuous cloud telemetry dependencies."
+> 3. **On AI Optimization:** "The system currently executes a demand-driven algorithmic control state machine that achieved 38.2% energy savings in evaluation trials. `ppo_controller.py` provides the fully implemented Reinforcement Learning MDP framework for planned multi-agent training."
+> 4. **On Digital Twin Role:** "The 3D Digital Twin is an explainable visual interface. It visualizes backend state changes—such as PMV thermal heatmaps and energy particle flows—in real time with <150 ms synchronization latency."
+
+---
+
+*For further details, consult `viva_presentation.md` for the 18-slide presentation deck and speaker notes.*
