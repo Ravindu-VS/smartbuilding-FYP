@@ -102,7 +102,14 @@ class RoomVisualState {
         const prevOcc = this.targetAvatarCount;
         this.occupancyProbability = backendState.ai?.occupancy_probability ?? 0;
         this.predictedOccupancy = backendState.ai?.predicted_occupancy ?? 0;
-        this.targetAvatarCount = backendState.ground_truth?.true_occupancy ?? backendState.sensors?.occupancy ?? backendState.ai?.predicted_occupancy ?? 0;
+        if (backendState.source === 'hardware') {
+            // Real room: one avatar while the presence sensor reports someone (only when connected)
+            const connected = backendState.hardware?.connected === true;
+            this.targetAvatarCount = connected && backendState.presence?.fused_presence ? 1 : 0;
+        } else {
+            // Simulated room: the simulator's true occupant count
+            this.targetAvatarCount = backendState.ground_truth?.true_occupancy ?? 0;
+        }
 
         // Determine avatar state from probability thresholds
         const prob = this.occupancyProbability;
@@ -121,9 +128,7 @@ class RoomVisualState {
         this.previousOccupancy = prevOcc;
 
         // --- Lighting ---
-        const lightAction = backendState.control?.light_action ||
-                            backendState.control?.light ||
-                            (backendState.device_state?.light_on ? 'ON' : 'OFF');
+        const lightAction = backendState.control?.light_action || 'OFF';
         this.lightAction = lightAction;
         if (lightAction === 'ON' || lightAction === 'FULL') {
             this.lightTarget = 1.0;
@@ -134,9 +139,7 @@ class RoomVisualState {
         }
 
         // --- HVAC ---
-        const hvacAction = backendState.control?.hvac_action ||
-                           backendState.control?.hvac ||
-                           backendState.device_state?.hvac_mode || 'off';
+        const hvacAction = backendState.control?.hvac_action || 'off';
         const normalizedHvac = hvacAction.toUpperCase();
         if (normalizedHvac === 'COOLING' || normalizedHvac === 'NORMAL') {
             this.hvacVisualMode = 'cooling';
@@ -159,21 +162,21 @@ class RoomVisualState {
         this.controlMode = backendState.control?.control_mode || '';
 
         // --- Energy & Thermal ---
-        this.powerWatts = backendState.energy?.estimated_power_watts ?? 0;
-        this.temperature = backendState.sensors?.temperature ?? backendState.temperature ?? 24.0;
-        
-        // Simple PMV approximation based on temperature (assuming 24C is neutral 0)
-        // 20C -> -2, 22C -> -1, 24C -> 0, 26C -> +1, 28C -> +2
-        this.pmv = (this.temperature - 24.0) * 0.5;
-        this.pmv = Math.max(-3, Math.min(3, this.pmv));
+        this.powerWatts = backendState.energy?.estimated_power_watts ?? backendState.energy?.measured_power_watts ?? 0;
+        const t = backendState.sensors?.Temperature ?? backendState.sensors?.temperature;
+        this.temperature = (typeof t === 'number') ? t : null;
+
+        // Temperature-deviation index for the heatmap: (T - 24 °C) / 2, clipped to ±3.
+        // It is NOT Fanger's PMV (no humidity, air speed, radiant temperature, clothing or activity).
+        // No temperature -> 0 (neutral colour).
+        this.pmv = this.temperature === null ? 0 : Math.max(-3, Math.min(3, (this.temperature - 24.0) * 0.5));
 
         // --- Hero Room ---
-        this.isHeroRoom = (backendState.source === 'hardware' || backendState.isLive === true);
-        if (this.isHeroRoom && this.lastUpdateTimestamp) {
-            try {
-                this.heroSyncLatencyMs = Date.now() - new Date(this.lastUpdateTimestamp).getTime();
-            } catch { this.heroSyncLatencyMs = 0; }
-        }
+        // Hero room = the hardware room while its board is connected.
+        // heroSyncLatencyMs = age of the board's last reading when the server sent this state.
+        this.isHeroRoom = backendState.source === 'hardware' && backendState.hardware?.connected === true;
+        const age = backendState.hardware?.age_s;
+        this.heroSyncLatencyMs = (this.isHeroRoom && typeof age === 'number') ? Math.round(age * 1000) : null;
 
         return true;
     }

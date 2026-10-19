@@ -32,41 +32,31 @@ class LightingEngineImpl {
             const lightMesh = this._app.lightMeshes.get(roomId);
             if (!lightMesh) return;
 
-            // Initialize PointLight if not present
-            if (!lightMesh.userData.pointLight) {
-                const pLight = new THREE.PointLight(0xfffff0, 0, 15);
-                pLight.position.set(0, -1, 0); // slightly below ceiling
-                lightMesh.add(pLight);
-                lightMesh.userData.pointLight = pLight;
-            }
+            // The ceiling panel's glow (emissive + bloom) shows the light decision.
+            // (A PointLight per room was planned here but never ran: THREE was not imported.
+            //  26 extra point lights make every material much slower to render, so the
+            //  panels only glow.)
 
             // Smoothly interpolate brightness
             const newBrightness = dampedLerp(currentBrightness, vs.lightTarget, 0.08, delta);
             this._roomBrightness.set(roomId, newBrightness);
             
-            const pLight = lightMesh.userData.pointLight;
-
             // Apply to mesh
             if (newBrightness > 0.6) {
                 // ON
                 lightMesh.material.emissive.setHex(0xffffff);
                 lightMesh.material.emissiveIntensity = newBrightness * 3.0;
                 lightMesh.material.color.setHex(0xffffff);
-                pLight.intensity = newBrightness * 2.5;
-                pLight.color.setHex(0xaaaaee); // Cool white/blue for sci-fi feel
             } else if (newBrightness > 0.2) {
                 // DIM
                 lightMesh.material.emissive.setHex(0xffeeaa);
                 lightMesh.material.emissiveIntensity = newBrightness;
                 lightMesh.material.color.setHex(0xeeeecc);
-                pLight.intensity = newBrightness * 0.8;
-                pLight.color.setHex(0xffeeaa); // Warm dim
             } else {
                 // OFF
                 lightMesh.material.emissive.setHex(0x000000);
                 lightMesh.material.emissiveIntensity = 0;
                 lightMesh.material.color.setHex(0x333333);
-                pLight.intensity = 0;
             }
         });
     }

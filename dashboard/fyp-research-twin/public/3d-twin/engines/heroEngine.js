@@ -115,12 +115,8 @@ class HeroEngineImpl {
         // Only care about Room 101
         if (roomId !== this._heroRoomId) return;
 
-        // Track latency from backend timestamp
-        if (backendState.timestamp) {
-            try {
-                this._latencyMs = Date.now() - new Date(backendState.timestamp).getTime();
-            } catch { /* ignore parse errors */ }
-        }
+        // Age of the board's last reading (from the server), not a guess
+        this._latencyMs = visualState?.heroSyncLatencyMs ?? null;
     }
 
     tick(delta) {
@@ -138,8 +134,9 @@ class HeroEngineImpl {
             const scale = 1.0 + (1.0 - this._pulseIntensity) * 0.3; // Ring expands as it fades
             this._syncRing.scale.set(scale, scale, 1);
         } else if (this._syncRing) {
-            // Subtle idle glow to show Room 101 is always LIVE
-            const idleGlow = 0.08 + Math.sin(SimulationClock.elapsed * 2) * 0.04;
+            // Idle glow only while the board is actually connected
+            const connected = VisualStateStore.get(this._heroRoomId).isHeroRoom;
+            const idleGlow = connected ? 0.08 + Math.sin(SimulationClock.elapsed * 2) * 0.04 : 0;
             this._syncRing.material.opacity = idleGlow;
             this._syncRing.scale.set(1, 1, 1);
         }

@@ -57,7 +57,11 @@ export const SIM_CONFIG = {
 
     // --- State Hash Fields (for dirty checking) ---
     hashFields: [
-        'sensors.occupancy',
+        'source',
+        'hardware.connected',
+        'presence.fused_presence',
+        'control.control_mode',
+        'sensors.Temperature',
         'ai.occupancy_probability',
         'ai.predicted_occupancy',
         'control.light_action',

@@ -104,11 +104,6 @@ export const CONFIG = {
         gap: 6.5,        // Gap between floors in exploded view
         duration: 1200,  // Animation duration (ms)
     },
-    api: {
-        sseUrl: 'http://127.0.0.1:8001/api/stream',
-        stateUrl: 'http://127.0.0.1:8001/api/system/live',
-        pollInterval: 2000,
-    }
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -124,7 +119,7 @@ const FLOOR_LAYOUTS = [
             { id: 'cafe',       name: 'Coffee Shop',     type: 'shop',     x: 15, z: 0,  w: 15, d: 12, maxOcc: 15 },
             { id: 'retail_a',   name: 'Retail Store A',  type: 'shop',     x: 0,  z: 12, w: 10, d: 8,  maxOcc: 10 },
             { id: 'retail_b',   name: 'Retail Store B',  type: 'shop',     x: 10, z: 12, w: 10, d: 8,  maxOcc: 10 },
-            { id: 'bath',       name: 'Public Restrooms',type: 'bathroom', x: 20, z: 12, w: 10, d: 8,  maxOcc: 5  },
+            { id: 'bathroom',   name: 'Public Restrooms',type: 'bathroom', x: 20, z: 12, w: 10, d: 8,  maxOcc: 5  },
         ]
     },
     // Floor 2 — Health & Recreation
@@ -167,13 +162,37 @@ const FLOOR_LAYOUTS = [
     {
         name: 'Penthouse Suite',
         rooms: [
-            { id: 'pent_living',  name: 'Penthouse Lounge',type: 'residential', x: 0,  z: 0,  w: 20, d: 12, maxOcc: 8 },
-            { id: 'pent_master',  name: 'Master Bedroom',  type: 'residential', x: 20, z: 0,  w: 10, d: 12, maxOcc: 2 },
+            { id: 'lounge',       name: 'Penthouse Lounge',type: 'residential', x: 0,  z: 0,  w: 20, d: 12, maxOcc: 8 },
+            { id: 'master',       name: 'Master Bedroom',  type: 'residential', x: 20, z: 0,  w: 10, d: 12, maxOcc: 2 },
             { id: 'terrace',      name: 'Roof Terrace',    type: 'lobby',       x: 0,  z: 12, w: 20, d: 8,  maxOcc: 15},
-            { id: 'pent_bath',    name: 'Luxury Bath',     type: 'bathroom',    x: 20, z: 12, w: 10, d: 8,  maxOcc: 2 },
+            { id: 'bath',         name: 'Luxury Bath',     type: 'bathroom',    x: 20, z: 12, w: 10, d: 8,  maxOcc: 2 },
         ]
     },
 ];
+
+// Room badge above each room. The hardware room's badge follows the board status.
+function drawRoomBadge(ctx, kind) {
+    const styles = {
+        live:    { fill: 'rgba(16, 185, 129, 0.85)', stroke: '#059669', text: '● LIVE ESP32' },
+        test:    { fill: 'rgba(217, 119, 6, 0.85)',  stroke: '#b45309', text: 'TEST DATA' },
+        offline: { fill: 'rgba(185, 28, 28, 0.85)',  stroke: '#7f1d1d', text: 'NO BOARD' },
+        sim:     { fill: 'rgba(100, 116, 139, 0.5)', stroke: '#475569', text: 'SIMULATION' },
+    };
+    const st = styles[kind] || styles.sim;
+    ctx.clearRect(0, 0, 256, 64);
+    ctx.beginPath();
+    ctx.fillStyle = st.fill;
+    if (ctx.roundRect) ctx.roundRect(2, 2, 252, 60, 16); else ctx.rect(2, 2, 252, 60);
+    ctx.fill();
+    ctx.strokeStyle = st.stroke;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 30px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(st.text, 128, 32);
+}
 
 // ═══════════════════════════════════════════════════════════════
 // MAIN APPLICATION CLASS
@@ -207,9 +226,10 @@ class SmartBuildingTwin {
         this.timeOfDay = 10;          // 0-24
         this.animating = false;
 
-        // Live data
+        // Live data (pushed by the Next.js page; see applyBackendState)
         this.liveData = {};
         this.connected = false;
+        this.liveBadge = null;        // { ctx, texture } of the hardware room's badge
 
         this.init();
     }
@@ -227,7 +247,6 @@ class SmartBuildingTwin {
         this.buildExterior();
         this.buildRoof();
         this.setupEventListeners();
-        // this.connectToAPI();
 
         // Hide loading screen
         setTimeout(() => {
@@ -834,21 +853,10 @@ class SmartBuildingTwin {
         badgeCanvas.height = 64;
         const bCtx = badgeCanvas.getContext('2d');
         
-        bCtx.fillStyle = isLiveRoom ? 'rgba(6, 182, 212, 0.8)' : 'rgba(100, 116, 139, 0.5)';
-        if (bCtx.roundRect) bCtx.roundRect(0, 0, 256, 64, 16); else bCtx.fillRect(0, 0, 256, 64);
-        bCtx.fill();
-        
-        bCtx.strokeStyle = isLiveRoom ? '#0891b2' : '#475569';
-        bCtx.lineWidth = 4;
-        bCtx.stroke();
-        
-        bCtx.fillStyle = '#ffffff';
-        bCtx.font = 'bold 32px Inter, sans-serif';
-        bCtx.textAlign = 'center';
-        bCtx.textBaseline = 'middle';
-        bCtx.fillText(isLiveRoom ? '🔴 LIVE' : 'SIMULATION', 128, 32);
+        drawRoomBadge(bCtx, isLiveRoom ? 'offline' : 'sim');
 
         const badgeTex = new THREE.CanvasTexture(badgeCanvas);
+        if (isLiveRoom) this.liveBadge = { ctx: bCtx, texture: badgeTex, kind: 'offline' };
         const badgeMat = new THREE.SpriteMaterial({ map: badgeTex, transparent: true });
         const badgeSprite = new THREE.Sprite(badgeMat);
         badgeSprite.scale.set(4, 1, 1);
@@ -862,14 +870,14 @@ class SmartBuildingTwin {
             def: roomDef,
             floorIndex,
             group: roomGroup,
-            sensors: {
-                temperature: 22 + Math.random() * 4,
-                humidity: 40 + Math.random() * 20,
-                light: 200 + Math.random() * 400,
-                co2: 400 + Math.random() * 200,
-                occupancy: 0,
-            },
-            control: { light: 'OFF', hvac: 'ECO', energy: 0 },
+            source: isLiveRoom ? 'hardware' : 'simulated',
+            hardware: null,
+            hasData: false,
+            sensors: { temperature: null, humidity: null, light: null, co2: null },
+            co2Source: null,
+            occupancy: { truth: null, predicted: null, probability: null, presence: null },
+            control: { light: null, hvac: null, mode: null },
+            power: { estimated: null, measured: null },
         });
     }
 
@@ -1647,32 +1655,6 @@ class SmartBuildingTwin {
         }
     }
 
-    // ─── EVENT-DRIVEN STATE UPDATE ───
-
-    markDirty(roomId, roomData) {
-        // Save to internal room data mapping so clicks/hovers can access it
-        const existing = this.roomData.get(roomId);
-        if (existing) {
-            Object.assign(existing, roomData);
-        } else {
-            this.roomData.set(roomId, roomData);
-        }
-
-        // Derive visual state (uses lightweight hash, not JSON.stringify)
-        const visualState = VisualStateStore.get(roomId);
-        const changed = VisualStateStore.processBackendUpdate(roomId, roomData, null);
-
-        if (changed) {
-            // Emit to EventBus — all engines receive this
-            eventBus.emit(Events.ROOM_STATE_CHANGED, {
-                roomId,
-                backendState: roomData,
-                visualState,
-            });
-        }
-    }
-
-
     // ─── CLICK / HOVER INTERACTION ───
 
     onMouseMove(event) {
@@ -1694,9 +1676,15 @@ class SmartBuildingTwin {
 
             const key = `${room.floorIndex}_${room.roomId}`;
             const data = this.roomData.get(key);
-            if (data) {
+            if (data && data.hasData) {
+                const t = data.sensors.temperature;
+                const occ = data.source === 'hardware'
+                    ? (data.occupancy.presence === null ? 'presence —' : (data.occupancy.presence ? 'presence detected' : 'no presence'))
+                    : `${data.occupancy.truth ?? '—'}/${room.maxOcc} people (simulated)`;
                 document.getElementById('tooltip-info').textContent =
-                    `${data.sensors.temperature.toFixed(1)}°C | ${data.sensors.occupancy}/${room.maxOcc} people`;
+                    `${t === null ? '—' : t.toFixed(1) + '°C'} | ${occ}`;
+            } else if (data && data.source === 'hardware') {
+                document.getElementById('tooltip-info').textContent = 'Board not connected — no live data';
             } else {
                 document.getElementById('tooltip-info').textContent = `Floor ${room.floorIndex + 1}`;
             }
@@ -1738,270 +1726,195 @@ class SmartBuildingTwin {
 
     updateRoomPanel(data, roomUserData) {
         const s = data.sensors;
-        document.getElementById('room-temp').textContent = `${s.temperature.toFixed(1)}°C`;
-        document.getElementById('room-humidity').textContent = `${s.humidity.toFixed(0)}%`;
-        document.getElementById('room-light').textContent = `${s.light.toFixed(0)} lux`;
-        document.getElementById('room-co2').textContent = `${s.co2.toFixed(0)} ppm`;
+        const fmt = (v, digits, unit) => (v === null || v === undefined) ? '—' : `${v.toFixed(digits)}${unit}`;
+        const bar = (id, v, toPct) => {
+            document.getElementById(id).style.width = (v === null || v === undefined) ? '0%' : `${Math.max(0, Math.min(100, toPct(v)))}%`;
+        };
+        document.getElementById('room-temp').textContent = fmt(s.temperature, 1, '°C');
+        document.getElementById('room-humidity').textContent = fmt(s.humidity, 0, '%');
+        document.getElementById('room-light').textContent = fmt(s.light, 0, ' lux');
+        document.getElementById('room-co2').textContent = fmt(s.co2, 0, ' ppm');
+        bar('temp-bar', s.temperature, v => ((v - 15) / 20) * 100);
+        bar('humidity-bar', s.humidity, v => v);
+        bar('light-bar', s.light, v => (v / 800) * 100);
+        bar('co2-bar', s.co2, v => (v / 1500) * 100);
+
+        const co2Label = document.querySelector('#room-panel .sensor-card.co2 .sensor-label');
+        if (co2Label) {
+            co2Label.textContent = data.co2Source === 'mq2_estimate' ? 'CO₂ (MQ-2 estimate, uncalibrated)'
+                : data.co2Source === 'scd41_ndir' ? 'CO₂ (SCD41)' : 'CO₂ Level';
+        }
 
         const sourceBadge = document.getElementById('room-source-badge');
+        sourceBadge.style.display = 'inline-block';
         if (data.source === 'hardware') {
-            sourceBadge.style.display = 'inline-block';
-            sourceBadge.textContent = '🟢 REAL SENSOR ACTIVE';
-            sourceBadge.style.background = '#10b981';
+            const hw = data.hardware;
+            if (hw && hw.connected && hw.real_board) {
+                sourceBadge.textContent = '🟢 LIVE — ESP32 board';
+                sourceBadge.style.background = '#10b981';
+            } else if (hw && hw.connected) {
+                sourceBadge.textContent = '🟡 TEST SENDER — not the real board';
+                sourceBadge.style.background = '#d97706';
+            } else {
+                const seen = hw && hw.last_seen ? ` (last data ${new Date(hw.last_seen).toLocaleTimeString()})` : '';
+                sourceBadge.textContent = '🔴 BOARD NOT CONNECTED' + seen;
+                sourceBadge.style.background = '#dc2626';
+            }
         } else {
-            sourceBadge.style.display = 'inline-block';
-            sourceBadge.textContent = '🔵 SIMULATED DATA';
+            sourceBadge.textContent = '🔵 SIMULATED ROOM';
             sourceBadge.style.background = '#3b82f6';
         }
 
-        // Progress bars
-        document.getElementById('temp-bar').style.width = `${((s.temperature - 15) / 20) * 100}%`;
-        document.getElementById('humidity-bar').style.width = `${s.humidity}%`;
-        document.getElementById('light-bar').style.width = `${Math.min(s.light / 800, 1) * 100}%`;
-        document.getElementById('co2-bar').style.width = `${Math.min(s.co2 / 1500, 1) * 100}%`;
-
-        // Occupancy
-        document.getElementById('room-occupancy').textContent = s.occupancy;
-        document.getElementById('room-max-occ').textContent = `/ ${roomUserData.maxOcc || data.def.maxOcc}`;
-
+        // Occupancy: simulated rooms have the simulator's true count; the real room has a presence sensor
+        const occ = data.occupancy;
+        const occEl = document.getElementById('room-occupancy');
+        const maxEl = document.getElementById('room-max-occ');
         const statusEl = document.getElementById('room-occ-status');
-        if (s.occupancy > (data.def.maxOcc * 0.6)) {
+        const aiLine = document.getElementById('room-ai-line');
+        if (data.source === 'hardware') {
+            occEl.textContent = occ.presence === null ? '—' : (occ.presence ? 'Yes' : 'No');
+            maxEl.textContent = ' presence sensor';
+        } else {
+            occEl.textContent = occ.truth === null ? '—' : String(occ.truth);
+            maxEl.textContent = `/ ${roomUserData.maxOcc || data.def.maxOcc} (simulated)`;
+        }
+        if (occ.predicted === null) {
+            statusEl.textContent = 'NO DATA';
+            statusEl.className = 'occ-status empty';
+        } else if (data.control.mode === 'OCCUPIED') {
             statusEl.textContent = 'OCCUPIED';
             statusEl.className = 'occ-status';
-        } else if (s.occupancy > 0) {
+        } else if (data.control.mode === 'STANDBY') {
             statusEl.textContent = 'STANDBY';
             statusEl.className = 'occ-status standby';
         } else {
             statusEl.textContent = 'EMPTY';
             statusEl.className = 'occ-status empty';
         }
+        if (aiLine) {
+            aiLine.textContent = occ.probability === null ? 'AI: no prediction (no data)'
+                : `AI occupancy probability ${(occ.probability * 100).toFixed(0)}% → ${occ.predicted ? 'occupied' : 'empty'}`;
+        }
 
-        // Control states
+        // Control states (null when there is no decision)
         const lightState = document.getElementById('room-light-state');
-        lightState.textContent = data.control.light || 'OFF';
-        lightState.className = 'control-state' + (data.control.light === 'ON' || data.control.light === 'FULL' ? ' on' : '');
-
-        document.getElementById('room-hvac-state').textContent = data.control.hvac || 'ECO';
-        document.getElementById('room-energy').textContent = `${(data.control.energy || 0).toFixed(1)} kW`;
-    }
-
-    // ─── API CONNECTION ───
-
-    connectToAPI() {
-        // Try SSE first
-        try {
-            const evtSource = new EventSource(CONFIG.api.sseUrl);
-
-            evtSource.onopen = () => {
-                this.connected = true;
-                this.updateConnectionStatus(true);
-            };
-
-            evtSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this.processLiveData(data);
-                } catch (e) { /* ignore parse errors */ }
-            };
-
-            evtSource.onerror = () => {
-                this.connected = false;
-                this.updateConnectionStatus(false);
-                evtSource.close();
-                // Fallback to polling
-                setTimeout(() => this.startPolling(), 3000);
-            };
-        } catch (e) {
-            this.startPolling();
-        }
-
-        // Also start simulation data updates for non-monitored rooms
-        this.startSimulationUpdates();
-    }
-
-    startPolling() {
-        const poll = async () => {
-            try {
-                const res = await fetch(CONFIG.api.stateUrl);
-                if (res.ok) {
-                    const data = await res.json();
-                    this.processLiveData(data);
-                    this.updateConnectionStatus(true);
-                }
-            } catch (e) {
-                this.updateConnectionStatus(false);
-            }
-        };
-
-        setInterval(poll, CONFIG.api.pollInterval);
-        poll(); // Initial fetch
-    }
-
-    processLiveData(data) {
-        this.liveData = data;
-        if (data.system && data.system.simulation_time) {
-            const simTime = data.system.simulation_time;
-            if (simTime !== "null" && simTime !== "--:--:--") {
-                // Parse HH:MM:SS
-                let timeStr = simTime;
-                if (timeStr.includes('T')) timeStr = timeStr.split('T')[1];
-                const parts = timeStr.split(':');
-                
-                if (parts.length >= 2) {
-                    const hour = parseInt(parts[0], 10) + parseInt(parts[1], 10) / 60;
-                    this.updateTimeOfDay(hour);
-                    const timeSlider = document.getElementById('time-slider');
-                    if (timeSlider) {
-                        timeSlider.value = hour;
-                        document.getElementById('time-label').textContent = `${parts[0]}:${parts[1]}`;
-                    }
-                    const simTimeDisplay = document.getElementById('sim-time');
-                    if (simTimeDisplay) simTimeDisplay.textContent = `${parts[0]}:${parts[1]}`;
-                }
-            }
-        }
-
-        // Handle new multi-floor response format
-        if (data.floors && Array.isArray(data.floors)) {
-            data.floors.forEach((floorData) => {
-                if (Array.isArray(floorData.rooms)) {
-                    floorData.rooms.forEach((room) => {
-                        // API room_id is like "f2_office_b", convert to "2_office_b" for JS Map
-                        const key = room.room_id.replace(/^f/, '');
-                        const rd = this.roomData.get(key);
-                        if (rd) {
-                            rd.sensors.temperature = room.sensors?.Temperature || room.temperature || rd.sensors.temperature;
-                            rd.sensors.humidity = room.sensors?.Humidity || room.humidity || rd.sensors.humidity;
-                            rd.sensors.light = room.sensors?.Light || room.light_level || rd.sensors.light;
-                            rd.sensors.co2 = room.sensors?.CO2 || room.co2 || rd.sensors.co2;
-                            
-                            // Occupancy from backend (Ground Truth prioritized for exact counts)
-                            rd.sensors.occupancy = room.ground_truth?.true_occupancy ?? room.sensors?.occupancy ?? room.ai?.predicted_occupancy ?? 0;
-                            
-                            // Actuators from backend
-                            rd.control.light = room.control?.light_action || (room.device_state?.light_on ? 'ON' : 'OFF');
-                            rd.control.hvac = room.control?.hvac_action || room.device_state?.hvac_mode || 'ECO';
-                            
-                            // Energy from backend
-                            rd.control.energy = room.energy?.estimated_power_watts || 0;
-                        }
-                    });
-                }
-            });
-        }
-        // Fallback for flat array response (all floors in data.rooms)
-        else {
-            const rooms = data.rooms || data;
-            if (Array.isArray(rooms)) {
-                rooms.forEach((room) => {
-                    if (room.room_id) {
-                        // Backend room_id is like "f2_office_b"
-                        // We replace 'f' with nothing so it becomes "2_office_b" which matches our JS map keys
-                        const key = room.room_id.replace(/^f/, '');
-                        const rd = this.roomData.get(key);
-                        if (rd) {
-                            rd.sensors.temperature = room.sensors?.Temperature || room.temperature || rd.sensors.temperature;
-                            rd.sensors.humidity = room.sensors?.Humidity || room.humidity || rd.sensors.humidity;
-                            rd.sensors.light = room.sensors?.Light || room.light_level || rd.sensors.light;
-                            rd.sensors.co2 = room.sensors?.CO2 || room.co2 || rd.sensors.co2;
-                            
-                            // Occupancy from backend (Ground Truth prioritized for exact counts)
-                            rd.sensors.occupancy = room.ground_truth?.true_occupancy ?? room.sensors?.occupancy ?? room.ai?.predicted_occupancy ?? 0;
-                            
-                            // Actuators from backend
-                            rd.control.light = room.control?.light_action || (room.device_state?.light_on ? 'ON' : 'OFF');
-                            rd.control.hvac = room.control?.hvac_action || room.device_state?.hvac_mode || 'ECO';
-                            
-                            // Energy from backend
-                            rd.control.energy = room.energy?.estimated_power_watts || room.energy_use || 0;
-                        }
-                    }
-                });
-            }
-        }
-        
-        // Update the dashboard stats with the newly processed data
-        this.updateBuildingStats();
-    }
-
-    startSimulationUpdates() {
-        // Obsolete: The backend now simulates all 26 rooms on all 5 floors.
-        // We no longer need to mock the data on the frontend.
-    }
-
-    updateConnectionStatus(connected) {
-        this.connected = connected;
-        const dot = document.getElementById('conn-dot');
-        const text = document.getElementById('conn-text');
-        if (connected) {
-            dot.classList.add('connected');
-            text.textContent = 'Live';
+        lightState.textContent = data.control.light ?? '—';
+        lightState.className = 'control-state' + (data.control.light === 'ON' ? ' on' : '');
+        document.getElementById('room-hvac-state').textContent = data.control.hvac ?? '—';
+        const energyEl = document.getElementById('room-energy');
+        if (data.source === 'hardware') {
+            energyEl.textContent = data.power.measured === null ? 'not measured' : `${data.power.measured.toFixed(2)} W (measured)`;
         } else {
-            dot.classList.remove('connected');
-            text.textContent = 'Simulated';
+            energyEl.textContent = data.power.estimated === null ? '—' : `${(data.power.estimated / 1000).toFixed(2)} kW (estimated)`;
         }
+    }
+
+    // ─── LIVE DATA (pushed by the Next.js page over postMessage) ───
+
+    /**
+     * Apply one backend state (the edge brain's SSE payload, forwarded by the page).
+     * Every value shown comes from this payload; nothing is generated here.
+     */
+    applyBackendState(msg) {
+        const rooms = Array.isArray(msg.rooms) ? msg.rooms : [];
+        this.liveData = { system: msg.system || null, hardware: msg.hardware || null };
+        if (msg.system && msg.system.simulation_time) {
+            SimulationClock.parseBackendTime(msg.system.simulation_time);
+            this.updateTimeOfDay(SimulationClock.hour);
+            const timeSlider = document.getElementById('time-slider');
+            if (timeSlider) {
+                timeSlider.value = SimulationClock.hour;
+                document.getElementById('time-label').textContent = msg.system.simulation_time.slice(0, 5);
+            }
+        }
+
+        const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : null;
+        let matched = 0;
+        const unmatched = [];
+        for (const room of rooms) {
+            const key = String(room.room_id || '').replace(/^f/, '');
+            const rd = this.roomData.get(key);
+            if (!rd) { unmatched.push(room.room_id); continue; }
+            matched++;
+            const s = room.sensors || {};
+            rd.source = room.source;
+            rd.hardware = room.hardware || null;
+            rd.hasData = !!room.ai;
+            rd.sensors = { temperature: num(s.Temperature), humidity: num(s.Humidity), light: num(s.Light), co2: num(s.CO2) };
+            rd.co2Source = s.CO2_source || null;
+            rd.occupancy = {
+                truth: num(room.ground_truth?.true_occupancy),
+                predicted: room.ai ? room.ai.predicted_occupancy : null,
+                probability: room.ai ? num(room.ai.occupancy_probability) : null,
+                presence: room.presence ? (room.presence.fused_presence ?? null) : null,
+            };
+            rd.control = {
+                light: room.control?.light_action ?? null,
+                hvac: room.control?.hvac_action ?? null,
+                mode: room.control?.control_mode ?? null,
+            };
+            rd.power = { estimated: num(room.energy?.estimated_power_watts), measured: num(room.energy?.measured_power_watts) };
+
+            const visualState = VisualStateStore.get(key);
+            if (VisualStateStore.processBackendUpdate(key, room, null)) {
+                eventBus.emit(Events.ROOM_STATE_CHANGED, { roomId: key, backendState: room, visualState });
+            }
+            if (room.source === 'hardware') this.updateLiveBadge(room.hardware);
+        }
+        this.updateBuildingStats();
+        // Tell the page how many backend rooms were found in the 3D model (a real sync check)
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                type: 'TWIN_SYNC_REPORT', matched, received: rooms.length,
+                modelRooms: this.roomData.size, unmatched, seq: msg.seq ?? null,
+            }, '*');
+        }
+    }
+
+    updateLiveBadge(hw) {
+        if (!this.liveBadge) return;
+        const kind = hw && hw.connected ? (hw.real_board ? 'live' : 'test') : 'offline';
+        if (kind === this.liveBadge.kind) return;
+        this.liveBadge.kind = kind;
+        drawRoomBadge(this.liveBadge.ctx, kind);
+        this.liveBadge.texture.needsUpdate = true;
+    }
+
+    setLinkStatus(ok, detail) {
+        this.connected = ok;
+        let banner = document.getElementById('link-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'link-banner';
+            banner.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:50;' +
+                'background:rgba(127,29,29,0.92);color:#fff;padding:8px 14px;border-radius:8px;' +
+                'font:600 13px Inter,sans-serif;border:1px solid #ef4444;display:none;';
+            document.body.appendChild(banner);
+        }
+        banner.textContent = `Edge brain not connected${detail ? ' — ' + detail : ''}. The 3D view is not live.`;
+        banner.style.display = ok ? 'none' : 'block';
     }
 
     updateBuildingStats() {
-        let totalOccupied = 0;
-        let totalTemp = 0;
-        let roomCount = 0;
-
-        // Use global system data from API if available
-        if (this.liveData && this.liveData.system) {
-            const sys = this.liveData.system;
-            const elTotalRooms = document.getElementById('stat-total-rooms');
-            const elOccupied = document.getElementById('stat-occupied');
-            const elPower = document.getElementById('stat-power');
-            const elEnergySaved = document.getElementById('stat-energy-saved');
-            const elDecisions = document.getElementById('stat-decisions');
-            const totalEnergyHeader = document.getElementById('total-energy');
-            
-            if (elTotalRooms) elTotalRooms.textContent = sys.total_rooms || 26;
-            if (elOccupied) elOccupied.textContent = sys.occupied_rooms || 0;
-            if (elPower) elPower.textContent = `${((sys.total_power_watts || 0) / 1000).toFixed(1)} kW`;
-            
-            if (elEnergySaved) {
-                const savedWh = sys.energy_saved_wh || 0;
-                const pct = sys.percentage_saved || 0;
-                elEnergySaved.textContent = `${(savedWh / 1000).toFixed(1)} kWh (${pct.toFixed(1)}%)`;
-            }
-            if (elDecisions) elDecisions.textContent = sys.model_loaded ? "ACTIVE" : "STANDBY";
-            if (totalEnergyHeader) totalEnergyHeader.textContent = `${((sys.total_cumulative_energy_wh || 0) / 1000).toFixed(1)} kWh`;
-        } else {
-            // Fallback to local aggregation
-            let totalPower = 0;
-            this.roomData.forEach(data => {
-                if (data.sensors.occupancy > 0) totalOccupied++;
-                totalPower += data.control.energy || 0;
-            });
-            const elOccupied = document.getElementById('stat-occupied');
-            const elPower = document.getElementById('stat-power');
-            if (elOccupied) elOccupied.textContent = totalOccupied;
-            if (elPower) elPower.textContent = `${(totalPower / 1000).toFixed(1)} kW`;
+        const sys = this.liveData && this.liveData.system;
+        const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+        if (sys) {
+            set('stat-total-rooms', String(sys.total_rooms ?? '—'));
+            set('stat-occupied', `${sys.occupied_rooms ?? '—'} / ${sys.rooms_with_data ?? '—'}`);
+            set('stat-power', `${((sys.sim_estimated_power_watts ?? 0) / 1000).toFixed(1)} kW (est.)`);
+            set('stat-energy-saved', '—');
+            set('stat-decisions', sys.model_loaded ? 'RF model' : 'heuristic');
+            set('total-energy', `${((sys.sim_cumulative_energy_wh ?? 0) / 1000).toFixed(1)} kWh (sim)`);
+            if (typeof sys.outdoor_temp_c === 'number') set('outdoor-temp', `${sys.outdoor_temp_c.toFixed(0)}°C`);
         }
+        const temps = [];
+        this.roomData.forEach(d => { if (d.sensors && typeof d.sensors.temperature === 'number') temps.push(d.sensors.temperature); });
+        set('stat-avg-temp', temps.length ? `${(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1)}°C` : '—');
+        set('stat-comfort', '—');
 
-        // Calculate average temperature locally
-        this.roomData.forEach(data => {
-            totalTemp += data.sensors.temperature || 24;
-            roomCount++;
-        });
-
-        const elAvgTemp = document.getElementById('stat-avg-temp');
-        if (elAvgTemp) elAvgTemp.textContent = `${(totalTemp / Math.max(roomCount, 1)).toFixed(1)}°C`;
-        
-        const elComfort = document.getElementById('stat-comfort');
-        if (elComfort) elComfort.textContent = `${(85 + Math.random() * 10).toFixed(0)}%`;
-        
-        const elOutdoorTemp = document.getElementById('outdoor-temp');
-        if (elOutdoorTemp) elOutdoorTemp.textContent = `${(26 + Math.sin(this.timeOfDay / 3) * 4).toFixed(0)}°C`;
-
-        // Update selected room panel if open
         if (this.selectedRoom) {
             const data = this.roomData.get(this.selectedRoom);
-            if (data) {
-                this.updateRoomPanel(data, data.def);
-            }
+            if (data) this.updateRoomPanel(data, data.def);
         }
     }
 
@@ -2108,6 +2021,7 @@ class SmartBuildingTwin {
 
 // ─── LAUNCH ───
 const app = new SmartBuildingTwin();
+window.twinApp = app;   // for inspection in the browser console and the end-to-end test
 
 // Register all engines with the EngineManager
 EngineManager.register('occupancy', OccupancyEngine);
@@ -2125,36 +2039,30 @@ EngineManager.initAll(app);
 
 console.log('[Architecture] Phase 2: EventBus + EngineManager + SceneRegistry + RoomController + HeroEngine + DebugOverlay active.');
 
-// Listen for Next.js Demo Controller & Live SSE overrides
+// Data comes only from the Next.js page (one SSE connection there, forwarded here)
 window.addEventListener('message', (event) => {
-    if (!event.data) return;
-    
+    if (!event.data || event.source !== window.parent) return;
+
     if (event.data.type === 'UI_COMMAND') {
         const { action, payload } = event.data;
         if (action === 'setViewMode') app.setViewMode(payload);
         if (action === 'selectFloor') app.selectFloor(payload);
-        if (action === 'updateTimeOfDay') app.updateTimeOfDay(payload);
         if (action === 'toggleDebug') SIM_CONFIG.debug = !SIM_CONFIG.debug;
-        if (action === 'setSimSpeed') SimulationClock.speed = payload;
-        if (action === 'togglePause') SimulationClock.togglePause();
     }
-    
-    if (event.data.type === 'SYNC_STATE' && event.data.payload) {
-        const roomsPayload = event.data.payload;
-        
-        for (const [nextJsId, roomData] of Object.entries(roomsPayload)) {
-            const legacyId = nextJsId.replace('f', '');
-            // VisualStateStore uses lightweight hash — no JSON.stringify
-            app.markDirty(legacyId, roomData);
-        }
-        
-        // Simulation time via SimulationClock (supports pause/speed)
-        if (event.data.system?.simulation_time) {
-            SimulationClock.parseBackendTime(event.data.system.simulation_time);
-            app.updateTimeOfDay(SimulationClock.hour);
-        }
+
+    if (event.data.type === 'SYNC_STATE' && Array.isArray(event.data.rooms)) {
+        app.applyBackendState(event.data);
+    }
+
+    if (event.data.type === 'LINK_STATUS') {
+        app.setLinkStatus(!!event.data.ok, event.data.detail || '');
     }
 });
+
+// Ask the page for the current state once this view has loaded
+if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'TWIN_READY' }, '*');
+}
 
 // Debug mode toggle via keyboard
 window.addEventListener('keydown', (e) => {

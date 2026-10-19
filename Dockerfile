@@ -24,5 +24,5 @@ ENV POSTGRES_HOST=postgres
 # Expose backend port
 EXPOSE 8001
 
-# Command to run the application
-CMD ["python", "run_system.py"]
+# Command to run the application (the live system's backend; run_system.py was removed)
+CMD ["python", "raspberry_pi/edge_brain.py"]

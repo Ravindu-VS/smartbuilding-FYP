@@ -81,28 +81,10 @@ class EnvironmentalEngineImpl {
         const time = SimulationClock.elapsed;
         const hour = SimulationClock.hour;
         
-        // --- Thermal Heatmapping ---
-        if (this._app.roomMeshes) {
-            this._app.roomMeshes.forEach(mesh => {
-                const fullRoomId = `${mesh.userData.floorIndex}_${mesh.userData.roomId}`;
-                const vs = VisualStateStore.get(fullRoomId);
-                if (vs) {
-                    const temp = vs.temperature || 22.0;
-                    // Map temperature to color: 18C (Blue) -> 22C (Cyan/Green) -> 26C (Orange) -> 30C (Red)
-                    let targetColor = new THREE.Color();
-                    if (temp <= 22) {
-                        targetColor.lerpColors(new THREE.Color(0x0044ff), new THREE.Color(0x00ffcc), (temp - 18) / 4);
-                    } else {
-                        targetColor.lerpColors(new THREE.Color(0x00ffcc), new THREE.Color(0xff4400), (temp - 22) / 8);
-                    }
-                    mesh.material.color.lerp(targetColor, 0.05);
-                    mesh.material.emissive.copy(targetColor);
-                    mesh.material.emissiveIntensity = 0.6; // Glowing thermal floor
-                }
-            });
-        }
+        // (Room floors are coloured by temperature only when the Temp. Heatmap button is on:
+        //  see ResearchEngine. An always-on copy here referenced VisualStateStore without
+        //  importing it, threw on every frame and stopped the sky, sun and cars from updating.)
 
-        
         // --- Wind Animation (Trees) ---
         const windStrength = 0.05;
         this._trees.forEach(tree => {

@@ -149,7 +149,7 @@ class AvatarPoolImpl {
         SceneRegistry.register(
             `${EntityType.AVATAR}_pool_${idx}`,
             avatar,
-            { roomId, floorId: Math.round(floorY / 3.8), type: EntityType.AVATAR, poolIndex: idx }
+            { roomId, floorId: parseInt(String(roomId).split('_')[0], 10), type: EntityType.AVATAR, poolIndex: idx }
         );
 
         return avatar;

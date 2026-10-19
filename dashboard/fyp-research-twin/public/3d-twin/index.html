@@ -11,8 +11,8 @@
     <script type="importmap">
     {
         "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+            "three": "./vendor/three/three.module.js",
+            "three/addons/": "./vendor/three/addons/"
         }
     }
     </script>
@@ -63,7 +63,7 @@
             </div>
             <div class="badge status-badge" id="connection-badge">
                 <span class="dot" id="conn-dot"></span>
-                <span id="conn-text">Connecting...</span>
+                <span id="conn-text">Waiting for data</span>
             </div>
         </div>
     </header>
@@ -74,28 +74,28 @@
         <div class="floor-buttons">
             <button class="floor-btn" data-floor="4" id="btn-floor-5">
                 <span class="floor-num">5</span>
-                <span class="floor-name">Executive Suite</span>
-                <span class="floor-status">● Monitoring</span>
+                <span class="floor-name">Penthouse Suite</span>
+                <span class="floor-status">● Simulated</span>
             </button>
             <button class="floor-btn" data-floor="3" id="btn-floor-4">
                 <span class="floor-num">4</span>
-                <span class="floor-name">Engineering</span>
-                <span class="floor-status">● Monitoring</span>
+                <span class="floor-name">Residential Apartments</span>
+                <span class="floor-status">● Simulated</span>
             </button>
             <button class="floor-btn active" data-floor="2" id="btn-floor-3">
                 <span class="floor-num">3</span>
                 <span class="floor-name">Operations</span>
-                <span class="floor-status live">● Live AI</span>
+                <span class="floor-status live">● ESP32 room</span>
             </button>
             <button class="floor-btn" data-floor="1" id="btn-floor-2">
                 <span class="floor-num">2</span>
-                <span class="floor-name">Administration</span>
-                <span class="floor-status">● Monitoring</span>
+                <span class="floor-name">Health &amp; Recreation</span>
+                <span class="floor-status">● Simulated</span>
             </button>
             <button class="floor-btn" data-floor="0" id="btn-floor-1">
                 <span class="floor-num">1</span>
-                <span class="floor-name">Lobby & Services</span>
-                <span class="floor-status">● Monitoring</span>
+                <span class="floor-name">Retail &amp; Lobby</span>
+                <span class="floor-status">● Simulated</span>
             </button>
         </div>
         <div class="view-controls">
@@ -117,9 +117,9 @@
                 Hide UI
             </button>
             <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 8px 0;"></div>
-            <button class="ctrl-btn" id="btn-pmv" title="Thermal Comfort Heatmap">
+            <button class="ctrl-btn" id="btn-pmv" title="Room temperature vs 24 °C (not a PMV calculation)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
-                PMV Heatmap
+                Temp. Heatmap
             </button>
             <button class="ctrl-btn" id="btn-energy" title="Energy Flow Visualization">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 10 10-12h-9l1-10z"/></svg>
@@ -144,25 +144,25 @@
         <div class="sensor-grid">
             <div class="sensor-card temp">
                 <div class="sensor-icon">🌡️</div>
-                <div class="sensor-value" id="room-temp">24.2°C</div>
+                <div class="sensor-value" id="room-temp">—</div>
                 <div class="sensor-label">Temperature</div>
                 <div class="sensor-bar"><div class="bar-fill" id="temp-bar" style="width:60%"></div></div>
             </div>
             <div class="sensor-card humidity">
                 <div class="sensor-icon">💧</div>
-                <div class="sensor-value" id="room-humidity">55%</div>
+                <div class="sensor-value" id="room-humidity">—</div>
                 <div class="sensor-label">Humidity</div>
                 <div class="sensor-bar"><div class="bar-fill" id="humidity-bar" style="width:55%"></div></div>
             </div>
             <div class="sensor-card light">
                 <div class="sensor-icon">💡</div>
-                <div class="sensor-value" id="room-light">450 lux</div>
+                <div class="sensor-value" id="room-light">—</div>
                 <div class="sensor-label">Light Level</div>
                 <div class="sensor-bar"><div class="bar-fill" id="light-bar" style="width:45%"></div></div>
             </div>
             <div class="sensor-card co2">
                 <div class="sensor-icon">🌬️</div>
-                <div class="sensor-value" id="room-co2">520 ppm</div>
+                <div class="sensor-value" id="room-co2">—</div>
                 <div class="sensor-label">CO₂ Level</div>
                 <div class="sensor-bar"><div class="bar-fill" id="co2-bar" style="width:35%"></div></div>
             </div>
@@ -170,24 +170,25 @@
         <div class="occupancy-section">
             <h4>Occupancy</h4>
             <div class="occupancy-display">
-                <span class="occ-count" id="room-occupancy">3</span>
-                <span class="occ-max" id="room-max-occ">/ 8</span>
+                <span class="occ-count" id="room-occupancy">—</span>
+                <span class="occ-max" id="room-max-occ"></span>
             </div>
-            <div class="occ-status" id="room-occ-status">OCCUPIED</div>
+            <div class="occ-status empty" id="room-occ-status">NO DATA</div>
+            <div id="room-ai-line" style="font-size:11px;color:#94a3b8;margin-top:6px;"></div>
         </div>
         <div class="control-section">
             <h4>AI Control State</h4>
             <div class="control-row">
                 <span>Lighting</span>
-                <span class="control-state on" id="room-light-state">ON</span>
+                <span class="control-state" id="room-light-state">—</span>
             </div>
             <div class="control-row">
                 <span>HVAC</span>
-                <span class="control-state" id="room-hvac-state">COOLING</span>
+                <span class="control-state" id="room-hvac-state">—</span>
             </div>
             <div class="control-row">
                 <span>Energy</span>
-                <span class="control-value" id="room-energy">1.2 kW</span>
+                <span class="control-value" id="room-energy">—</span>
             </div>
         </div>
     </div>
@@ -211,7 +212,7 @@
             <span class="stat-value" id="stat-power">0.0 kW</span>
         </div>
         <div class="stat-item">
-            <span class="stat-label">Energy Saved</span>
+            <span class="stat-label">Energy Saved (not computed)</span>
             <span class="stat-value" id="stat-energy-saved" style="color: #4ade80;">0.0 kWh (0%)</span>
         </div>
         <div class="stat-item">

@@ -1,85 +1,66 @@
 import { create } from 'zustand';
-import { BuildingStatePayload, RoomState, SystemState } from '../types/building';
+import {
+  BuildingStatePayload, HardwareStatus, RoomState, SystemState, TwinSyncReport,
+} from '../types/building';
+
+// The last state received from the edge brain, kept exactly as sent.
+// Which room is the hardware room and whether its board is connected come from the
+// backend payload, never from the room id.
+
+export interface LinkState {
+  connected: boolean;              // SSE open AND a message arrived within STALE_AFTER_MS
+  lastMessageAt: number | null;    // client clock (ms)
+  messages: number;
+  error: string | null;
+}
+
+export const STALE_AFTER_MS = 3000;
 
 interface BuildingStore {
   rooms: Record<string, RoomState>;
   system: SystemState | null;
-  lastUpdate: number;
-  isConnected: boolean;
-  demoMode: boolean;
-  
-  // Actions
+  hardware: HardwareStatus | null;
+  raw: BuildingStatePayload | null;
+  link: LinkState;
+  twinSync: TwinSyncReport | null;
+
   updateFromSSE: (payload: BuildingStatePayload) => void;
-  setConnectionStatus: (status: boolean) => void;
-  toggleDemoMode: (status: boolean) => void;
-  
-  // Selectors
-  getRoom: (id: string) => RoomState | undefined;
+  setLink: (patch: Partial<LinkState>) => void;
+  setTwinSync: (report: TwinSyncReport) => void;
 }
 
-export const useBuildingStore = create<BuildingStore>((set, get) => ({
+export const useBuildingStore = create<BuildingStore>((set) => ({
   rooms: {},
   system: null,
-  lastUpdate: Date.now(),
-  isConnected: false,
-  demoMode: false,
+  hardware: null,
+  raw: null,
+  link: { connected: false, lastMessageAt: null, messages: 0, error: null },
+  twinSync: null,
 
   updateFromSSE: (payload) => {
-    if (get().demoMode) return; // Ignore real SSE if demo mode is active
-    
-    set((state) => {
-      const newRooms = { ...state.rooms };
-      
-      // The python backend may send data as hierarchical 'floors' array or flat 'rooms' array
-      let allRooms: any[] = [];
-      if (payload.rooms && Array.isArray(payload.rooms)) {
-        allRooms = payload.rooms;
-      } else if (payload.floors && Array.isArray(payload.floors)) {
-        payload.floors.forEach((floor: any) => {
-          if (floor.rooms && Array.isArray(floor.rooms)) {
-            allRooms = allRooms.concat(floor.rooms);
-          }
-        });
-      }
-
-      allRooms.forEach((room) => {
-        if (!room.room_id) return;
-        
-        // Ensure Room 101 (f2_office_a) is marked as LIVE hardware
-        if (room.room_id === 'f2_office_a') {
-          room.isLive = true;
-          room.source = 'hardware';
-        } else {
-          room.isLive = false;
-          room.source = 'simulation';
-        }
-
-        // Normalize uppercase sensor keys from python backend
-        if (room.sensors) {
-          const s = room.sensors;
-          room.sensors = {
-            temperature: s.Temperature ?? s.temperature,
-            humidity: s.Humidity ?? s.humidity,
-            light: s.Light ?? s.light,
-            co2: s.CO2 ?? s.co2,
-            occupancy: s.occupancy ?? s.Occupancy ?? 0
-          };
-        }
-        
-        newRooms[room.room_id] = room;
-      });
-
-      return {
-        rooms: newRooms,
-        system: payload.system,
-        lastUpdate: Date.now(),
-        isConnected: payload.system?.api_online ?? true
-      };
-    });
+    const rooms: Record<string, RoomState> = {};
+    for (const room of payload.rooms ?? []) {
+      if (room && room.room_id) rooms[room.room_id] = room;
+    }
+    set((state) => ({
+      rooms,
+      system: payload.system ?? null,
+      hardware: payload.hardware ?? null,
+      raw: payload,
+      link: {
+        connected: true,
+        lastMessageAt: Date.now(),
+        messages: state.link.messages + 1,
+        error: null,
+      },
+    }));
   },
 
-  setConnectionStatus: (status) => set({ isConnected: status }),
-  toggleDemoMode: (status) => set({ demoMode: status }),
-
-  getRoom: (id) => get().rooms[id],
+  setLink: (patch) => set((state) => ({ link: { ...state.link, ...patch } })),
+  setTwinSync: (report) => set({ twinSync: report }),
 }));
+
+export function hardwareRoom(state: { rooms: Record<string, RoomState>; system: SystemState | null }) {
+  const id = state.system?.hardware_room_id;
+  return id ? state.rooms[id] : undefined;
+}

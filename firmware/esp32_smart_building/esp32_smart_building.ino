@@ -322,7 +322,7 @@ void setup() {
       bme_found = true;
       Serial.println("  + BME280 (Temp/Humidity/Pressure) ACTIVE");
     } else {
-      Serial.println("  i BME280 not found — using thermal estimate fallback");
+      Serial.println("  i BME280 not found — temperature/humidity/pressure will not be sent");
     }
   #endif
 
@@ -333,7 +333,7 @@ void setup() {
       bh1750_found = true;
       Serial.println("  + BH1750 (Illuminance) ACTIVE");
     } else {
-      Serial.println("  i BH1750 not found — using ambient light estimate");
+      Serial.println("  i BH1750 not found — light level will not be sent");
     }
   #endif
 
@@ -576,22 +576,27 @@ void send_telemetry() {
   // 1. Read all physical sensors
   // ---------------------------------------------------------------
   
-  // BME280: Temperature + Humidity + Pressure
-  float temp = 24.5;   // fallback
-  float hum = 50.0;    // fallback
-  float pressure = 1013.25;
-  
+  // BME280: Temperature + Humidity + Pressure.
+  // No made-up fallback values: if the sensor is missing or a read fails, the field
+  // is left out of the JSON and the edge brain shows it as missing.
+  float temp = NAN, hum = NAN, pressure = NAN;
   if (bme_found) {
     temp = bme.readTemperature();
     hum = bme.readHumidity();
     pressure = bme.readPressure() / 100.0;  // Pa -> hPa
   }
+  bool have_temp_hum = !isnan(temp) && !isnan(hum);
+  bool have_pressure = !isnan(pressure) && pressure > 0;
 
-  // BH1750: Illuminance
-  float lux = 350.0;   // fallback
+  // BH1750: Illuminance. Keep the last good reading when no new measurement is ready
+  // (continuous mode measures about every 120 ms, so this is at most one cycle old).
+  static float last_lux = NAN;
   if (bh1750_found && lightMeter.measurementReady()) {
-    lux = lightMeter.readLightLevel();
+    float l = lightMeter.readLightLevel();
+    if (l >= 0) last_lux = l;   // the library returns a negative value on error
   }
+  float lux = last_lux;
+  bool have_lux = !isnan(lux);
 
   // MQ-2: Gas/Air Quality (analog, secondary)
   int raw_mq2 = analogRead(MQ2_PIN);
@@ -624,12 +629,18 @@ void send_telemetry() {
   
   // Core environmental data
   doc["room_id"]          = "f2_office_a";
-  doc["temperature"]      = round(temp * 100.0) / 100.0;
-  doc["humidity"]         = round(hum * 100.0) / 100.0;
-  doc["pressure_hpa"]     = round(pressure * 10.0) / 10.0;
+  if (have_temp_hum) {
+    doc["temperature"]    = round(temp * 100.0) / 100.0;
+    doc["humidity"]       = round(hum * 100.0) / 100.0;
+  }
+  if (have_pressure) {
+    doc["pressure_hpa"]   = round(pressure * 10.0) / 10.0;
+  }
   doc["co2"]              = round(co2_value * 10.0) / 10.0;
   doc["co2_source"]       = co2_source;
-  doc["lux"]              = round(lux * 10.0) / 10.0;
+  if (have_lux) {
+    doc["lux"]            = round(lux * 10.0) / 10.0;
+  }
   doc["motion_detected"]  = pir_motion;
   doc["mq2_raw"]          = raw_mq2;
   doc["source"]           = "sensor_node";

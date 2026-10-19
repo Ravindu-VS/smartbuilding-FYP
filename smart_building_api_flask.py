@@ -407,7 +407,7 @@ def api_simulation_control():
     }
     """
     if _live_service is None:
-        return jsonify({"error": "Integration service not running (use run_system.py)"}), 503
+        return jsonify({"error": "Integration service not running"}), 503
 
     try:
         data = request.get_json()

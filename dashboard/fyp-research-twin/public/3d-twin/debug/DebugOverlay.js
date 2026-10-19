@@ -171,7 +171,7 @@ class DebugOverlayImpl {
         // Row 5: Timing
         if (isHero) {
             const heroMetrics = HeroEngine.getMetrics();
-            lines.push(`Latency: ${heroMetrics.latencyMs}ms  Syncs: ${heroMetrics.syncCount}  ${heroMetrics.pulseActive ? '● PULSE' : '○ idle'}`);
+            lines.push(`Board data age: ${heroMetrics.latencyMs ?? "—"} ms  Syncs: ${heroMetrics.syncCount}  ${heroMetrics.pulseActive ? '● PULSE' : '○ idle'}`);
         } else {
             lines.push(`Dirty: ${vs?.isDirty ? 'YES' : 'no'}  Updated: ${vs?.lastUpdateTimestamp?.split('T')[1]?.slice(0,8) || '—'}`);
         }
@@ -200,7 +200,7 @@ class DebugOverlayImpl {
         text += `│ FPS: ${this._fps.toFixed(0).padStart(4)}  Time: ${SimulationClock.formattedTime}  Speed: ${SimulationClock.speed}x${SimulationClock.paused ? ' ⏸' : ''}\n`;
         text += `│ Dirty Rooms: ${dirtyCount}  Entities: ${SceneRegistry.size}\n`;
         text += `│ Registry: ${Object.entries(registryStats).map(([k,v]) => `${k}:${v}`).join(' ')}\n`;
-        text += `│ Hero: Lat=${heroMetrics.latencyMs}ms  Syncs=${heroMetrics.syncCount}\n`;
+        text += `│ Hero: data age=${heroMetrics.latencyMs ?? "—"} ms  Syncs=${heroMetrics.syncCount}\n`;
         text += `├─── Recent Events ─────────────────────┤\n`;
         recentEvents.forEach(e => {
             text += `│ ${e.event}${e.roomId ? ` [${e.roomId}]` : ''}\n`;

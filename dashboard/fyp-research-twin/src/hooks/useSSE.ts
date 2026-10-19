@@ -1,71 +1,68 @@
-import { useEffect, useRef } from 'react';
-import { useBuildingStore } from '../store/useBuildingStore';
+import { useEffect, useState } from 'react';
+import { STALE_AFTER_MS, useBuildingStore } from '../store/useBuildingStore';
 import { BuildingStatePayload } from '../types/building';
 
-export function useSSE(url: string = 'http://127.0.0.1:8001/api/stream') {
-  const updateFromSSE = useBuildingStore((state) => state.updateFromSSE);
-  const setConnectionStatus = useBuildingStore((state) => state.setConnectionStatus);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+// Address of the edge brain. Set NEXT_PUBLIC_EDGE_URL (e.g. http://192.168.1.20:8001)
+// when the edge brain runs on a Raspberry Pi instead of this computer.
+export const EDGE_URL = (process.env.NEXT_PUBLIC_EDGE_URL || 'http://127.0.0.1:8001').replace(/\/$/, '');
+
+/**
+ * One SSE connection to the edge brain for the whole page. The 3D view receives the
+ * same payloads from the page (VanillaTwinWrapper), so everything shows the same state.
+ * The link counts as connected only while messages keep arriving.
+ */
+export function useSSE(url: string = `${EDGE_URL}/api/stream`) {
+  const updateFromSSE = useBuildingStore((s) => s.updateFromSSE);
+  const setLink = useBuildingStore((s) => s.setLink);
 
   useEffect(() => {
-    let isSubscribed = true;
+    let active = true;
+    let es: EventSource | null = null;
+    let reconnect: ReturnType<typeof setTimeout> | null = null;
 
     const connect = () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-
-      console.log(`[SSE] Connecting to ${url}...`);
-      const es = new EventSource(url);
-      eventSourceRef.current = es;
-
-      es.onopen = () => {
-        console.log('[SSE] Connected');
-        if (isSubscribed) setConnectionStatus(true);
-      };
-
+      if (!active) return;
+      es = new EventSource(url);
       es.onmessage = (event) => {
-        if (!isSubscribed) return;
+        if (!active) return;
         try {
-          const data = JSON.parse(event.data) as BuildingStatePayload;
-          
-          if (data.message === 'Waiting for simulation connection') {
-            console.warn('[SSE] Backend is waiting for simulation...');
-            setConnectionStatus(false);
-            return;
-          }
-          
-          updateFromSSE(data);
-        } catch (err) {
-          console.error('[SSE] Failed to parse message', err);
+          updateFromSSE(JSON.parse(event.data) as BuildingStatePayload);
+        } catch {
+          setLink({ error: 'unreadable message from the edge brain' });
         }
       };
-
-      es.onerror = (err) => {
-        console.error('[SSE] Error', err);
-        if (isSubscribed) setConnectionStatus(false);
-        es.close();
-        
-        // Auto-reconnect after 3 seconds
-        if (isSubscribed) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, 3000);
-        }
+      es.onerror = () => {
+        if (!active) return;
+        setLink({ connected: false, error: `cannot reach ${url}` });
+        es?.close();
+        reconnect = setTimeout(connect, 3000);
       };
     };
-
     connect();
 
+    // Watchdog: no message for STALE_AFTER_MS -> not live (backend stopped or tick loop stalled)
+    const watchdog = setInterval(() => {
+      const { link } = useBuildingStore.getState();
+      if (link.connected && (link.lastMessageAt === null || Date.now() - link.lastMessageAt > STALE_AFTER_MS)) {
+        setLink({ connected: false, error: `no data for more than ${STALE_AFTER_MS / 1000} s` });
+      }
+    }, 500);
+
     return () => {
-      isSubscribed = false;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
+      active = false;
+      es?.close();
+      if (reconnect) clearTimeout(reconnect);
+      clearInterval(watchdog);
     };
-  }, [url, updateFromSSE, setConnectionStatus]);
+  }, [url, updateFromSSE, setLink]);
+}
+
+/** Re-render every `ms` so "x s ago" labels stay current. */
+export function useNow(ms = 500) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
 }
