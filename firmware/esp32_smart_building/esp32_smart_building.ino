@@ -42,7 +42,7 @@
  *    - ESP32-S3 Onboard LED:     GPIO 38 (connection status)
  * 
  * 5. NETWORK & SYSTEM:
- *    - Wi-Fi 2.4GHz STA Mode -> SSID: "YOUR_WIFI_NAME", Pass: "YOUR_WIFI_PASSWORD"
+ *    - Wi-Fi 2.4GHz STA Mode -> SSID and password from secrets.h
  *    - REST API Server -> http://<RASPBERRY_PI_IP>:8001/api/hardware/sensor-data
  *
  * SENSOR PRIORITY (graceful degradation — all optional):
@@ -120,12 +120,17 @@
 // =============================================================================
 // MASTER CONFIGURATION
 // =============================================================================
-// Network & Server Config
-const char* ssid = "YOUR_WIFI_NAME";                   // Your Wi-Fi Hotspot Name
-const char* password = "YOUR_WIFI_PASSWORD";           // Your Wi-Fi Hotspot Password
-
-// >>> CHANGE THIS to your Raspberry Pi's IP address <<<
-const char* server_url = "http://172.20.10.2:8001/api/hardware/sensor-data";
+// Network & Server Config: Wi-Fi name, password and the edge brain's address are kept
+// in secrets.h (same folder, listed in .gitignore, so they are never committed).
+// Create it by copying secrets.example.h and filling in your values.
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#else
+  #error "Create secrets.h from secrets.example.h (Wi-Fi name, password, edge brain URL)"
+#endif
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
+const char* server_url = EDGE_SERVER_URL;   // http://<edge brain IP>:8001/api/hardware/sensor-data
 
 // =============================================================================
 // GPIO PIN ASSIGNMENTS (ESP32-S3)
