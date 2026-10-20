@@ -150,26 +150,27 @@ class RoomVisualState {
         } else if (normalizedHvac === 'LOW') {
             this.hvacVisualMode = 'ventilation';
             this.windowTarget = 0;
-        } else if (normalizedHvac === 'VENTILATION' || normalizedHvac === 'ECO') {
-            this.hvacVisualMode = normalizedHvac.toLowerCase();
-            this.windowTarget = 0.26; // 15 degrees
+        } else if (normalizedHvac === 'VENTILATION') {
+            this.hvacVisualMode = 'ventilation';
+            this.windowTarget = 0;
         } else {
             this.hvacVisualMode = 'off';
             this.windowTarget = 0;
         }
 
+        // Window open only when the "open window" scenario is active (simulated extra air change)
+        if ((backendState.disturbances?.window_ach ?? 0) > 0) this.windowTarget = 0.26;
         this.fanSpeed = (backendState.device_state?.hvac_speed ?? 0) / 100;
         this.controlMode = backendState.control?.control_mode || '';
 
         // --- Energy & Thermal ---
-        this.powerWatts = backendState.energy?.estimated_power_watts ?? backendState.energy?.measured_power_watts ?? 0;
+        this.powerWatts = backendState.energy?.power_w ?? backendState.energy?.measured_power_watts ?? 0;
         const t = backendState.sensors?.Temperature ?? backendState.sensors?.temperature;
         this.temperature = (typeof t === 'number') ? t : null;
 
-        // Temperature-deviation index for the heatmap: (T - 24 °C) / 2, clipped to ±3.
-        // It is NOT Fanger's PMV (no humidity, air speed, radiant temperature, clothing or activity).
-        // No temperature -> 0 (neutral colour).
-        this.pmv = this.temperature === null ? 0 : Math.max(-3, Math.min(3, (this.temperature - 24.0) * 0.5));
+        // PMV (ISO 7730) from the simulator's true state; the real room has none (neutral colour).
+        const pmv = backendState.comfort?.pmv;
+        this.pmv = (typeof pmv === 'number') ? pmv : 0;
 
         // --- Hero Room ---
         // Hero room = the hardware room while its board is connected.

@@ -20,6 +20,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ─── New Decoupled Architecture ───
@@ -37,6 +38,7 @@ import { EnergyEngine } from './engines/energyEngine.js';
 import { HeroEngine } from './engines/heroEngine.js';
 import { EnvironmentalEngine } from './engines/EnvironmentalEngine.js';
 import { ResearchEngine } from './engines/ResearchEngine.js';
+import { RealismEngine } from './engines/RealismEngine.js';
 
 // Controllers & Debug
 import { RoomController } from './controllers/RoomController.js';
@@ -64,14 +66,14 @@ export const CONFIG = {
         target: [0, 8, 0],
     },
     colors: {
-        background: 0x050510,
-        ground: 0x020205,
-        concrete: 0x11111a, // Dark sci-fi metal
-        concreteFrame: 0x1a1a2a,
-        glass: 0x00aaff, // Cyan-tinted glass
-        wallInterior: 0x151525,
-        floorTile: 0x10101c,
-        ceiling: 0x11111a,
+        background: 0x9fb8cf,
+        ground: 0x6f7268,
+        concrete: 0xc9c5bd,       // light architectural concrete (slab edges)
+        concreteFrame: 0x2b3036,  // dark anodised aluminium (mullions, transoms)
+        glass: 0x9cc4d8,          // low-iron glass with a slight blue-green tint
+        wallInterior: 0xe8e4dc,
+        floorTile: 0xd6d0c4,
+        ceiling: 0xf2f0ea,
         carpet: {
             office: 0x5a6577,
             meeting: 0x6b7b6e,
@@ -169,6 +171,42 @@ const FLOOR_LAYOUTS = [
         ]
     },
 ];
+
+const EMBEDDED = new URLSearchParams(window.location.search).has('embedded');
+if (EMBEDDED) document.body.classList.add('embedded');
+
+// Live label above each room: name, people, temperature, lights and AC from the streamed state.
+function drawRoomLabel(ctx, info) {
+    const W = 512, H = 150;
+    ctx.clearRect(0, 0, W, H);
+    const border = { sim: '#475569', live: '#10b981', test: '#d97706', offline: '#b91c1c' }[info.kind] || '#475569';
+    ctx.beginPath();
+    ctx.fillStyle = info.selected ? 'rgba(12, 74, 110, 0.92)' : 'rgba(15, 23, 42, 0.82)';
+    if (ctx.roundRect) ctx.roundRect(3, 3, W - 6, H - 6, 22); else ctx.rect(3, 3, W - 6, H - 6);
+    ctx.fill();
+    ctx.lineWidth = info.selected ? 7 : 4;
+    ctx.strokeStyle = info.selected ? '#38bdf8' : border;
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 38px Inter, Segoe UI, sans-serif';
+    let name = info.name;
+    while (ctx.measureText(name).width > W - 60 && name.length > 4) name = name.slice(0, -2);
+    ctx.fillText(name === info.name ? name : name + '…', 26, 46);
+    ctx.font = '600 31px Inter, Segoe UI, sans-serif';
+    if (info.kind === 'offline') {
+        ctx.fillStyle = '#fca5a5';
+        ctx.fillText('ESP32 not connected', 26, 104);
+        return;
+    }
+    let x = 26;
+    const seg = (text, color) => { ctx.fillStyle = color; ctx.fillText(text, x, 104); x += ctx.measureText(text).width + 22; };
+    seg(info.people, '#e2e8f0');
+    seg(info.temp, '#7dd3fc');
+    seg(info.light === 'OFF' || !info.light ? 'lights off' : `lights ${info.light.toLowerCase()}`, info.light === 'ON' ? '#fde047' : info.light === 'DIM' ? '#ca8a04' : '#64748b');
+    seg(info.ac, info.acOn ? '#38bdf8' : '#64748b');
+}
 
 // Room badge above each room. The hardware room's badge follows the board status.
 function drawRoomBadge(ctx, kind) {
@@ -284,35 +322,71 @@ class SmartBuildingTwin {
     }
 
     createWindowTexture() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        
-        ctx.fillStyle = '#0a0d18'; // Base very dark
-        ctx.fillRect(0, 0, 512, 512);
-
-        const cols = 8;
-        const rows = 12;
-        const padX = 6;
-        const padY = 8;
-        const cellW = 512 / cols;
-        const cellH = 512 / rows;
-
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                const isLit = Math.random() > 0.8;
-                ctx.fillStyle = isLit ? '#ffffff' : '#05070a';
-                ctx.fillRect(c * cellW + padX, r * cellH + padY, cellW - padX*2, cellH - padY*2);
+        // Office-tower facade: concrete spandrels and window bands. Returns the colour map
+        // and an emissive map with a random share of lit windows (used at night).
+        const make = (lit) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = lit ? '#000000' : '#b9b6ae';
+            ctx.fillRect(0, 0, 256, 512);
+            const cols = 6, rows = 14;
+            const cw = 256 / cols, rh = 512 / rows;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x = c * cw + 3, y = r * rh + rh * 0.22, w = cw - 6, h = rh * 0.62;
+                    if (lit) {
+                        if (Math.random() < 0.32) {
+                            const warm = 200 + Math.floor(Math.random() * 55);
+                            ctx.fillStyle = `rgb(255,${warm},${Math.floor(warm * 0.75)})`;
+                            ctx.fillRect(x, y, w, h);
+                        }
+                    } else {
+                        const v = 40 + Math.floor(Math.random() * 25);
+                        const grd = ctx.createLinearGradient(x, y, x + w, y + h);
+                        grd.addColorStop(0, `rgb(${v + 30},${v + 48},${v + 62})`);
+                        grd.addColorStop(1, `rgb(${v},${v + 12},${v + 22})`);
+                        ctx.fillStyle = grd;
+                        ctx.fillRect(x, y, w, h);
+                    }
+                }
             }
-        }
-
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.needsUpdate = true;
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.anisotropy = 8;
+            return tex;
+        };
+        const tex = make(false);
+        tex.userData = { emissive: make(true) };
         return tex;
+    }
+
+    createGrassTexture() {
+        // Lawn: mottled greens with mowing stripes (sRGB colour map)
+        const c = document.createElement('canvas');
+        c.width = c.height = 512;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#5b7a3a';
+        ctx.fillRect(0, 0, 512, 512);
+        for (let i = 0; i < 9000; i++) {
+            const x = Math.random() * 512, y = Math.random() * 512, r = 1 + Math.random() * 3;
+            const g = 95 + Math.floor(Math.random() * 50), rr = 60 + Math.floor(Math.random() * 35);
+            ctx.fillStyle = `rgba(${rr},${g},${40 + Math.floor(Math.random() * 20)},0.55)`;
+            ctx.fillRect(x, y, r, r);
+        }
+        for (let k = 0; k < 8; k++) {
+            ctx.fillStyle = k % 2 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.04)';
+            ctx.fillRect(k * 64, 0, 64, 512);
+        }
+        const t = new THREE.CanvasTexture(c);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.repeat.set(4, 3);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 8;
+        return t;
     }
 
     createRoadTexture() {
@@ -360,7 +434,7 @@ class SmartBuildingTwin {
     setupScene() {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(CONFIG.colors.background);
-        this.scene.fog = new THREE.FogExp2(CONFIG.colors.background, 0.008);
+        this.scene.fog = new THREE.FogExp2(CONFIG.colors.background, 0.004);
     }
 
     setupCamera() {
@@ -380,21 +454,32 @@ class SmartBuildingTwin {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.2;
+        this.renderer.toneMappingExposure = 0.6;
 
+        // Until the physical sky has rendered (RealismEngine), a neutral studio environment
         const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
         this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
 
+        // Post-processing: multisampled HDR target, ambient occlusion, bloom for lights, tone mapping
+        const w = window.innerWidth, h = window.innerHeight;
+        const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 });
         const renderScene = new RenderPass(this.scene, this.camera);
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-        bloomPass.threshold = 1.5;
-        bloomPass.strength = 0.5;
-        bloomPass.radius = 0.5;
+        this.gtaoPass = new GTAOPass(this.scene, this.camera, w, h);
+        this.gtaoPass.output = GTAOPass.OUTPUT.Default;
+        this.gtaoPass.blendIntensity = 0.85;
+        this.gtaoPass.updateGtaoMaterial({ radius: 1.2, distanceExponent: 1.5, thickness: 1.5, scale: 1.0, samples: 12 });
+        this.gtaoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 0.6, 0.5, 0.9);
+        this.bloomPass = bloomPass;
+        bloomPass.threshold = 1.0;
+        bloomPass.strength = 0.45;
+        bloomPass.radius = 0.55;
 
         const outputPass = new OutputPass();
 
-        this.composer = new EffectComposer(this.renderer);
+        this.composer = new EffectComposer(this.renderer, target);
         this.composer.addPass(renderScene);
+        this.composer.addPass(this.gtaoPass);
         this.composer.addPass(bloomPass);
         this.composer.addPass(outputPass);
 
@@ -405,6 +490,7 @@ class SmartBuildingTwin {
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.composer.setSize(window.innerWidth, window.innerHeight);
+            if (this.gtaoPass) this.gtaoPass.setSize(window.innerWidth, window.innerHeight);
         });
     }
 
@@ -432,21 +518,23 @@ class SmartBuildingTwin {
         this.sunLight = new THREE.DirectionalLight(0xfff5e6, 2.5);
         this.sunLight.position.set(30, 50, 30);
         this.sunLight.castShadow = true;
-        this.sunLight.shadow.mapSize.width = 2048;
-        this.sunLight.shadow.mapSize.height = 2048;
-        this.sunLight.shadow.camera.near = 0.5;
-        this.sunLight.shadow.camera.far = 120;
-        this.sunLight.shadow.camera.left = -40;
-        this.sunLight.shadow.camera.right = 40;
-        this.sunLight.shadow.camera.top = 40;
-        this.sunLight.shadow.camera.bottom = -40;
-        this.sunLight.shadow.bias = -0.0005;
+        this.sunLight.shadow.mapSize.width = 4096;
+        this.sunLight.shadow.mapSize.height = 4096;
+        this.sunLight.shadow.camera.near = 1;
+        this.sunLight.shadow.camera.far = 220;
+        this.sunLight.shadow.camera.left = -55;
+        this.sunLight.shadow.camera.right = 55;
+        this.sunLight.shadow.camera.top = 55;
+        this.sunLight.shadow.camera.bottom = -55;
+        this.sunLight.shadow.bias = -0.0003;
+        this.sunLight.shadow.normalBias = 0.03;
         this.scene.add(this.sunLight);
 
         // Fill light
-        const fill = new THREE.DirectionalLight(0xc4d4f0, 1.0);
+        const fill = new THREE.DirectionalLight(0xc4d4f0, 0.4);
         fill.position.set(-20, 15, -10);
         this.scene.add(fill);
+        this.fillLight = fill;
     }
 
     // ─── PROCEDURAL CAR ───
@@ -556,8 +644,8 @@ class SmartBuildingTwin {
 
         // Grassy lawns inside the plaza
         const grassGeo = new THREE.PlaneGeometry(CONFIG.building.width + 30, CONFIG.building.depth + 30);
-        const grassMat = new THREE.MeshStandardMaterial({ 
-            color: 0x4a6a2c, roughness: 1.0, bumpMap: groundNoise, bumpScale: 0.3 
+        const grassMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff, map: this.createGrassTexture(), roughness: 1.0, bumpMap: groundNoise, bumpScale: 0.3
         });
         const grass = new THREE.Mesh(grassGeo, grassMat);
         grass.rotation.x = -Math.PI / 2;
@@ -605,16 +693,18 @@ class SmartBuildingTwin {
         }
 
         // Background City Context
-        const cityMat = new THREE.MeshStandardMaterial({ color: 0xb0b3b8, roughness: 0.7, metalness: 0.1 });
-        const windowMat = new THREE.MeshStandardMaterial({ 
-            color: 0xffffff, 
-            roughness: 0.2, 
-            metalness: 0.8, 
+        const cityMat = new THREE.MeshStandardMaterial({ color: 0xa9a59d, roughness: 0.85, metalness: 0.05 });
+        const windowMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.25,
+            metalness: 0.35,
             map: windowTex,
-            emissive: 0xffffff,
-            emissiveMap: windowTex,
-            emissiveIntensity: 1.5
+            emissive: 0xffd9a0,
+            emissiveMap: windowTex.userData.emissive,
+            emissiveIntensity: 0.05,
+            envMapIntensity: 1.2,
         });
+        this.cityWindowMat = windowMat;
         
         const cityGroup = new THREE.Group();
         for (let i = 0; i < 40; i++) {
@@ -624,16 +714,19 @@ class SmartBuildingTwin {
             
             const bGroup = new THREE.Group();
             
-            // Main block
-            const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cityMat);
+            // Main block (a few facade tones, like a real skyline)
+            const tones = [0xa9a59d, 0xc2b8a6, 0x8f969c, 0xb5b0a6, 0x7d8a93];
+            const bm = i % 3 === 0 ? cityMat : new THREE.MeshStandardMaterial({ color: tones[i % tones.length], roughness: 0.85, metalness: 0.05 });
+            const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), bm);
             b.position.y = h/2;
             b.castShadow = true;
             b.receiveShadow = true;
             bGroup.add(b);
 
-            // Windows (glass with texture)
-            windowMat.map.repeat.set(w / 10, h / 10);
+            // Facade (window bands); UVs scaled per building so windows keep a real size
             const winGeo = new THREE.BoxGeometry(w + 0.2, h * 0.8, d + 0.2);
+            const uv = winGeo.attributes.uv;
+            for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * Math.round(w / 10), uv.getY(k) * Math.round(h * 0.8 / 12));
             const win = new THREE.Mesh(winGeo, windowMat);
             win.position.y = h/2;
             bGroup.add(win);
@@ -652,7 +745,7 @@ class SmartBuildingTwin {
         
         // Add Nature (Lush Organic Trees)
         const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3422, roughness: 0.9, bumpMap: groundNoise, bumpScale: 0.5 });
-        const leafMat = new THREE.MeshStandardMaterial({ color: 0x3d5c1e, roughness: 0.9, flatShading: true });
+        const leafMats = [0x3f6b2a, 0x4d7a30, 0x5a8236, 0x35602a, 0x66873a].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95 }));
         
         // Create organic deformed tree geometry
         const leavesGeo = new THREE.IcosahedronGeometry(2.0, 3);
@@ -673,10 +766,18 @@ class SmartBuildingTwin {
             trunk.castShadow = true;
             treeGroup.add(trunk);
             
-            const leaves = new THREE.Mesh(leavesGeo, leafMat);
-            leaves.position.y = 2.5;
-            leaves.castShadow = true;
-            treeGroup.add(leaves);
+            // canopy of 3-4 overlapping blobs: a rounder, more natural crown
+            const lm = leafMats[i % leafMats.length];
+            const blobs = 3 + (i % 2);
+            for (let q = 0; q < blobs; q++) {
+                const leaves = new THREE.Mesh(leavesGeo, lm);
+                const s = 0.65 + Math.random() * 0.35;
+                leaves.scale.set(s, s * 0.85, s);
+                leaves.position.set((Math.random() - 0.5) * 1.4, 2.4 + Math.random() * 0.9, (Math.random() - 0.5) * 1.4);
+                leaves.castShadow = true;
+                leaves.receiveShadow = true;
+                treeGroup.add(leaves);
+            }
             
             const angle = Math.random() * Math.PI * 2;
             let dist;
@@ -790,15 +891,15 @@ class SmartBuildingTwin {
         this.roomMeshes.push(floorMesh);
         roomGroup.add(floorMesh);
 
-        // Interior walls - GLASS
-        const wallMat = new THREE.MeshPhysicalMaterial({
-            color: CONFIG.colors.wallInterior,
-            roughness: 0.1,
-            metalness: 0.1,
+        // Interior partitions: light frosted glass (no transmission pass: much cheaper to render)
+        const wallMat = new THREE.MeshStandardMaterial({
+            color: 0xf4f2ee,
+            roughness: 0.35,
+            metalness: 0.0,
             transparent: true,
-            transmission: 0.8,
-            opacity: 0.4,
+            opacity: 0.16,
             side: THREE.DoubleSide,
+            depthWrite: false,
         });
 
         // 4 walls (simple box geometry for each)
@@ -847,22 +948,21 @@ class SmartBuildingTwin {
 
         floorGroup.add(roomGroup);
 
-        // --- HYBRID DIGITAL TWIN BADGES ---
-        const badgeCanvas = document.createElement('canvas');
-        badgeCanvas.width = 256;
-        badgeCanvas.height = 64;
-        const bCtx = badgeCanvas.getContext('2d');
-        
-        drawRoomBadge(bCtx, isLiveRoom ? 'offline' : 'sim');
-
-        const badgeTex = new THREE.CanvasTexture(badgeCanvas);
-        if (isLiveRoom) this.liveBadge = { ctx: bCtx, texture: badgeTex, kind: 'offline' };
-        const badgeMat = new THREE.SpriteMaterial({ map: badgeTex, transparent: true });
-        const badgeSprite = new THREE.Sprite(badgeMat);
-        badgeSprite.scale.set(4, 1, 1);
-        badgeSprite.position.set(roomDef.x + roomDef.w / 2, y0 + 3.5, roomDef.z + roomDef.d / 2);
-        
-        roomGroup.add(badgeSprite);
+        // --- LIVE ROOM LABEL (values from the streamed state) ---
+        const labelCanvas = document.createElement('canvas');
+        labelCanvas.width = 512;
+        labelCanvas.height = 150;
+        const lCtx = labelCanvas.getContext('2d');
+        drawRoomLabel(lCtx, { name: roomDef.name, kind: isLiveRoom ? 'offline' : 'sim', people: '—', temp: '—', light: null, ac: '—', acOn: false });
+        const labelTex = new THREE.CanvasTexture(labelCanvas);
+        labelTex.colorSpace = THREE.SRGBColorSpace;
+        const labelSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthTest: false }));
+        labelSprite.scale.set(5.1, 1.5, 1);
+        labelSprite.position.set(roomDef.x + roomDef.w / 2, y0 + 3.05, roomDef.z + roomDef.d / 2);
+        labelSprite.renderOrder = 10;
+        labelSprite.visible = floorIndex === this.selectedFloor;
+        roomGroup.add(labelSprite);
+        const label = { ctx: lCtx, texture: labelTex, sprite: labelSprite, key: '' };
 
 
         // Store room data
@@ -878,6 +978,7 @@ class SmartBuildingTwin {
             occupancy: { truth: null, predicted: null, probability: null, presence: null },
             control: { light: null, hvac: null, mode: null },
             power: { estimated: null, measured: null },
+            label,
         });
     }
 
@@ -1213,8 +1314,8 @@ class SmartBuildingTwin {
         // Concrete frame material
         const frameMat = new THREE.MeshStandardMaterial({
             color: CONFIG.colors.concreteFrame,
-            roughness: 0.6,
-            metalness: 0.1,
+            roughness: 0.35,
+            metalness: 0.8,
         });
 
         // Build glass curtain walls per floor for individual control
@@ -1273,6 +1374,22 @@ class SmartBuildingTwin {
                 this.floorGroups[fi].add(col);
             });
 
+            // Vertical mullions of the curtain wall (every 1.5 m), dark aluminium
+            const mullGeo = new THREE.BoxGeometry(0.06, wallH, 0.12);
+            const spots = [];
+            for (let x = 1.5; x < bw - 0.1; x += 1.5) { spots.push([x, -0.08, 0]); spots.push([x, bd + 0.08, 0]); }
+            for (let z = 1.5; z < bd - 0.1; z += 1.5) { spots.push([-0.08, z, Math.PI / 2]); spots.push([bw + 0.08, z, Math.PI / 2]); }
+            const mull = new THREE.InstancedMesh(mullGeo, frameMat, spots.length);
+            const dummy = new THREE.Object3D();
+            spots.forEach(([x, z, ry], k) => {
+                dummy.position.set(x, slabTop + wallH / 2, z);
+                dummy.rotation.set(0, ry, 0);
+                dummy.updateMatrix();
+                mull.setMatrixAt(k, dummy.matrix);
+            });
+            mull.castShadow = true;
+            this.floorGroups[fi].add(mull);
+
             // Window glow planes (emissive, inside glass)
             this.addWindowGlows(this.floorGroups[fi], fi, bw, bd, wallH, slabTop);
         }
@@ -1326,7 +1443,7 @@ class SmartBuildingTwin {
 
         // Roof slab
         const roofGeo = new THREE.BoxGeometry(bw + 0.5, 0.3, bd + 0.5);
-        const roofMat = new THREE.MeshStandardMaterial({ color: 0x606060, roughness: 0.8 });
+        const roofMat = new THREE.MeshStandardMaterial({ color: 0xb4b0a8, roughness: 0.9 });
         const roof = new THREE.Mesh(roofGeo, roofMat);
         roof.position.set(bw / 2, totalH + 0.15, bd / 2);
         roof.castShadow = true;
@@ -1353,7 +1470,7 @@ class SmartBuildingTwin {
         });
 
         // Roof parapet (low wall around edge)
-        const parapetMat = new THREE.MeshStandardMaterial({ color: 0x707070, roughness: 0.7 });
+        const parapetMat = new THREE.MeshStandardMaterial({ color: 0xc9c5bd, roughness: 0.85 });
         const parapetH = 0.8;
         const parapetT = 0.15;
 
@@ -1500,6 +1617,8 @@ class SmartBuildingTwin {
 
     selectFloor(index) {
         this.selectedFloor = index;
+        if (this.selectedRoom) { this.selectedRoom = null; this.resetHighlight(); }
+        this.updateLabelVisibility();
 
         // Update UI
         document.querySelectorAll('.floor-btn').forEach(btn => {
@@ -1702,8 +1821,63 @@ class SmartBuildingTwin {
 
         if (intersects.length > 0) {
             const room = intersects[0].object.userData;
-            this.showRoomPanel(room);
+            if (EMBEDDED && window.parent !== window) {
+                window.parent.postMessage({ type: 'ROOM_SELECTED', room_id: `f${room.floorIndex}_${room.roomId}` }, '*');
+            } else {
+                this.showRoomPanel(room);
+            }
         }
+    }
+
+    // Selection requested by the page (room list, alerts, demo)
+    selectRoomById(roomId) {
+        if (!roomId) {
+            if (this.selectedRoom) {
+                this.selectedRoom = null;
+                this.resetHighlight();
+            }
+            this.updateLabelVisibility();
+            return;
+        }
+        const m = /^f(\d+)_(.+)$/.exec(roomId);
+        if (!m) return;
+        const key = `${m[1]}_${m[2]}`;
+        const data = this.roomData.get(key);
+        if (!data) return;
+        if (this.selectedRoom === key) return;
+        this.selectedRoom = key;
+        this.selectedFloor = data.floorIndex;
+        this.highlightRoom({ floorIndex: data.floorIndex, roomId: data.def.id });
+        this.updateLabelVisibility();
+    }
+
+    updateLabelVisibility() {
+        this.roomData.forEach((d, key) => {
+            if (!d.label) return;
+            d.label.sprite.visible = d.floorIndex === this.selectedFloor || key === this.selectedRoom;
+        });
+        this.refreshLabels(true);
+    }
+
+    refreshLabels(force = false) {
+        const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : null;
+        this.roomData.forEach((d, key) => {
+            if (!d.label || (!d.label.sprite.visible && !force)) return;
+            let kind = 'sim';
+            if (d.source === 'hardware') kind = d.hardware && d.hardware.connected ? (d.hardware.real_board ? 'live' : 'test') : 'offline';
+            const t = num(d.sensors.temperature);
+            const people = d.source === 'hardware'
+                ? (d.occupancy.presence === null ? 'presence —' : d.occupancy.presence ? 'someone in' : 'nobody')
+                : (d.occupancy.truth === null ? '— people' : `${d.occupancy.truth} ${d.occupancy.truth === 1 ? 'person' : 'people'}`);
+            const hv = d.control.hvac;
+            const ac = !hv ? 'AC —' : hv === 'NORMAL' ? `AC ${d.control.setpoint ?? ''}°C` : hv === 'LOW' ? 'AC 27°C' : 'AC off';
+            const info = { name: d.def.name, kind, people, temp: t === null ? '—' : `${t.toFixed(1)}°C`, light: d.control.light, ac, acOn: hv === 'NORMAL' || hv === 'LOW', selected: key === this.selectedRoom };
+            const k = JSON.stringify(info);
+            if (k === d.label.key) return;
+            d.label.key = k;
+            drawRoomLabel(d.label.ctx, info);
+            d.label.texture.needsUpdate = true;
+        });
     }
 
     showRoomPanel(roomUserData) {
@@ -1818,13 +1992,16 @@ class SmartBuildingTwin {
     applyBackendState(msg) {
         const rooms = Array.isArray(msg.rooms) ? msg.rooms : [];
         this.liveData = { system: msg.system || null, hardware: msg.hardware || null };
-        if (msg.system && msg.system.simulation_time) {
-            SimulationClock.parseBackendTime(msg.system.simulation_time);
+        const clockIso = msg.clock && msg.clock.iso;
+        if (clockIso) {
+            SimulationClock.parseBackendTime(clockIso);
+            SimulationClock.cloudCover = typeof msg.clock.cloud_cover === 'number' ? msg.clock.cloud_cover : 0;
+            SimulationClock.sunAltitude = typeof msg.clock.sun_altitude === 'number' ? msg.clock.sun_altitude : null;
             this.updateTimeOfDay(SimulationClock.hour);
             const timeSlider = document.getElementById('time-slider');
             if (timeSlider) {
                 timeSlider.value = SimulationClock.hour;
-                document.getElementById('time-label').textContent = msg.system.simulation_time.slice(0, 5);
+                document.getElementById('time-label').textContent = clockIso.slice(11, 16);
             }
         }
 
@@ -1852,15 +2029,16 @@ class SmartBuildingTwin {
                 light: room.control?.light_action ?? null,
                 hvac: room.control?.hvac_action ?? null,
                 mode: room.control?.control_mode ?? null,
+                setpoint: num(room.control?.setpoint_c),
             };
-            rd.power = { estimated: num(room.energy?.estimated_power_watts), measured: num(room.energy?.measured_power_watts) };
+            rd.power = { estimated: num(room.energy?.power_w ?? room.energy?.estimated_power_watts), measured: num(room.energy?.measured_power_watts) };
 
             const visualState = VisualStateStore.get(key);
             if (VisualStateStore.processBackendUpdate(key, room, null)) {
                 eventBus.emit(Events.ROOM_STATE_CHANGED, { roomId: key, backendState: room, visualState });
             }
-            if (room.source === 'hardware') this.updateLiveBadge(room.hardware);
         }
+        this.refreshLabels();
         this.updateBuildingStats();
         // Tell the page how many backend rooms were found in the 3D model (a real sync check)
         if (window.parent && window.parent !== window) {
@@ -1901,10 +2079,10 @@ class SmartBuildingTwin {
         if (sys) {
             set('stat-total-rooms', String(sys.total_rooms ?? '—'));
             set('stat-occupied', `${sys.occupied_rooms ?? '—'} / ${sys.rooms_with_data ?? '—'}`);
-            set('stat-power', `${((sys.sim_estimated_power_watts ?? 0) / 1000).toFixed(1)} kW (est.)`);
+            set('stat-power', `${((sys.sim_power_watts ?? 0) / 1000).toFixed(1)} kW`);
             set('stat-energy-saved', '—');
-            set('stat-decisions', sys.model_loaded ? 'RF model' : 'heuristic');
-            set('total-energy', `${((sys.sim_cumulative_energy_wh ?? 0) / 1000).toFixed(1)} kWh (sim)`);
+            set('stat-decisions', sys.controller || '—');
+            set('total-energy', '—');
             if (typeof sys.outdoor_temp_c === 'number') set('outdoor-temp', `${sys.outdoor_temp_c.toFixed(0)}°C`);
         }
         const temps = [];
@@ -2031,6 +2209,7 @@ EngineManager.register('energy', EnergyEngine);
 EngineManager.register('hero', HeroEngine);
 EngineManager.register('environment', EnvironmentalEngine);
 EngineManager.register('research', ResearchEngine);
+EngineManager.register('realism', RealismEngine);
 EngineManager.register('roomController', RoomController);
 EngineManager.register('debugOverlay', DebugOverlay);
 
@@ -2046,7 +2225,10 @@ window.addEventListener('message', (event) => {
     if (event.data.type === 'UI_COMMAND') {
         const { action, payload } = event.data;
         if (action === 'setViewMode') app.setViewMode(payload);
-        if (action === 'selectFloor') app.selectFloor(payload);
+        if (action === 'selectFloor' && typeof payload === 'number' && payload !== app.selectedFloor) app.selectFloor(payload);
+        if (action === 'selectRoom') app.selectRoomById(payload);
+        if (action === 'setOverlay' && payload) ResearchEngine.setColors(payload.mode, payload.colors || {});
+        if (action === 'setQuality') RealismEngine.setQuality(payload);
         if (action === 'toggleDebug') SIM_CONFIG.debug = !SIM_CONFIG.debug;
     }
 

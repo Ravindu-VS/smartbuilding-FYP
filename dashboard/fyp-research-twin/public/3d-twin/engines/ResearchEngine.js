@@ -100,13 +100,27 @@ class ResearchEngineImpl {
         this._particleSystem.instanceMatrix.needsUpdate = true;
     }
 
+    /** Room colours computed by the page (same function as its legend). mode 'none' restores. */
+    setColors(mode, colors) {
+        this._colors = new Map();
+        for (const [roomId, hex] of Object.entries(colors || {})) {
+            const m = /^f(\d+)_(.+)$/.exec(roomId);
+            if (m) this._colors.set(`${m[1]}_${m[2]}`, new THREE.Color(hex));
+        }
+        if (!mode || mode === 'none') {
+            if (this.mode === 'COLORS') this.setMode('NONE');
+        } else if (this.mode !== 'COLORS') {
+            this.setMode('COLORS');
+        }
+    }
+
     setMode(mode) {
         this.mode = mode;
         if (this._particleSystem) {
             this._particleSystem.visible = (mode === 'ENERGY');
         }
         
-        if (mode !== 'PMV') {
+        if (mode !== 'PMV' && mode !== 'COLORS') {
             this._restoreOriginalColors();
         }
     }
@@ -130,7 +144,9 @@ class ResearchEngineImpl {
     tick(delta) {
         if (!this._app) return;
 
-        if (this.mode === 'PMV') {
+        if (this.mode === 'COLORS') {
+            this._updateColors(delta);
+        } else if (this.mode === 'PMV') {
             this._updatePMV(delta);
         } else if (this.mode === 'ENERGY') {
             this._updateEnergyFlow(delta);
@@ -164,6 +180,19 @@ class ResearchEngineImpl {
             mesh.material.emissive.lerp(targetColor, 0.05);
             mesh.material.emissiveIntensity = dampedLerp(mesh.material.emissiveIntensity, 0.7, 0.05, delta);
             mesh.material.color.lerp(new THREE.Color(0x000000), 0.05); // Darken base to let emissive pop
+        });
+    }
+
+    _updateColors(delta) {
+        if (!this._app.roomMeshes || !this._colors) return;
+        const fallback = new THREE.Color(0x1e293b);
+        const black = new THREE.Color(0x000000);
+        this._app.roomMeshes.forEach(mesh => {
+            const ud = mesh.userData;
+            const target = this._colors.get(`${ud.floorIndex}_${ud.roomId}`) || fallback;
+            mesh.material.emissive.lerp(target, 0.12);
+            mesh.material.emissiveIntensity = dampedLerp(mesh.material.emissiveIntensity, 0.85, 0.08, delta);
+            mesh.material.color.lerp(black, 0.08);
         });
     }
 

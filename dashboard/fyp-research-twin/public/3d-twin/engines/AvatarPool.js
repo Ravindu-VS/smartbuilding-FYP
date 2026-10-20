@@ -130,7 +130,7 @@ class AvatarPoolImpl {
 
         // Configure for this room
         avatar.userData.roomId = roomId;
-        avatar.userData.baseY = 0; // Local Y is 0
+        avatar.userData.baseY = 0.32; // local to the floor group: standing on the slab (0.3 m) + floor finish
         avatar.userData.state = 'walking';
         avatar.userData.walkStart = { x: startPos.x, z: startPos.z };
         avatar.userData.walkTarget = { x: targetPos.x, z: targetPos.z };
@@ -138,7 +138,7 @@ class AvatarPoolImpl {
         avatar.userData.walkProgress = 0;
 
         // Position at start (door entrance)
-        avatar.position.set(startPos.x, 0, startPos.z);
+        avatar.position.set(startPos.x, 0.32, startPos.z);
         avatar.visible = true;
 
         // Track in-use

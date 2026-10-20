@@ -94,7 +94,7 @@ class EnvironmentalEngineImpl {
         });
 
         // --- Sun & Sky Update ---
-        this._updateLighting(hour);
+        if (!this._app.realism) this._updateLighting(hour);   // the RealismEngine drives sun, sky and haze
 
         // --- Cars Update ---
         this._updateCars(hour, delta, time);
@@ -107,8 +107,10 @@ class EnvironmentalEngineImpl {
         const sunX = Math.cos(sunAngle) * 30;
 
         if (this._app.sunLight) {
+            // Cloud cover from the simulated weather (the overcast scenario dims the sun)
+            const cloud = Math.max(0, Math.min(1, SimulationClock.cloudCover || 0));
             if (hour >= 6 && hour <= 18) {
-                this._app.sunLight.intensity = 1.0 + Math.sin(sunAngle) * 0.8;
+                this._app.sunLight.intensity = (1.0 + Math.sin(sunAngle) * 0.8) * (1 - 0.75 * cloud);
                 this._app.sunLight.position.set(sunX, Math.max(5, sunHeight), 20);
 
                 if (this._app.ambientLight) this._app.ambientLight.intensity = 0.4 + Math.sin(sunAngle) * 0.2;
@@ -132,7 +134,8 @@ class EnvironmentalEngineImpl {
         // Sky & Fog Color
         if (this._app.scene && this._app.scene.background) {
             const nightColor = new THREE.Color(0x050510);
-            const dayColor = new THREE.Color(0x4a80ba); // Bright clear sky blue
+            const cloud = Math.max(0, Math.min(1, SimulationClock.cloudCover || 0));
+            const dayColor = new THREE.Color(0x4a80ba).lerp(new THREE.Color(0x5b6470), cloud); // clear blue -> overcast grey
             
             if (hour >= 6 && hour <= 18) {
                 const dayProgress = Math.sin(sunAngle);

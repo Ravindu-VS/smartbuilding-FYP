@@ -105,7 +105,7 @@ class OccupancyEngineImpl {
             const layout = this._app.floorLayouts?.[floorIndex];
             if (layout?.rooms) {
                 rs.roomDef = layout.rooms.find(r => r.id === roomName);
-                rs.floorY = floorIndex * 3.8;
+                rs.floorY = 0.32;   // positions are local to the floor group
                 if (rs.roomDef) {
                     rs.deskPositions = this._computeDeskPositions(rs.roomDef, rs.floorY);
                 }

@@ -61,7 +61,7 @@ class HeroEngineImpl {
         const roomDef = { x: 0, z: 0, w: 14, d: 12 };
         const cx = roomDef.x + roomDef.w / 2;
         const cz = roomDef.z + roomDef.d / 2;
-        const y = 2 * 3.8 + 0.05; // Floor 3 base Y + tiny offset
+        const y = 0.35; // local to the floor group: just above the floor finish
 
         // Create ring geometry
         const ringGeometry = new THREE.RingGeometry(

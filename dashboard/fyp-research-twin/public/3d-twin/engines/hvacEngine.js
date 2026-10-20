@@ -39,7 +39,7 @@ class HVACEngineImpl {
         if (!roomData || !roomData.def || !roomData.group) return null;
         
         const rd = roomData.def;
-        const count = 3000;
+        const count = 400;
         
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(count * 3);
@@ -49,7 +49,7 @@ class HVACEngineImpl {
         for(let i=0; i<count; i++) {
             // Start at ceiling vent (center of room)
             positions[i*3] = rd.x + rd.w/2 + (Math.random()-0.5);
-            positions[i*3+1] = roomData.floorIndex * 3.5 + 3.2; // near ceiling
+            positions[i*3+1] = 3.2; // near the ceiling (coordinates are local to the floor)
             positions[i*3+2] = rd.z + rd.d/2 + (Math.random()-0.5);
             
             velocities[i*3] = (Math.random() - 0.5) * 2;
@@ -97,7 +97,7 @@ class HVACEngineImpl {
         // Add to the floor group
         roomData.group.add(points);
         
-        return { points, geometry, velocities, count, rd, floorY: roomData.floorIndex * 3.5 };
+        return { points, geometry, velocities, count, rd, floorY: 0.3 };
     }
 
     onRoomStateChanged({ roomId, backendState, visualState }) {
@@ -111,10 +111,10 @@ class HVACEngineImpl {
 
         const vs = visualState;
         
-        // Show particles only when HVAC is NORMAL or LOW
+        // Show particles while the AC runs (NORMAL = cooling, LOW = set-back)
         const sys = this._particleSystems.get(roomId);
         if (sys) {
-            sys.points.visible = (vs.hvacVisualMode === 'NORMAL' || vs.hvacVisualMode === 'LOW');
+            sys.points.visible = (vs.hvacVisualMode === 'cooling' || vs.hvacVisualMode === 'ventilation');
         }
 
         const prevAngle = this._roomWindowAngles.get(roomId);
@@ -139,7 +139,7 @@ class HVACEngineImpl {
                 const vel = sys.velocities;
                 
                 // Increase speed based on fan speed
-                const speedMult = (vs.hvacVisualMode === 'NORMAL') ? 2.0 : 1.0;
+                const speedMult = (vs.hvacVisualMode === 'cooling') ? 2.0 : 1.0;
                 
                 for(let i=0; i<sys.count; i++) {
                     let i3 = i * 3;
@@ -152,7 +152,7 @@ class HVACEngineImpl {
                     // Reset if hits floor or fades out
                     if (pos[i3+1] < sys.floorY + 0.1 || alpha[i] <= 0) {
                         pos[i3] = sys.rd.x + sys.rd.w/2 + (Math.random()-0.5) * 1.5;
-                        pos[i3+1] = sys.floorY + 3.2; // ceiling
+                        pos[i3+1] = 3.2; // ceiling
                         pos[i3+2] = sys.rd.z + sys.rd.d/2 + (Math.random()-0.5) * 1.5;
                         
                         vel[i3] = (Math.random() - 0.5) * 2;

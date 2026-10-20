@@ -71,6 +71,11 @@ export const SIM_CONFIG = {
         'device_state.hvac_speed',
         'ground_truth.true_occupancy',
         'energy.estimated_power_watts',
+        'energy.power_w',
+        'comfort.pmv',
+        'control.setpoint_c',
+        'control.vent_boost',
+        'disturbances.window_ach',
         'sensors.temperature',
         'temperature'
     ],
