@@ -51,3 +51,10 @@ node_modules/
 
 # Gemini agent files
 .gemini/
+
+# Board secrets (Wi-Fi password) — copy secrets.example.h to secrets.h
+firmware/esp32_smart_building/secrets.h
+
+# Digital twin cache and local calibration
+output/twin_cache/
+output/hw_calibration.json

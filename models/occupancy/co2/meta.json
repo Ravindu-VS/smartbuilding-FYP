@@ -1,0 +1,75 @@
+{
+  "feature_set": "co2",
+  "features": [
+    "CO2"
+  ],
+  "threshold": 0.5,
+  "selected": {
+    "family": "decision_tree",
+    "joblib": "models/occupancy/co2/model.joblib",
+    "joblib_bytes": 2531,
+    "json": "models/occupancy/co2/model.json",
+    "json_bytes": 2302,
+    "portable_vs_sklearn_max_abs_diff": 0.0,
+    "n_parameters": 28,
+    "inference_us_per_sample_dev_pc": 5.993816499994864
+  },
+  "edge": {
+    "family": "decision_tree",
+    "joblib": "models/occupancy/co2/edge_model.joblib",
+    "joblib_bytes": 2531,
+    "json": "models/occupancy/co2/edge_model.json",
+    "json_bytes": 2302,
+    "portable_vs_sklearn_max_abs_diff": 0.0,
+    "n_parameters": 28,
+    "inference_us_per_sample_dev_pc": 6.241978750040289
+  },
+  "test_combined": {
+    "n": 12417,
+    "accuracy": 0.7810260127244906,
+    "precision": 0.5379969803724207,
+    "recall": 0.7077126779212182,
+    "f1": 0.6112937812723374,
+    "confusion": {
+      "tn": 7560,
+      "fp": 1836,
+      "fn": 883,
+      "tp": 2138
+    },
+    "roc_auc": 0.7843547699099069
+  },
+  "versions": {
+    "python": "3.13.16",
+    "scikit_learn": "1.8.0",
+    "numpy": "2.2.6",
+    "pandas": "3.0.1"
+  },
+  "dataset": {
+    "name": "UCI Occupancy Detection (Candanedo & Feldheim 2016)",
+    "files": {
+      "train": {
+        "rows": 8143,
+        "sha256": "b2c4d0ce2b9e4e453c476f7125ef31aeec2d1f5c7f5572d0e80de3df6521ab56",
+        "first": "2015-02-04 17:51:00",
+        "last": "2015-02-10 09:33:00",
+        "occupied_share": 0.2123296082524868
+      },
+      "test1": {
+        "rows": 2665,
+        "sha256": "1b92c7c1b2838963464fa891a610cf3c5db4becb7189189b29b330107a584c7f",
+        "first": "2015-02-02 14:19:00",
+        "last": "2015-02-04 10:43:00",
+        "occupied_share": 0.3647279549718574
+      },
+      "test2": {
+        "rows": 9752,
+        "sha256": "d026d1bd5aeccd4aff4f3b3710d48e40613bd5fc370db7e61bbdcaa50d985095",
+        "first": "2015-02-11 14:48:00",
+        "last": "2015-02-18 09:19:00",
+        "occupied_share": 0.21011074651353567
+      }
+    }
+  },
+  "generated_utc": "2026-10-08T04:14:03Z",
+  "git_commit": "287a415"
+}

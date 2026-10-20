@@ -230,6 +230,21 @@ CONTROL_TUNING = {
 
 
 # =============================================================================
+# BUILDING GEOMETRY (shared by the simulation and the 3D view)
+# =============================================================================
+# Plan positions are metres from the building's south-west corner: x runs east
+# (0..30), z runs north (0..20). Each room has x, z (corner) and w, d (size in x, z).
+# The 3D view draws exactly these rectangles (it receives them from the edge brain).
+BUILDING_GEOMETRY = {
+    "width_m": 30.0,          # x extent
+    "depth_m": 20.0,          # z extent
+    "floor_height_m": 3.5,    # floor-to-floor
+    "slab_m": 0.3,            # room height = floor_height - slab = 3.2 m
+    "north": "+z",            # z = 0 faces south, z = depth faces north
+}
+
+
+# =============================================================================
 # BUILDING CONFIGURATION — THE SINGLE SOURCE OF TRUTH
 # =============================================================================
 
@@ -244,11 +259,11 @@ BUILDING_CONFIG = {
             "name": "Retail & Lobby",
             "floor_type": "commercial",
             "rooms": [
-                {"room_id": "f0_lobby",      "name": "Main Lobby",       "type": "lobby",    "area_m2": 180, "volume_m3": 630, "max_occupancy": 15},
-                {"room_id": "f0_cafe",        "name": "Coffee Shop",      "type": "shop",     "area_m2": 180, "volume_m3": 630, "max_occupancy": 15},
-                {"room_id": "f0_retail_a",    "name": "Retail Store A",   "type": "shop",     "area_m2": 80,  "volume_m3": 280, "max_occupancy": 10},
-                {"room_id": "f0_retail_b",    "name": "Retail Store B",   "type": "shop",     "area_m2": 80,  "volume_m3": 280, "max_occupancy": 10},
-                {"room_id": "f0_bathroom",    "name": "Public Restrooms", "type": "bathroom", "area_m2": 80,  "volume_m3": 280, "max_occupancy": 5},
+                {"room_id": "f0_lobby",      "name": "Main Lobby",       "type": "lobby",    "area_m2": 180, "volume_m3": 630, "max_occupancy": 15, "x": 0, "z": 0, "w": 15, "d": 12},
+                {"room_id": "f0_cafe",        "name": "Coffee Shop",      "type": "shop",     "area_m2": 180, "volume_m3": 630, "max_occupancy": 15, "x": 15, "z": 0, "w": 15, "d": 12},
+                {"room_id": "f0_retail_a",    "name": "Retail Store A",   "type": "shop",     "area_m2": 80,  "volume_m3": 280, "max_occupancy": 10, "x": 0, "z": 12, "w": 10, "d": 8},
+                {"room_id": "f0_retail_b",    "name": "Retail Store B",   "type": "shop",     "area_m2": 80,  "volume_m3": 280, "max_occupancy": 10, "x": 10, "z": 12, "w": 10, "d": 8},
+                {"room_id": "f0_bathroom",    "name": "Public Restrooms", "type": "bathroom", "area_m2": 80,  "volume_m3": 280, "max_occupancy": 5, "x": 20, "z": 12, "w": 10, "d": 8},
             ],
         },
         # ─── Floor 2: Health & Recreation ───
@@ -257,10 +272,10 @@ BUILDING_CONFIG = {
             "name": "Health & Recreation",
             "floor_type": "recreation",
             "rooms": [
-                {"room_id": "f1_gym",         "name": "Fitness Center",   "type": "gym",      "area_m2": 240, "volume_m3": 840, "max_occupancy": 20},
-                {"room_id": "f1_spa",         "name": "Spa & Wellness",   "type": "lounge",   "area_m2": 120, "volume_m3": 420, "max_occupancy": 10},
-                {"room_id": "f1_studio",      "name": "Yoga Studio",      "type": "gym",      "area_m2": 120, "volume_m3": 420, "max_occupancy": 12},
-                {"room_id": "f1_lockers",     "name": "Locker Rooms",     "type": "bathroom", "area_m2": 120, "volume_m3": 420, "max_occupancy": 10},
+                {"room_id": "f1_gym",         "name": "Fitness Center",   "type": "gym",      "area_m2": 240, "volume_m3": 840, "max_occupancy": 20, "x": 0, "z": 0, "w": 20, "d": 12},
+                {"room_id": "f1_spa",         "name": "Spa & Wellness",   "type": "lounge",   "area_m2": 120, "volume_m3": 420, "max_occupancy": 10, "x": 20, "z": 0, "w": 10, "d": 12},
+                {"room_id": "f1_studio",      "name": "Yoga Studio",      "type": "gym",      "area_m2": 120, "volume_m3": 420, "max_occupancy": 12, "x": 0, "z": 12, "w": 15, "d": 8},
+                {"room_id": "f1_lockers",     "name": "Locker Rooms",     "type": "bathroom", "area_m2": 120, "volume_m3": 420, "max_occupancy": 10, "x": 15, "z": 12, "w": 15, "d": 8},
             ],
         },
         # ─── Floor 3: Operations (AI Monitored — maps to original 4 rooms) ───
@@ -270,12 +285,12 @@ BUILDING_CONFIG = {
             "floor_type": "office",
             "is_primary_monitored": True,
             "rooms": [
-                {"room_id": "f2_office_a",    "name": "Office A",         "type": "office",   "area_m2": 168, "volume_m3": 588, "max_occupancy": 10, "legacy_sim_id": 0, "data_source": "hardware", "sensors": ["temperature", "humidity", "co2", "lux"]},
-                {"room_id": "f2_meeting_b",   "name": "Meeting Room B",   "type": "meeting",  "area_m2": 80,  "volume_m3": 280, "max_occupancy": 8,  "legacy_sim_id": 2, "data_source": "simulation"},
-                {"room_id": "f2_kitchen",     "name": "Kitchen",          "type": "kitchen",  "area_m2": 48,  "volume_m3": 168, "max_occupancy": 4,  "legacy_sim_id": 1, "data_source": "simulation"},
-                {"room_id": "f2_corridor",    "name": "Main Corridor",    "type": "corridor", "area_m2": 64,  "volume_m3": 224, "max_occupancy": 5,  "legacy_sim_id": 3, "data_source": "simulation"},
-                {"room_id": "f2_office_b2",   "name": "Office B2",        "type": "office",   "area_m2": 112, "volume_m3": 392, "max_occupancy": 8, "data_source": "simulation"},
-                {"room_id": "f2_server",      "name": "Server Room",      "type": "server",   "area_m2": 128, "volume_m3": 448, "max_occupancy": 2, "data_source": "simulation"},
+                {"room_id": "f2_office_a",    "name": "Office A",         "type": "office",   "area_m2": 168, "volume_m3": 588, "max_occupancy": 10, "x": 0, "z": 0, "w": 14, "d": 12, "legacy_sim_id": 0, "data_source": "hardware", "sensors": ["temperature", "humidity", "co2", "lux"]},
+                {"room_id": "f2_meeting_b",   "name": "Meeting Room B",   "type": "meeting",  "area_m2": 80,  "volume_m3": 280, "max_occupancy": 8, "x": 14, "z": 0, "w": 10, "d": 8,  "legacy_sim_id": 2, "data_source": "simulation"},
+                {"room_id": "f2_kitchen",     "name": "Kitchen",          "type": "kitchen",  "area_m2": 48,  "volume_m3": 168, "max_occupancy": 4, "x": 24, "z": 0, "w": 6, "d": 8,  "legacy_sim_id": 1, "data_source": "simulation"},
+                {"room_id": "f2_corridor",    "name": "Main Corridor",    "type": "corridor", "area_m2": 64,  "volume_m3": 224, "max_occupancy": 5, "x": 14, "z": 8, "w": 16, "d": 4,  "legacy_sim_id": 3, "data_source": "simulation"},
+                {"room_id": "f2_office_b2",   "name": "Office B2",        "type": "office",   "area_m2": 112, "volume_m3": 392, "max_occupancy": 8, "x": 0, "z": 12, "w": 14, "d": 8, "data_source": "simulation"},
+                {"room_id": "f2_server",      "name": "Server Room",      "type": "server",   "area_m2": 128, "volume_m3": 448, "max_occupancy": 2, "x": 14, "z": 12, "w": 16, "d": 8, "data_source": "simulation"},
             ],
         },
         # ─── Floor 4: Residential Apartments ───
@@ -284,13 +299,13 @@ BUILDING_CONFIG = {
             "name": "Residential Apartments",
             "floor_type": "residential",
             "rooms": [
-                {"room_id": "f3_apt1_living", "name": "Apt 1 - Living",   "type": "residential", "area_m2": 120, "volume_m3": 420, "max_occupancy": 4},
-                {"room_id": "f3_apt1_bed",    "name": "Apt 1 - Bedroom",  "type": "residential", "area_m2": 60,  "volume_m3": 210, "max_occupancy": 2},
-                {"room_id": "f3_apt2_living", "name": "Apt 2 - Living",   "type": "residential", "area_m2": 120, "volume_m3": 420, "max_occupancy": 4},
-                {"room_id": "f3_apt2_bed",    "name": "Apt 2 - Bedroom",  "type": "residential", "area_m2": 60,  "volume_m3": 210, "max_occupancy": 2},
-                {"room_id": "f3_apt1_bath",   "name": "Apt 1 - Bathroom", "type": "bathroom",    "area_m2": 40,  "volume_m3": 140, "max_occupancy": 1},
-                {"room_id": "f3_hallway",     "name": "Hallway",          "type": "corridor",    "area_m2": 160, "volume_m3": 560, "max_occupancy": 3},
-                {"room_id": "f3_apt2_bath",   "name": "Apt 2 - Bathroom", "type": "bathroom",    "area_m2": 40,  "volume_m3": 140, "max_occupancy": 1},
+                {"room_id": "f3_apt1_living", "name": "Apt 1 - Living",   "type": "residential", "area_m2": 120, "volume_m3": 420, "max_occupancy": 4, "x": 0, "z": 0, "w": 10, "d": 12},
+                {"room_id": "f3_apt1_bed",    "name": "Apt 1 - Bedroom",  "type": "residential", "area_m2": 60,  "volume_m3": 210, "max_occupancy": 2, "x": 10, "z": 0, "w": 5, "d": 12},
+                {"room_id": "f3_apt2_living", "name": "Apt 2 - Living",   "type": "residential", "area_m2": 120, "volume_m3": 420, "max_occupancy": 4, "x": 15, "z": 0, "w": 10, "d": 12},
+                {"room_id": "f3_apt2_bed",    "name": "Apt 2 - Bedroom",  "type": "residential", "area_m2": 60,  "volume_m3": 210, "max_occupancy": 2, "x": 25, "z": 0, "w": 5, "d": 12},
+                {"room_id": "f3_apt1_bath",   "name": "Apt 1 - Bathroom", "type": "bathroom",    "area_m2": 40,  "volume_m3": 140, "max_occupancy": 1, "x": 0, "z": 12, "w": 5, "d": 8},
+                {"room_id": "f3_hallway",     "name": "Hallway",          "type": "corridor",    "area_m2": 160, "volume_m3": 560, "max_occupancy": 3, "x": 5, "z": 12, "w": 20, "d": 8},
+                {"room_id": "f3_apt2_bath",   "name": "Apt 2 - Bathroom", "type": "bathroom",    "area_m2": 40,  "volume_m3": 140, "max_occupancy": 1, "x": 25, "z": 12, "w": 5, "d": 8},
             ],
         },
         # ─── Floor 5: Penthouse Suite ───
@@ -299,10 +314,10 @@ BUILDING_CONFIG = {
             "name": "Penthouse Suite",
             "floor_type": "residential",
             "rooms": [
-                {"room_id": "f4_lounge",      "name": "Penthouse Lounge", "type": "residential", "area_m2": 240, "volume_m3": 840, "max_occupancy": 8},
-                {"room_id": "f4_master",      "name": "Master Bedroom",   "type": "residential", "area_m2": 120, "volume_m3": 420, "max_occupancy": 2},
-                {"room_id": "f4_terrace",     "name": "Roof Terrace",     "type": "lobby",       "area_m2": 160, "volume_m3": 560, "max_occupancy": 15},
-                {"room_id": "f4_bath",        "name": "Luxury Bath",      "type": "bathroom",    "area_m2": 80,  "volume_m3": 280, "max_occupancy": 2},
+                {"room_id": "f4_lounge",      "name": "Penthouse Lounge", "type": "residential", "area_m2": 240, "volume_m3": 840, "max_occupancy": 8, "x": 0, "z": 0, "w": 20, "d": 12},
+                {"room_id": "f4_master",      "name": "Master Bedroom",   "type": "residential", "area_m2": 120, "volume_m3": 420, "max_occupancy": 2, "x": 20, "z": 0, "w": 10, "d": 12},
+                {"room_id": "f4_terrace",     "name": "Roof Terrace",     "type": "lobby",       "area_m2": 160, "volume_m3": 560, "max_occupancy": 15, "x": 0, "z": 12, "w": 20, "d": 8},
+                {"room_id": "f4_bath",        "name": "Luxury Bath",      "type": "bathroom",    "area_m2": 80,  "volume_m3": 280, "max_occupancy": 2, "x": 20, "z": 12, "w": 10, "d": 8},
             ],
         },
     ],
