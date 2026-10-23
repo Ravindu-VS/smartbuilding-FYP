@@ -31,8 +31,6 @@ Models: ridge regression and histogram gradient-boosted trees on the temperature
 from __future__ import annotations
 
 import glob
-import math
-from datetime import datetime
 import json
 import os
 import sys
@@ -47,6 +45,7 @@ sys.path.insert(0, ROOT)
 from ml.common import (PROCESSED, SYNTHETIC, feature_reference, git_commit, md_table, next_version,  # noqa: E402
                        regression_metrics, rounded, sha256_file, utc_now, versions, write_artifact)
 from ml.features import add_features                                                               # noqa: E402
+from ml.online import LIGHT, ThermalOnline, _room_static                                            # noqa: E402,F401
 from ml.portable import export                                                                      # noqa: E402
 
 SEED = 42
@@ -68,14 +67,6 @@ UCI_FEATURES = ["T", "T_lag5", "T_lag10", "T_lag15", "dT5", "dT15", "RH", "CO2",
                 "hour_cos", "weekday"]
 REPORT = os.path.join(ROOT, "docs", "results", "thermal.md")
 RESULTS = os.path.join(ROOT, "experiments", "results", "exp03_thermal")
-LIGHT = {"OFF": 0.0, "DIM": 0.4, "ON": 1.0}
-
-
-def _room_static() -> Dict[str, Dict[str, float]]:
-    from twin.spec import build_spec
-    return {r.room_id: {"area_m2": r.area, "ac_w_per_m3": r.physics_params["ac_cool_capacity_w"] / r.volume,
-                        "window_m2": r.window_area, "ac_max_electric_w": r.controller_overrides["ac_max_electric_w"]}
-            for r in build_spec()}
 
 
 def twin_frame(names: List[str]) -> pd.DataFrame:
@@ -324,72 +315,3 @@ def write_report(twin: Dict, uci: Dict, registered: Dict) -> None:
 if __name__ == "__main__":
     sys.exit(main())
 
-
-class ThermalOnline:
-    """
-    The thermal-model features computed live, one 5-minute sample at a time, exactly as
-    twin_frame() computes them from a table (checked by tests/test_ml.py).  Feed it every
-    5 minutes with a record in the generator's format (twin/runner.py _record keys).
-    """
-
-    def __init__(self):
-        self.static = _room_static()
-        self.hist: Dict[str, List[Dict]] = {}
-
-    def update(self, rec: Dict) -> Dict[str, float]:
-        rid = rec["room_id"]
-        h = self.hist.setdefault(rid, [])
-        t_meas = rec.get("meas_temperature_c")
-        if t_meas is None or (isinstance(t_meas, float) and math.isnan(t_meas)):
-            # forward fill for at most two samples, as twin_frame does
-            prev = [x for x in h[-2:] if x["_T_raw"] is not None]
-            t_val = h[-1]["T"] if h and len(prev) > 0 and _ffill_ok(h) else float("nan")
-        else:
-            t_val = float(t_meas)
-        sp = rec["setpoint_c"] if rec["hvac_cmd"] == "NORMAL" else (27.0 if rec["hvac_cmd"] == "LOW" else None)
-        cmd_key = f"{rec['hvac_cmd']}|{rec['setpoint_c']}"
-        since = 0
-        if h and h[-1]["_cmd"] == cmd_key:
-            since = min(120, h[-1]["min_since_hvac_change_raw"] + 5)
-        co2 = rec.get("meas_co2_ppm")
-        co2 = float("nan") if co2 is None else float(co2)
-
-        def lag(key, k):
-            return h[-k][key] if len(h) >= k else float("nan")
-
-        ts = rec["timestamp"] if isinstance(rec["timestamp"], datetime) else datetime.fromisoformat(rec["timestamp"])
-        hr = ts.hour + ts.minute / 60.0
-        st = self.static[rid]
-        f = {"T": t_val, "T_lag5": lag("T", 1), "T_lag10": lag("T", 2), "T_lag15": lag("T", 3)}
-        f["dT5"], f["dT15"] = t_val - f["T_lag5"], t_val - f["T_lag15"]
-        f["RH"] = float("nan") if rec.get("meas_humidity_pct") is None else float(rec["meas_humidity_pct"])
-        f["CO2"] = co2
-        f["CO2_d15"] = co2 - lag("CO2", 3)
-        pir = rec.get("meas_pir_seconds")
-        f["pir_recent"] = 1.0 if (pir is not None and not (isinstance(pir, float) and math.isnan(pir)) and pir <= 600) else 0.0
-        f["ac_on"] = 1.0 if rec["hvac_cmd"] == "NORMAL" else 0.0
-        f["ac_low"] = 1.0 if rec["hvac_cmd"] == "LOW" else 0.0
-        f["setpoint_gap"] = 0.0 if sp is None else t_val - sp
-        f["ac_power_frac"] = rec["hvac_w"] / st["ac_max_electric_w"]
-        f["min_since_hvac_change"] = float(since)
-        f["light_level"] = LIGHT[rec["light_cmd"]]
-        f["vent"] = float(rec["vent_boost"])
-        f["t_out"] = float(rec["t_out_c"])
-        f["t_out_gap"] = f["t_out"] - t_val
-        f["ghi"] = float(rec["ghi_w_m2"])
-        f["hour_sin"], f["hour_cos"] = math.sin(2 * math.pi * hr / 24), math.cos(2 * math.pi * hr / 24)
-        f["area_m2"], f["ac_w_per_m3"], f["window_m2"] = st["area_m2"], st["ac_w_per_m3"], st["window_m2"]
-        h.append({"T": t_val, "_T_raw": t_meas, "CO2": co2, "_cmd": cmd_key, "min_since_hvac_change_raw": since})
-        if len(h) > 6:
-            del h[0]
-        return f
-
-
-def _ffill_ok(h: List[Dict]) -> bool:
-    """True when the last real temperature is at most two samples back."""
-    missing = 0
-    for x in reversed(h):
-        if x["_T_raw"] is not None and not (isinstance(x["_T_raw"], float) and math.isnan(x["_T_raw"])):
-            return missing < 2
-        missing += 1
-    return False

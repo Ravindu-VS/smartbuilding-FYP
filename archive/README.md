@@ -7,7 +7,7 @@ the move and by running the full test suite after it (see `docs/CLEANUP.md`).
 
 | Path | What it was | Superseded by |
 |---|---|---|
-| `app/`, `auth/`, `main.py`, `smart_building_api_flask.py`, `Dockerfile`, `docker-compose.yml`, `run_*.bat` | FastAPI / Flask back end of the first design (JWT, Postgres, Redis) | `raspberry_pi/edge_brain.py` (Flask, SSE, SQLite store) |
+| `app/`, `auth/`, `main.py`, `smart_building_api_flask.py`, `Dockerfile`, `docker-compose.yml`, `run_docker.bat` | FastAPI / Flask back end of the first design (JWT, Postgres, Redis) | `raspberry_pi/edge_brain.py` (Flask, SSE, SQLite store) |
 | `sim/`, `integration/` (except the room configuration), `data/generator.py`, `config.yaml`, `room_config.json` | first building simulator and its coordinator | `twin/` (ISO 13790 5R1C physics, scenarios, runner) |
 | `integration/building_config.py` | moved, not archived: now `twin/building_config.py` | - |
 | `control/`, `agents/`, `smart_building_controller.py` | rule / MPC / PPO (stable-baselines3) controllers and room/floor/building agents on the first simulator | `twin/controllers.py` (rules, multi-objective optimiser), `rl/` (PPO on the current twin) |

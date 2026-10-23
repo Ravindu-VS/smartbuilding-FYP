@@ -1,0 +1,7 @@
+# Training, evaluation and data preparation (development PC). Python 3.13 tested.
+-r edge.txt
+pandas==3.0.5
+scikit-learn==1.8.0
+joblib==1.6.0
+scipy==1.18.1
+gymnasium==1.4.0      # environment API check of rl/env.py (PPO itself is numpy)

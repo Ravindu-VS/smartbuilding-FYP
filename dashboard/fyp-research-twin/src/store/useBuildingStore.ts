@@ -39,7 +39,7 @@ interface BuildingStore {
   selectedFloor: number;
   selectedRoom: string | null;
   overlay: Overlay;
-  bottomTab: 'decisions' | 'analytics' | 'meter';
+  bottomTab: 'decisions' | 'analytics' | 'meter' | 'models';
   demoOpen: boolean;
   bottomCollapsed: boolean;
 
@@ -60,7 +60,7 @@ interface BuildingStore {
   selectFloor: (f: number) => void;
   selectRoom: (id: string | null) => void;
   setOverlay: (o: Overlay) => void;
-  setBottomTab: (t: 'decisions' | 'analytics' | 'meter') => void;
+  setBottomTab: (t: 'decisions' | 'analytics' | 'meter' | 'models') => void;
   setDemoOpen: (v: boolean) => void;
   setBottomCollapsed: (v: boolean) => void;
   setTwinView: (v: TwinView) => void;

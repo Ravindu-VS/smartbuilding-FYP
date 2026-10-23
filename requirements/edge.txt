@@ -1,0 +1,8 @@
+# Raspberry Pi 4B runtime (inference and control only): Python 3.11-3.13.
+# Models are numpy-only JSON (ml/portable.py); the training stack is NOT needed on the Pi.
+# Install: python3 -m pip install -r requirements/edge.txt
+flask==3.1.3
+numpy==2.5.3          # any numpy >= 1.26 works for inference; pinned to the tested version
+paho-mqtt==2.1.0      # only needed when MQTT_ENABLED=1
+# GPIO output on the Pi (optional, raspberry_pi/physical_output.py): uncomment on the device
+# RPi.GPIO==0.7.1

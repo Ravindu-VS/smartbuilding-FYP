@@ -1,7 +1,7 @@
 // Calls to the edge brain's control API. Every action changes the simulation on the
 // edge brain; the dashboard then shows the result from the next streamed state.
 import { EDGE_URL } from '../hooks/useSSE';
-import type { BuildingConfig, HistoryPoint, SeriesPoint, TimelineEvent, Comparison } from '../types/building';
+import type { BuildingConfig, HistoryPoint, SeriesPoint, TimelineEvent, Comparison, ModelsStatus, ProvenanceStatus } from '../types/building';
 
 async function post<T = unknown>(path: string, body: unknown): Promise<T> {
   const r = await fetch(`${EDGE_URL}${path}`, {
@@ -37,5 +37,8 @@ export const api = {
     return get<TimelineEvent[]>(`/api/timeline?${p.toString()}`);
   },
   history: (roomId: string) => get<Record<string, HistoryPoint[]>>(`/api/rooms/history?room_id=${encodeURIComponent(roomId)}`),
+  models: () => get<ModelsStatus>('/api/models'),
+  provenance: () => get<ProvenanceStatus>('/api/provenance'),
+  mqtt: () => get<Record<string, unknown>>('/api/hardware/mqtt'),
   analytics: () => get<{ comparison: Comparison; series: SeriesPoint[]; meter: import('../types/building').Meter }>('/api/analytics'),
 };

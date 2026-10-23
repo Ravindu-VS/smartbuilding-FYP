@@ -28,7 +28,7 @@ from typing import Deque, Dict, List, Optional
 import numpy as np
 
 from ml.drift import DriftMonitor
-from ml.features import OnlineFeatures
+from ml.online import OnlineFeatures, ThermalOnline, pir_features
 from ml.portable import ModelError, Portable
 from ml.registry import Registry
 
@@ -108,7 +108,6 @@ class LiveModels:
             self.thermal = _Loaded("thermal_h30", "active", self.registry)
             self.rf = _Loaded("occupancy_rf", "active", self.registry)
             self.features = OnlineFeatures()
-            from ml.thermal import ThermalOnline
             self.thermal_online = ThermalOnline()
             self.conf_candidate, self.conf_active = Confusion(), Confusion()
             self.agree = self.compared = 0
@@ -142,7 +141,6 @@ class LiveModels:
         m = self.shadow.model
         if m is None:
             return
-        from ml.occupancy import pir_features
         rows, rids = [], []
         for rid, o in obs.items():
             f = self.features.update(rid, o.timestamp, {"Temperature": o.temperature, "Humidity": o.humidity,

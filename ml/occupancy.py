@@ -46,6 +46,7 @@ sys.path.insert(0, ROOT)
 from ml.common import (PROCESSED, ROOT as _R, SYNTHETIC, classification_metrics, feature_reference,  # noqa: E402
                        git_commit, md_table, next_version, rounded, sha256_file, utc_now, versions, write_artifact)
 from ml.features import FEATURE_SETS, UNITS, add_features, matrix                                    # noqa: E402
+from ml.online import pir_features                                                                   # noqa: E402
 from ml.portable import export                                                                       # noqa: E402
 
 SEED = 42
@@ -364,13 +365,6 @@ TWIN_FUSION_FEATURES = ["pir_2min", "pir_10min", "pir_20min", "pir_log", "CO2", 
                         "T_d15", "HR_d15", "hour_sin", "hour_cos", "weekday"]
 TWIN_FUSION_UNITS = {"pir_2min": "0/1 motion in last 2 min", "pir_10min": "0/1 motion in last 10 min",
                      "pir_20min": "0/1 motion in last 20 min", "pir_log": "ln(1 + seconds since motion), capped at 1 day"}
-
-
-def pir_features(seconds) -> Dict[str, float]:
-    """PIR features from 'seconds since last motion' (None = no motion seen yet)."""
-    s = 86400.0 if seconds is None or (isinstance(seconds, float) and np.isnan(seconds)) else min(float(seconds), 86400.0)
-    return {"pir_2min": float(s <= 120), "pir_10min": float(s <= 600), "pir_20min": float(s <= 1200),
-            "pir_log": float(np.log1p(s))}
 
 
 def add_pir(df: pd.DataFrame) -> pd.DataFrame:

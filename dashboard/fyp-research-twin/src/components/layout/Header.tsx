@@ -39,6 +39,10 @@ export function AiSwitch({ live, learning, busy, on, onToggle }: { live: boolean
   );
 }
 
+const CONTROLLER_NAME: Record<string, string> = {
+  mo: 'Thesis AI optimizer', threshold_rf: 'Rule on Random Forest', ppo: 'PPO (reinforcement learning)',
+};
+
 export default function Header() {
   const raw = useBuildingStore((s) => s.raw);
   const link = useBuildingStore((s) => s.link);
@@ -140,7 +144,9 @@ export default function Header() {
             data-testid="controller"
           >
             {(config?.controllers ?? [{ id: 'mo', label: 'AI optimizer' }]).map((c) => (
-              <option key={c.id} value={c.id}>{c.id === 'mo' ? 'Thesis AI optimizer' : 'Rule on Random Forest'}</option>
+              <option key={c.id} value={c.id} disabled={c.available === false} title={c.available === false ? c.availability : c.label}>
+                {CONTROLLER_NAME[c.id] ?? c.id}{c.available === false ? ' (not approved yet)' : ''}
+              </option>
             ))}
           </select>
         </div>

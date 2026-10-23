@@ -1,5 +1,5 @@
 """
-End-to-end check of the 3D digital twin inside the real dashboard (interaction flows A-F of
+End-to-end check of the 3D digital twin inside the real dashboard (interaction flows A-G of
 the redesign brief: exterior to room, direct room navigation, HVAC inspection, comparing
 rooms, the live room, resize and recovery).
 
@@ -204,6 +204,30 @@ async def main():
         await pg.wait_for_timeout(1500)
         back = await S("() => !document.querySelector('[data-testid=presentation-hud]')")
         check("F", "presentation mode opens and Esc returns to the dashboard", pres and back)
+        # ---------------- Flow G — data provenance, room numbers, models panel (master prompt sections 12-13)
+        await S("() => document.querySelector('[data-testid=nav-room-f2_office_b2]').click()")
+        await pg.wait_for_timeout(2500)
+        num = await S("() => document.querySelector('[data-testid=room-number]')?.innerText || ''")
+        prov = await S("() => document.querySelector('[data-testid=room-provenance]')?.innerText || ''")
+        check("G", "simulated room shows its room number", num.startswith("Room 1"), num)
+        check("G", "simulated room labels readings as simulated and P(occupied) as an estimate",
+              "simulated" in prov and "estimate" in prov, prov[:120])
+        await S("() => document.querySelector('[data-testid=nav-room-f2_office_a]').click()")
+        await pg.wait_for_timeout(2500)
+        num101 = await S("() => document.querySelector('[data-testid=room-number]')?.innerText || ''")
+        board = await S("() => document.querySelector('[data-testid=board-status]')?.innerText || ''")
+        check("G", "the real room is Room 101 and shows its board status (no invented values)",
+              num101 == "Room 101" and board != "", f"{num101} / {board}")
+        await S("() => document.querySelector('[data-testid=tab-models]').click()")
+        for _ in range(40):
+            ok = await S("() => !!document.querySelector('[data-testid=models-live]')")
+            if ok: break
+            await pg.wait_for_timeout(500)
+        live_txt = await S("() => document.querySelector('[data-testid=models-live]')?.innerText || ''")
+        prov_txt = await S("() => document.querySelector('[data-testid=models-provenance]')?.innerText || ''")
+        check("G", "models panel lists the models running in the system", "thermal_h30" in live_txt, live_txt[:160])
+        check("G", "models panel states where the numbers come from", "simulated" in prov_txt and "measured" in prov_txt, prov_txt[:160])
+        await shot("G_models")
         await T("() => twin.setView('building')")
         await pg.wait_for_timeout(2000)
         crit = [e for e in errs if "favicon" not in e]

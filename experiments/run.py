@@ -126,7 +126,22 @@ def extra_model_load_failure():
             "(no random or default substitute): " + "; ".join(f"{m['task']}: {m['error']}" for m in s["models"])}
 
 
-EXTRA = {"controller_failure": extra_controller_failure, "model_load_failure": extra_model_load_failure}
+def extra_ppo_seed_variability():
+    """Every PPO training run's best policy on the same evaluation (normal scenario, seeds 1-3)."""
+    from rl.evaluate import compare
+    out = {}
+    for path in sorted(glob.glob(os.path.join(ROOT, "models", "ppo_runs", "seed*", "policy_best.json"))):
+        run = os.path.basename(os.path.dirname(path))
+        res = compare(["ppo"], ["normal"], [1, 2, 3], 7.0, path, workers=2)
+        m = res["summary"]["normal"]["ppo"]
+        out[run] = {k: m.get(k) for k in ("energy_kwh", "energy_kwh_sd", "discomfort_share", "discomfort_share_sd",
+                                          "discomfort_pmv_h", "iaq_min", "light_switches", "hvac_changes", "failsafe_F2")}
+    txt = "; ".join(f"{k}: {v['energy_kwh']:.0f} kWh, discomfort {100 * v['discomfort_share']:.1f} %" for k, v in out.items())
+    return {"passed": bool(out), "runs": out, "result": f"best policy of each training run on normal/seeds 1-3 - {txt}"}
+
+
+EXTRA = {"controller_failure": extra_controller_failure, "model_load_failure": extra_model_load_failure,
+         "ppo_seed_variability": extra_ppo_seed_variability}
 
 
 def run_ml(cfg, out_dir):

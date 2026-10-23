@@ -212,6 +212,14 @@ export interface RoomState {
   presence?: PresenceReadings | null;
   power_measurement?: { voltage_v: number | null; current_mA: number | null; power_mW: number | null; available: boolean } | null;
   sensor_health?: Record<string, boolean> | null;
+  room_number?: number;                 // 101 = the real room, 102-126 = simulated (labels; ids stay the keys)
+  provenance?: Record<string, string>;  // synthetic | room101_measured | prediction | unavailable
+  prediction?: { temperature_30min?: ThermalPrediction | null } | null;
+  freshness?: { age_s: number | null; timeout_s: number; stale: boolean; state: string } | null;
+}
+
+export interface ThermalPrediction {
+  predicted_c: number; for_time: string; made_at: string; model: string; provenance: 'prediction';
 }
 
 export interface Clock {
@@ -378,7 +386,7 @@ export interface BuildingStatePayload {
 }
 
 export interface BuildingConfigRoom {
-  room_id: string; name: string; type: string; floor_id: number;
+  room_id: string; room_number?: number; name: string; type: string; floor_id: number;
   x: number; z: number; w: number; d: number; area_m2: number; max_occupancy: number;
   data_source: string; window_area_m2: number; lighting_w: number; ac_capacity_w: number;
   schedule_hours: [number, number, boolean]; equipment_cooled: boolean;
@@ -389,7 +397,7 @@ export interface BuildingConfig {
   building: { name: string; width_m: number; depth_m: number; floor_height_m: number; slab_m: number; floors: number };
   floors: { floor_id: number; name: string; floor_type: string; rooms: string[] }[];
   rooms: BuildingConfigRoom[];
-  controllers: { id: string; label: string }[];
+  controllers: { id: string; label: string; available?: boolean; availability?: string }[];
   scenarios: string[];
   hardware_room_id: string;
   hardware_room_ids: string[];
@@ -438,4 +446,34 @@ export interface TwinSyncReport {
   modelRooms: number;
   unmatched: string[];
   seq: number | null;
+}
+
+// /api/models and /api/provenance (model registry, shadow mode, drift, data sources)
+export interface LiveModel {
+  task: string; role: 'shadow' | 'active'; version: string | null; loaded: boolean; error: string | null;
+  approved_version: string | null; features: string[] | null; trained_utc: string | null;
+  provenance_of_training_data: string | null;
+}
+export interface ConfusionSummary { n: number; accuracy: number | null; precision: number | null; recall: number | null; f1: number | null }
+export interface DriftReport { rows: number; enough_data: boolean; status: string; max_psi?: number; features: Record<string, { psi?: number; out_of_range?: number; missing_share: number }> }
+export interface ModelsStatus {
+  registry: Record<string, { active: string | null; versions: string[]; candidates: string[]; last_event: { action: string; version: string; utc: string } | null }>;
+  live: null | {
+    loaded_at: string; models: LiveModel[];
+    shadow: { task: string; version: string | null; compared_room_steps: number; agreement_with_active: number | null;
+              candidate_vs_truth: ConfusionSummary; active_vs_truth: ConfusionSummary; active: string; note: string };
+    thermal: { task: string; version: string | null; scored: number; live_mae_c: number | null; live_bias_c: number | null; basis: string };
+    drift: { real_room_inputs_vs_occupancy_rf_training: DriftReport | null; simulated_inputs_vs_shadow_training: DriftReport | null };
+    errors: string[];
+  };
+  live_error: string | null;
+  controllers: { id: string; label: string; available: boolean; availability: string }[];
+  active_controller: string; random_forest_source: string | null;
+}
+export interface ProvenanceStatus {
+  classes: Record<string, string> | null;
+  rooms: { room_id: string; room_number: number; source: string; measurements: string }[];
+  weather: string;
+  store: null | { schema_version: number; tables: Record<string, number>; provenance: Record<string, Record<string, number>> };
+  datasets: Record<string, { name: string; licence: string; accessed: string; provenance: string; landing_page: string }>;
 }

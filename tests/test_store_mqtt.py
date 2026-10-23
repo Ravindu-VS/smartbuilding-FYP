@@ -122,3 +122,22 @@ def test_bridge_marks_unacknowledged_commands(mqtt_broker, tmp_path, monkeypatch
     assert any("no acknowledgement" in e for e in events)
     dev.loop_stop(); dev.disconnect()
     bridge.stop()
+
+
+def test_export_keeps_provenance_classes_apart(tmp_path):
+    import subprocess, sys, csv
+    db = str(tmp_path / "e.sqlite3")
+    s = Store(db)
+    s.add_reading("2026-10-23T10:00:00", ROOM, "room101_measured", {"temperature_c": 27.0}, msg_id="a")
+    s.add_reading("2026-10-23T10:00:03", ROOM, "synthetic", {"temperature_c": 26.0}, msg_id="b")
+    s.close()
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = str(tmp_path / "x.csv")
+    r = subprocess.run([sys.executable, os.path.join(root, "scripts", "export_store.py"), "--db", db, "--table", "readings",
+                        "--out", out], capture_output=True, text=True)
+    assert r.returncode == 2                                   # mixed classes refused
+    r = subprocess.run([sys.executable, os.path.join(root, "scripts", "export_store.py"), "--db", db, "--table", "readings",
+                        "--provenance", "room101_measured", "--out", out], capture_output=True, text=True)
+    assert r.returncode == 0
+    rows = list(csv.DictReader(open(out)))
+    assert len(rows) == 1 and rows[0]["provenance"] == "room101_measured"

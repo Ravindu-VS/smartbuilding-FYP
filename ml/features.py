@@ -19,15 +19,12 @@ Calendar
 """
 from __future__ import annotations
 
-from collections import deque
-from datetime import datetime
-from typing import Deque, Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 
-MAX_GAP_S = 300.0
-BASE = ["Temperature", "Humidity", "Light", "CO2", "HumidityRatio"]
+from ml.online import BASE, MAX_GAP_S, OnlineFeatures   # noqa: F401  (live, numpy-only version)
 TEMPORAL_CO2 = ["CO2_d5", "CO2_d15", "CO2_std15"]
 TEMPORAL_OTHER = ["T_d15", "HR_d15", "Light_d1", "Light_mean5"]
 CALENDAR = ["hour_sin", "hour_cos", "weekday"]
@@ -97,49 +94,6 @@ def _segment_features(s: pd.DataFrame, time_col: str) -> pd.DataFrame:
     s["hour_cos"] = np.cos(2 * np.pi * h / 24.0).values
     s["weekday"] = (t.dt.weekday < 5).astype(int).values
     return s
-
-
-class OnlineFeatures:
-    """
-    The same features computed reading by reading (live inference).  Keeps the last
-    20 minutes of readings per room; a gap longer than MAX_GAP_S clears the history,
-    exactly as add_features starts a new segment.
-    """
-
-    def __init__(self, window_min: float = 20.0):
-        self.window_s = window_min * 60.0
-        self._hist: Dict[str, Deque[Tuple[float, Dict[str, float]]]] = {}
-
-    def update(self, room_id: str, ts: datetime, values: Dict[str, Optional[float]]) -> Dict[str, float]:
-        now = ts.timestamp()
-        h = self._hist.setdefault(room_id, deque())
-        if h and now - h[-1][0] > MAX_GAP_S:
-            h.clear()
-        row = {k: (np.nan if values.get(k) is None else float(values[k])) for k in BASE}
-        h.append((now, row))
-        while h and now - h[0][0] > self.window_s:
-            h.popleft()
-        times = np.array([x[0] for x in h])
-
-        def lag(key, minutes):
-            pos = np.searchsorted(times, now - minutes * 60.0, side="right") - 1
-            return h[pos][1][key] if pos >= 0 else np.nan
-
-        f = dict(row)
-        f["CO2_d5"] = row["CO2"] - lag("CO2", 5)
-        f["CO2_d15"] = row["CO2"] - lag("CO2", 15)
-        recent = np.array([x[1]["CO2"] for x in h if now - x[0] < 15 * 60.0])
-        recent = recent[~np.isnan(recent)]
-        f["CO2_std15"] = float(np.std(recent, ddof=1)) if len(recent) >= 3 else np.nan
-        f["T_d15"] = row["Temperature"] - lag("Temperature", 15)
-        f["HR_d15"] = row["HumidityRatio"] - lag("HumidityRatio", 15)
-        f["Light_d1"] = row["Light"] - lag("Light", 1)
-        rl = [x[1]["Light"] for x in h if now - x[0] < 5 * 60.0]
-        f["Light_mean5"] = float(np.nanmean(rl)) if rl and not np.all(np.isnan(rl)) else np.nan
-        hr = ts.hour + ts.minute / 60.0
-        f["hour_sin"], f["hour_cos"] = float(np.sin(2 * np.pi * hr / 24.0)), float(np.cos(2 * np.pi * hr / 24.0))
-        f["weekday"] = 1 if ts.weekday() < 5 else 0
-        return f
 
 
 def matrix(df: pd.DataFrame, features: Sequence[str]) -> np.ndarray:

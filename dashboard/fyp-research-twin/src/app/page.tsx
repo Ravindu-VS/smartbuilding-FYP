@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { Brain, BarChart3, Gauge, ChevronDown, ChevronUp } from 'lucide-react';
+import { Brain, BarChart3, Gauge, ChevronDown, ChevronUp, Database } from 'lucide-react';
 import { EDGE_URL, useNow, useSSE } from '../hooks/useSSE';
 import { backendIsCurrent, useBuildingStore } from '../store/useBuildingStore';
 import { api } from '../lib/api';
@@ -14,6 +14,7 @@ import RoomPanel from '../components/room/RoomPanel';
 import DecisionFeed from '../components/timeline/DecisionFeed';
 import AnalyticsPanel from '../components/analytics/AnalyticsPanel';
 import EnergyMeterPanel from '../components/analytics/EnergyMeterPanel';
+import ModelsPanel from '../components/analytics/ModelsPanel';
 import DemoMode from '../components/demo/DemoMode';
 
 // Every number on this page comes from the edge brain (SSE stream and its API) or is
@@ -77,11 +78,12 @@ export default function Dashboard() {
               <button onClick={() => setTab('decisions')} className={`px-3 py-1 text-[11.5px] rounded-t-md flex items-center gap-1.5 ${tab === 'decisions' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`} data-testid="tab-decisions"><Brain size={13} />AI decisions</button>
               <button onClick={() => setTab('meter')} className={`px-3 py-1 text-[11.5px] rounded-t-md flex items-center gap-1.5 ${tab === 'meter' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`} data-testid="tab-meter"><Gauge size={13} />Energy meter</button>
               <button onClick={() => setTab('analytics')} className={`px-3 py-1 text-[11.5px] rounded-t-md flex items-center gap-1.5 ${tab === 'analytics' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`} data-testid="tab-analytics"><BarChart3 size={13} />Analytics</button>
+              <button onClick={() => setTab('models')} className={`px-3 py-1 text-[11.5px] rounded-t-md flex items-center gap-1.5 ${tab === 'models' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`} data-testid="tab-models"><Database size={13} />Models &amp; data</button>
               <button onClick={() => setCollapsed(!collapsed)} className="ml-auto mb-1 px-2 py-0.5 text-[11px] rounded-md text-slate-400 hover:text-white hover:bg-slate-800 flex items-center gap-1" title={collapsed ? 'Show the panels' : 'Hide the panels: more room for the 3D view'} data-testid="drawer-toggle">
                 {collapsed ? <><ChevronUp size={13} />Show panels</> : <><ChevronDown size={13} />Larger 3D view</>}
               </button>
             </div>
-            {!collapsed && <div className="flex-1 min-h-0">{tab === 'decisions' ? <DecisionFeed /> : tab === 'meter' ? <EnergyMeterPanel /> : <AnalyticsPanel />}</div>}
+            {!collapsed && <div className="flex-1 min-h-0">{tab === 'decisions' ? <DecisionFeed /> : tab === 'meter' ? <EnergyMeterPanel /> : tab === 'models' ? <ModelsPanel /> : <AnalyticsPanel />}</div>}
           </div>
         </main>
         <RoomPanel />

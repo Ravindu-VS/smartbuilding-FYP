@@ -58,4 +58,4 @@ echo "════════════════════════�
 echo ""
 
 # Launch the edge brain
-python raspberry_pi/edge_brain.py
+python3 raspberry_pi/edge_brain.py

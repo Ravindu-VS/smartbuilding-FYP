@@ -27,6 +27,7 @@ function RoomRow({ r, selected, onClick, onEnter }: { r: RoomState; selected: bo
       <span className={`w-1.5 h-6 rounded-full shrink-0 ${hw ? (connected ? 'bg-cyan-400' : 'bg-red-500') : isNum(p) && p >= 0.5 ? 'bg-sky-500' : 'bg-slate-700'}`} title={isNum(p) ? `AI P(occupied) ${p.toFixed(2)}` : 'no estimate'} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
+          {r.room_number != null && <span className="font-mono text-[9.5px] text-slate-500 shrink-0">{r.room_number}</span>}
           <span className={`truncate ${selected ? 'text-white font-semibold' : 'text-slate-200'}`}>{r.display_name}</span>
           {hw && <Cpu size={11} className={connected ? 'text-cyan-300' : 'text-red-400'} />}
           {busy && <span className="text-[9px] px-1 rounded bg-amber-900/60 text-amber-200 border border-amber-800">scenario</span>}

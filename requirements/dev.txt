@@ -1,0 +1,6 @@
+# Tests and local tooling.
+-r train.txt
+pytest==9.1.1
+amqtt==0.12.1         # in-process MQTT broker for the integration tests and experiment 10
+psutil==7.2.2         # used by amqtt's $SYS plugin
+playwright==1.56.0    # browser flows (tests/e2e/twin_flows.py); browsers are preinstalled in CI images

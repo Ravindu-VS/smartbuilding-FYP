@@ -124,6 +124,16 @@ function SimulatedRoom({ r, events, history, disabled }: { r: RoomState; events:
           <Reading icon={<Radio size={10} />} label="PIR" value={pir == null ? 'none' : pir < 90 ? 'motion' : `${Math.round(pir / 60)} min`} sub="since last motion" />
           <Reading icon={<Scale size={10} />} label="Comfort" value={`PMV ${fx(r.comfort?.pmv, 2)}`} sub={isNum(r.comfort?.pmv) ? (Math.abs(r.comfort!.pmv!) <= 0.5 ? 'comfortable' : r.comfort!.pmv! > 0 ? 'too warm' : 'too cool') : ''} />
         </div>
+        <div className="mt-1.5 flex flex-wrap gap-1 text-[9.5px]" data-testid="room-provenance">
+          <span className="px-1.5 py-0.5 rounded border border-slate-600 text-slate-300" title="Values computed by the simulator (5R1C physics, synthetic climate)">readings: simulated</span>
+          <span className="px-1.5 py-0.5 rounded border border-sky-700 text-sky-300" title="Occupancy probability is a model estimate">P(occupied): estimate</span>
+          {r.prediction?.temperature_30min && (
+            <span className="px-1.5 py-0.5 rounded border border-violet-700 text-violet-300" data-testid="room-forecast"
+              title={`${r.prediction.temperature_30min.model}, made ${r.prediction.temperature_30min.made_at}`}>
+              forecast {fx(r.prediction.temperature_30min.predicted_c, 1, ' °C')} at {r.prediction.temperature_30min.for_time.slice(11, 16)} (prediction)
+            </span>
+          )}
+        </div>
       </Section>
 
       <Section icon={<Zap size={12} />} title={r.control?.mode === 'conventional' ? 'Control now: conventional (AI off)' : 'AI decision'}>
@@ -202,6 +212,7 @@ export default function RoomPanel() {
           <div className="px-3 py-2.5 border-b border-slate-800 flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
+                {r.room_number != null && <span className="text-[11px] font-mono px-1 rounded bg-slate-800 text-slate-300" data-testid="room-number">Room {r.room_number}</span>}
                 <h2 className="text-[15px] font-bold text-white truncate" data-testid="room-name">{r.display_name}</h2>
                 {r.source === 'hardware'
                   ? <span className={`text-[9.5px] px-1.5 py-0.5 rounded border ${r.hardware?.connected ? (r.hardware.real_board ? 'border-emerald-600 text-emerald-300' : 'border-amber-600 text-amber-300') : 'border-red-700 text-red-300'}`}><Cpu size={10} className="inline mr-0.5" />{r.hardware?.connected ? (r.hardware.real_board ? 'LIVE ESP32' : 'TEST SENDER') : 'BOARD NOT CONNECTED'}</span>

@@ -15,13 +15,13 @@ set "PY=%~dp0.venv\Scripts\python.exe"
 if not exist "%PY%" (
   echo Python venv not found at %PY%
   echo Create it:  py -3.13 -m venv .venv
-  echo then:       .venv\Scripts\python.exe -m pip install -r raspberry_pi\requirements.txt
+  echo then:       .venv\Scripts\python.exe -m pip install -r requirements\train.txt
   pause & exit /b 1
 )
-"%PY%" -c "import flask, sklearn, pandas, joblib" 2>nul
+"%PY%" -c "import flask, numpy, sklearn, pandas, joblib" 2>nul
 if errorlevel 1 (
-  echo Python packages missing. Installing raspberry_pi\requirements.txt ...
-  "%PY%" -m pip install -r raspberry_pi\requirements.txt || (pause & exit /b 1)
+  echo Python packages missing. Installing requirements\train.txt ...
+  "%PY%" -m pip install -r requirements\train.txt || (pause & exit /b 1)
 )
 if not exist "dashboard\fyp-research-twin\node_modules" (
   echo Installing dashboard packages ^(first run only^)...

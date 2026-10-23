@@ -17,5 +17,8 @@
   ],
   "days": 7,
   "question": "Matched comparison of the conventional schedule, the original RF rule, the multi-objective optimiser and PPO.",
-  "id": "exp05_control"
+  "id": "exp05_control",
+  "extra": [
+    "ppo_seed_variability"
+  ]
 }

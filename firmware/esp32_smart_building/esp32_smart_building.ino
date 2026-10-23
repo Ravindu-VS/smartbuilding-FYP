@@ -2,7 +2,7 @@
  * =============================================================================
  * FINAL YEAR PROJECT: SMART BUILDING — ESP32-S3 SENSOR ACQUISITION NODE v2.0
  * Author: Vinusha Rathnayaka
- * Node Target: Room 101 (Floor 1 Main Office / Physical Prototype Anchor)
+ * Node Target: Room 101 = Office A (room id f2_office_a, floor 2 of the digital twin)
  * Microcontroller: ESP32-S3 Dual-Core (240 MHz, Wi-Fi 4)
  * =============================================================================
  * 
@@ -14,7 +14,8 @@
  *   Flow:
  *     1. ESP32 reads physical sensors (BME280, BH1750, SCD41, LD2410C, INA226, PIR, MQ-2)
  *     2. ESP32 POSTs raw sensor data to Raspberry Pi via HTTP
- *     3. Raspberry Pi runs Random Forest ML + PPO RL inference
+ *     3. Raspberry Pi estimates occupancy (PIR + CO2 fusion) and decides with the multi-objective
+ *        controller behind the safety layer (the PPO policy is used for the simulated rooms only)
  *     4. Pi responds with control decisions (fan_speed, light_level, servo_angle, hvac_action)
  *     5. ESP32 actuates Room 101 hardware based on Pi's decision
  *
