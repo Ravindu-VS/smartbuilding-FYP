@@ -1,0 +1,184 @@
+{
+  "results": {
+    "seasonal_naive_lag168": {
+      "test_seen_buildings": {
+        "n": 91962,
+        "mae": 8.4199,
+        "rmse": 17.9979,
+        "bias": 0.1554,
+        "r2": 0.9732,
+        "cv_rmse_pct": 22.5094,
+        "nmbe_pct": 0.1943,
+        "median_building_cv_rmse_pct": 17.263,
+        "median_building_nmbe_pct": 0.0122,
+        "buildings_cv_rmse_le_30pct": 14,
+        "buildings": 18
+      },
+      "test_unseen_buildings": {
+        "n": 24813,
+        "mae": 7.0167,
+        "rmse": 11.7371,
+        "bias": -0.2063,
+        "r2": 0.9678,
+        "cv_rmse_pct": 20.4582,
+        "nmbe_pct": -0.3596,
+        "median_building_cv_rmse_pct": 28.3896,
+        "median_building_nmbe_pct": 0.4434,
+        "buildings_cv_rmse_le_30pct": 3,
+        "buildings": 5
+      }
+    },
+    "persistence_lag24": {
+      "test_seen_buildings": {
+        "n": 91836,
+        "mae": 8.2438,
+        "rmse": 18.0469,
+        "bias": 0.0741,
+        "r2": 0.973,
+        "cv_rmse_pct": 22.5679,
+        "nmbe_pct": 0.0927,
+        "median_building_cv_rmse_pct": 20.0787,
+        "median_building_nmbe_pct": 0.0682,
+        "buildings_cv_rmse_le_30pct": 12,
+        "buildings": 18
+      },
+      "test_unseen_buildings": {
+        "n": 24778,
+        "mae": 4.7044,
+        "rmse": 8.0073,
+        "bias": -0.0122,
+        "r2": 0.985,
+        "cv_rmse_pct": 13.9538,
+        "nmbe_pct": -0.0213,
+        "median_building_cv_rmse_pct": 18.785,
+        "median_building_nmbe_pct": 0.1046,
+        "buildings_cv_rmse_le_30pct": 3,
+        "buildings": 5
+      }
+    },
+    "ridge_lags": {
+      "test_seen_buildings": {
+        "n": 91962,
+        "mae": 6.9083,
+        "rmse": 13.2732,
+        "bias": -0.1531,
+        "r2": 0.9854,
+        "cv_rmse_pct": 16.6004,
+        "nmbe_pct": -0.1915,
+        "median_building_cv_rmse_pct": 14.3873,
+        "median_building_nmbe_pct": -0.3537,
+        "buildings_cv_rmse_le_30pct": 16,
+        "buildings": 18
+      },
+      "test_unseen_buildings": {
+        "n": 24813,
+        "mae": 5.039,
+        "rmse": 8.1111,
+        "bias": -0.3391,
+        "r2": 0.9846,
+        "cv_rmse_pct": 14.138,
+        "nmbe_pct": -0.5911,
+        "median_building_cv_rmse_pct": 18.3556,
+        "median_building_nmbe_pct": 0.1367,
+        "buildings_cv_rmse_le_30pct": 3,
+        "buildings": 5
+      }
+    },
+    "ridge_weather_calendar": {
+      "test_seen_buildings": {
+        "n": 91962,
+        "mae": 17.6071,
+        "rmse": 25.1886,
+        "bias": 7.3002,
+        "r2": 0.9474,
+        "cv_rmse_pct": 31.5025,
+        "nmbe_pct": 9.13,
+        "median_building_cv_rmse_pct": 33.7263,
+        "median_building_nmbe_pct": 15.2519,
+        "buildings_cv_rmse_le_30pct": 6,
+        "buildings": 18
+      },
+      "test_unseen_buildings": {
+        "n": 24813,
+        "mae": 11.2502,
+        "rmse": 15.6197,
+        "bias": 2.3282,
+        "r2": 0.943,
+        "cv_rmse_pct": 27.2257,
+        "nmbe_pct": 4.0581,
+        "median_building_cv_rmse_pct": 44.9883,
+        "median_building_nmbe_pct": 15.2844,
+        "buildings_cv_rmse_le_30pct": 1,
+        "buildings": 5
+      }
+    },
+    "hist_gbt_lags": {
+      "test_seen_buildings": {
+        "n": 91962,
+        "mae": 5.9686,
+        "rmse": 12.2915,
+        "bias": 0.0946,
+        "r2": 0.9875,
+        "cv_rmse_pct": 15.3725,
+        "nmbe_pct": 0.1183,
+        "median_building_cv_rmse_pct": 12.4824,
+        "median_building_nmbe_pct": -0.2607,
+        "buildings_cv_rmse_le_30pct": 17,
+        "buildings": 18
+      },
+      "test_unseen_buildings": {
+        "n": 24813,
+        "mae": 4.5795,
+        "rmse": 7.7292,
+        "bias": -0.2455,
+        "r2": 0.986,
+        "cv_rmse_pct": 13.4722,
+        "nmbe_pct": -0.4279,
+        "median_building_cv_rmse_pct": 16.7618,
+        "median_building_nmbe_pct": -0.9518,
+        "buildings_cv_rmse_le_30pct": 3,
+        "buildings": 5
+      }
+    },
+    "hist_gbt_weather_calendar": {
+      "test_seen_buildings": {
+        "n": 91962,
+        "mae": 17.4699,
+        "rmse": 25.3881,
+        "bias": 5.9944,
+        "r2": 0.9466,
+        "cv_rmse_pct": 31.752,
+        "nmbe_pct": 7.497,
+        "median_building_cv_rmse_pct": 32.3546,
+        "median_building_nmbe_pct": 13.5411,
+        "buildings_cv_rmse_le_30pct": 5,
+        "buildings": 18
+      },
+      "test_unseen_buildings": {
+        "n": 24813,
+        "mae": 11.9625,
+        "rmse": 16.3749,
+        "bias": 1.4304,
+        "r2": 0.9373,
+        "cv_rmse_pct": 28.542,
+        "nmbe_pct": 2.4932,
+        "median_building_cv_rmse_pct": 47.019,
+        "median_building_nmbe_pct": 13.5555,
+        "buildings_cv_rmse_le_30pct": 1,
+        "buildings": 5
+      }
+    }
+  },
+  "unseen_buildings": [
+    "Panther_office_Brent",
+    "Panther_office_Hannah",
+    "Panther_office_Kristen",
+    "Panther_office_Lauretta",
+    "Panther_office_Valarie"
+  ],
+  "registered": {
+    "energy_dayahead": null
+  },
+  "generated_utc": "2026-10-23T10:35:30Z",
+  "git_commit": "3432ee5"
+}

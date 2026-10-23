@@ -1,0 +1,98 @@
+{
+  "id": "exp10_live_room",
+  "title": "Experiment 10 - Live-room integration (test harness)",
+  "status": "PASS",
+  "started": "2026-10-23T14:30:16",
+  "finished": "2026-10-23T14:30:30",
+  "wall_s": 14.4,
+  "question": "Room 101 data path over HTTP and MQTT with a simulated board: ingestion, validation, dedupe, acks, status, staleness, storage, provenance.",
+  "info": {
+    "checks": [
+      {
+        "check": "no board: room 101 shown as never connected",
+        "passed": true
+      },
+      {
+        "check": "HTTP reading accepted and a decision returned",
+        "passed": true
+      },
+      {
+        "check": "room 101 connected, values shown exactly",
+        "passed": true
+      },
+      {
+        "check": "test-sender data labelled synthetic, not measured",
+        "passed": true
+      },
+      {
+        "check": "edge connected to the MQTT broker",
+        "passed": true
+      },
+      {
+        "check": "device harness ran",
+        "passed": true
+      },
+      {
+        "check": "36 unique readings accepted, 4 duplicates dropped",
+        "passed": true
+      },
+      {
+        "check": "out-of-range values dropped and reported",
+        "passed": true
+      },
+      {
+        "check": "every command acknowledged",
+        "passed": true
+      },
+      {
+        "check": "readings stored with provenance synthetic (harness)",
+        "passed": true
+      },
+      {
+        "check": "no harness reading stored as room101_measured",
+        "passed": true
+      },
+      {
+        "check": "MQTT status endpoint reports the bridge",
+        "passed": true
+      },
+      {
+        "check": "silent board -> room shown as lost, no values",
+        "passed": true
+      }
+    ],
+    "bridge_stats": {
+      "received": 40,
+      "accepted": 36,
+      "rejected": 0,
+      "duplicates": 4,
+      "commands_sent": 36,
+      "acks": 36,
+      "ack_timeouts": 0,
+      "reconnects": 0,
+      "field_problems": 3
+    },
+    "physical_verification": "not performed (no board)"
+  },
+  "git_commit": "35a384b",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "active_models": {
+    "energy_dayahead": null,
+    "occupancy_best": null,
+    "occupancy_co2_temporal": null,
+    "occupancy_rf": null,
+    "occupancy_twin_fusion": null,
+    "thermal_h15": null,
+    "thermal_h30": null
+  },
+  "processed_data_sha256": {
+    "uci_occupancy.csv": "eafa3a795bd85c8253ac8536de1fcb002f848f5e67b752f4d5d256ee498e1923",
+    "bdg2_panther_office.csv": "75db0f3dccc68fbd4a78e1499d7e551f4c223a3843b457d822e6789530a39ab6"
+  }
+}

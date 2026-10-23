@@ -1,0 +1,15 @@
+== exp10_live_room: Experiment 10 - Live-room integration (test harness)
+sent 40 telemetry messages, received 36 commands
+PASS no board: room 101 shown as never connected
+PASS HTTP reading accepted and a decision returned
+PASS room 101 connected, values shown exactly
+PASS test-sender data labelled synthetic, not measured
+PASS edge connected to the MQTT broker
+PASS device harness ran
+PASS 36 unique readings accepted, 4 duplicates dropped
+PASS out-of-range values dropped and reported
+PASS every command acknowledged
+PASS readings stored with provenance synthetic (harness)
+PASS no harness reading stored as room101_measured
+PASS MQTT status endpoint reports the bridge
+PASS silent board -> room shown as lost, no values

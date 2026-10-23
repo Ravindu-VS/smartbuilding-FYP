@@ -1,0 +1,62 @@
+{
+  "id": "exp09_consistency",
+  "title": "Experiment 9 - Room and building consistency",
+  "status": "PASS",
+  "started": "2026-10-23T14:30:05",
+  "finished": "2026-10-23T14:30:11",
+  "wall_s": 5.9,
+  "question": "Room energies add up to floor and building totals and to the end-use split; live meter consistency.",
+  "info": {
+    "checks": [
+      {
+        "check": "sum of rooms = building",
+        "value": 2167451.265693779,
+        "expected": 2167451.265693779,
+        "abs_diff": 0.0,
+        "passed": true
+      },
+      {
+        "check": "sum of floors = building",
+        "value": 2167451.265693779,
+        "expected": 2167451.265693779,
+        "abs_diff": 0.0,
+        "passed": true
+      },
+      {
+        "check": "sum of end uses = building",
+        "value": 2167451.2656937786,
+        "expected": 2167451.265693779,
+        "abs_diff": 4.656612873077393e-10,
+        "passed": true
+      },
+      {
+        "check": "live twin: meter segments = energy of the 25 rooms over 3 simulated hours (kWh)",
+        "value": 146.50715781735977,
+        "expected": 146.50715781735974,
+        "abs_diff": 2.842170943040401e-14,
+        "passed": true
+      }
+    ]
+  },
+  "git_commit": "35a384b",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "active_models": {
+    "energy_dayahead": null,
+    "occupancy_best": null,
+    "occupancy_co2_temporal": null,
+    "occupancy_rf": null,
+    "occupancy_twin_fusion": null,
+    "thermal_h15": null,
+    "thermal_h30": null
+  },
+  "processed_data_sha256": {
+    "uci_occupancy.csv": "eafa3a795bd85c8253ac8536de1fcb002f848f5e67b752f4d5d256ee498e1923",
+    "bdg2_panther_office.csv": "75db0f3dccc68fbd4a78e1499d7e551f4c223a3843b457d822e6789530a39ab6"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "id": "exp04_energy",
+  "title": "Experiment 4 - Energy prediction",
+  "status": "PASS",
+  "started": "2026-10-23T15:58:30",
+  "finished": "2026-10-23T16:05:30",
+  "wall_s": 420.7,
+  "question": "Day-ahead hourly electricity of real office buildings (BDG2) vs seasonal-naive and persistence baselines.",
+  "info": {
+    "report": "docs/results/energy.md"
+  },
+  "git_commit": "3432ee5",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "active_models": {
+    "energy_dayahead": "v1",
+    "occupancy_best": "v1",
+    "occupancy_co2_temporal": null,
+    "occupancy_rf": "v1",
+    "occupancy_twin_fusion": "v1",
+    "ppo_policy": null,
+    "thermal_h15": "v1",
+    "thermal_h30": "v1"
+  },
+  "processed_data_sha256": {
+    "uci_occupancy.csv": "eafa3a795bd85c8253ac8536de1fcb002f848f5e67b752f4d5d256ee498e1923",
+    "bdg2_panther_office.csv": "75db0f3dccc68fbd4a78e1499d7e551f4c223a3843b457d822e6789530a39ab6"
+  }
+}

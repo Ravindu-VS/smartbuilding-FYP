@@ -1,0 +1,7 @@
+== exp04_energy: Experiment 4 - Energy prediction
+  seasonal_naive_lag168        seen: CV(RMSE)  22.51%  MAE    8.42 kWh | unseen: CV(RMSE)  20.46%
+  persistence_lag24            seen: CV(RMSE)  22.57%  MAE    8.24 kWh | unseen: CV(RMSE)  13.95%
+  ridge_lags                   seen: CV(RMSE)  16.60%  MAE    6.91 kWh | unseen: CV(RMSE)  14.14%
+  ridge_weather_calendar       seen: CV(RMSE)  31.50%  MAE   17.61 kWh | unseen: CV(RMSE)  27.23%
+  hist_gbt_lags                seen: CV(RMSE)  15.37%  MAE    5.97 kWh | unseen: CV(RMSE)  13.47%
+  hist_gbt_weather_calendar    seen: CV(RMSE)  31.75%  MAE   17.47 kWh | unseen: CV(RMSE)  28.54%

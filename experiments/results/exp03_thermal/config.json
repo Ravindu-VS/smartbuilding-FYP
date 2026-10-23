@@ -1,0 +1,7 @@
+{
+  "title": "Experiment 3 - Thermal prediction",
+  "type": "ml_script",
+  "module": "ml.thermal",
+  "question": "15/30-min room temperature forecasts vs persistence and a grey-box 1R1C model (twin ground truth; UCI real check).",
+  "id": "exp03_thermal"
+}

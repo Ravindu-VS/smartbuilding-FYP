@@ -1,0 +1,7 @@
+{
+  "title": "Experiment 2 - Occupancy-model evaluation",
+  "type": "ml_script",
+  "module": "ml.occupancy",
+  "question": "Occupancy models on a held-out later week of the UCI dataset (chronological), plus a domain check on the twin.",
+  "id": "exp02_occupancy"
+}

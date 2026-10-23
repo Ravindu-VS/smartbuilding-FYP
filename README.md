@@ -1,216 +1,172 @@
-# Design and Implementation of an Edge Intelligence Based Energy Management and Optimization System for Smart Buildings
+# Edge Intelligence Based Energy Management and Optimization System for Smart Buildings — Hybrid Cyber-Physical Digital Twin
 
 **Author:** Vinusha Rathnayaka · BSc (Hons) Computer Engineering, Final Year Project
 
-This README describes the **live system**: the edge brain (`raspberry_pi/edge_brain.py`) with
-its digital twin (`twin/`), the ESP32-S3 board in Office A (`firmware/esp32_smart_building/`)
-and the Next.js dashboard with the 3D digital twin (`dashboard/fyp-research-twin/`).
-Everything below was checked against the code on 20 October 2026; numbers come from the runs
-listed in [Measured results](#measured-results).
+A five-floor, 26-room smart building: 25 rooms simulated by a physics-based digital twin and one real room
+(Room 101, Office A) measured by an ESP32-S3 sensor/actuator node. A Raspberry Pi 4B "edge brain" estimates
+occupancy, decides lighting and air conditioning with a multi-objective optimiser behind a safety layer,
+learns from public datasets and the simulator (occupancy, thermal and energy models; a PPO policy), keeps
+every model versioned behind acceptance tests, stores history with provenance, and streams the building to a
+Next.js dashboard with a 3D digital twin.
+
+Every number in this README comes from a run recorded in `experiments/results/` or `docs/results/`.
+What is real, simulated, predicted or estimated is stated everywhere (see [provenance](#provenance)).
 
 ---
 
-## 1. What is real and what is simulated
+## 1. Architecture
 
-| Part | Real or simulated | Notes |
-|---|---|---|
-| Office A (`f2_office_a`, level 2) | **Real**: ESP32-S3 with BME280, BH1750, SCD41, LD2410C, INA226, MQ-2, PIR | The one real room. Values are shown only while the board is sending; with no reading for 10 s the room is **NOT CONNECTED** and shows no values. |
-| The other 25 rooms (5 floors) | **Simulated** by the digital twin `twin/live.py` | Per room: the thesis's ISO 13790 5R1C thermal model, CO2 and humidity balances, daylight, weather for Colombo, stochastic occupants, sensor models (PIR, CO2, temperature, lux) with noise. |
-| Occupancy estimate (AI) | Thesis method: PIR + CO2 fusion estimator (`FusionEstimator`) | Selectable alternative: the project's original Random Forest with thresholds. The simulator's true occupancy is used only for scoring and for the 3D people. |
-| Control (AI ON) | Multi-objective controller `J = αE + βC + γS` (α 1, β 3, γ 0.1) over AC and lighting options, then the safety layer (rules R1–R4) | After a 7-simulated-day learning week (the thesis method), cached in `output/twin_cache`. |
-| Control (AI OFF) | Conventional schedule: lights on and AC at the room's design set-point during its operating hours, same safety layer | |
-| Energy of simulated rooms | Computed by the physics (AC, lighting, plug loads) | Simulated, labelled as such. |
-| Energy of Office A | Measured by the INA226 on the board, kept per AI on/off segment | "not measured" when the INA226 is absent. |
-| Raspberry Pi GPIO outputs | Not wired yet | `PhysicalOutputController` records outputs only (`gpio_driving: false`). |
-
-## 2. Run it (Windows)
-
-**One click:** double-click `run_local.bat`. It checks the Python venv and the dashboard
-packages (installs them if missing), starts the edge brain on port 8001 and the Next.js
-dashboard on port 3000 in their own windows, waits until both answer, opens
-http://localhost:3000 and prints this PC's IP address for the ESP32's `server_url`.
-`run_local.bat test` also starts the test sender (shown as TEST SENDER, never as the board).
-Close the two server windows to stop everything.
-
-**Two terminals:**
-
-```cmd
-:: Terminal 1 — edge brain (digital twin + AI + API), port 8001
-cd /d "G:\projects\Final Year Project Smart Building\Project"
-.venv\Scripts\python.exe raspberry_pi\edge_brain.py
-
-:: Terminal 2 — Next.js dashboard with the 3D digital twin, port 3000
-cd /d "G:\projects\Final Year Project Smart Building\Project\dashboard\fyp-research-twin"
-npm run dev
+```
+ESP32-S3 (Room 101)  --HTTP every 3 s (edge also accepts MQTT sb/v1/room/f2_office_a/*)-->  Raspberry Pi 4B: edge brain (Flask :8001)
+  BME280, BH1750, SCD41, LD2410C,                                          |- validation, InputGuard, SQLite store (provenance)
+  INA226, MQ-2, PIR; fan / LED / damper  <--decision (fan, LED, servo)--   |- Room 101: PIR+CO2 fusion -> multi-objective controller -> SafetyLayer
+                                                                           |- digital twin: 25 rooms, ISO 13790 5R1C physics, 2 copies (AI vs conventional)
+                                                                           |     controllers: schedule | RF rule | multi-objective (MPC-like) | PPO (when approved)
+                                                                           |- models (numpy JSON, registry): occupancy, thermal forecast (live), shadow model, drift
+                                                                           '- API v3 + Server-Sent Events --> dashboard (Next.js :3000) + 3D twin (three.js)
+Offline (development PC): public datasets -> ml/ (training, evaluation, registry) ; twin -> rl/ (PPO training, evaluation) ; experiments/
 ```
 
-The first start runs the AI's learning week (a simulated week, run as fast as the PC allows;
-the 3D view shows its progress) and caches it in `output/twin_cache`; later starts load the cache.
+| Part | Where |
+|---|---|
+| Edge brain (API, SSE, store, MQTT, models) | `raspberry_pi/` |
+| Digital twin (physics, weather, occupants, sensors, controllers, safety, scenarios) | `twin/` ([docs/SIMULATION.md](docs/SIMULATION.md)) |
+| Machine learning (occupancy, thermal, energy, portable models, registry, drift, shadow) | `ml/` ([docs/ML.md](docs/ML.md)) |
+| Reinforcement learning (numpy PPO, environment, controller, evaluation) | `rl/` ([docs/RL.md](docs/RL.md)) |
+| Firmware | `firmware/esp32_smart_building/` ([docs/HARDWARE.md](docs/HARDWARE.md)) |
+| Dashboard and 3D twin | `dashboard/fyp-research-twin/` ([docs/twin3d.md](docs/twin3d.md)) |
+| Data (manifest, processed tables), models, experiments, tests, scripts | `data/`, `models/`, `experiments/`, `tests/`, `scripts/` |
+
+## 2. The building: 5 floors, 26 rooms
+
+Floors 0 Retail & Lobby, 1 Health & Recreation, 2 Operations, 3 Residential, 4 Penthouse. **Room 101 = Office A
+(`f2_office_a`, floor 2) is the real room; Rooms 102-126 are simulated.** Room numbers are labels; room ids are
+the keys in code, API, store and 3D twin. Full table: [docs/ROOMS.md](docs/ROOMS.md).
+
+| | Room 101 (real) | Rooms 102-126 (simulated) |
+|---|---|---|
+| Sensors | BME280, BH1750, SCD41 (NDIR CO2), LD2410C mmWave, PIR, INA226 power, MQ-2 (gas; never used as CO2) | modelled: noise + lag, PIR as a Poisson process |
+| Values shown | only while the board posts (no reading for 10 s = NOT CONNECTED, no values) | always, labelled simulated |
+| Control | PIR+CO2 fusion -> multi-objective controller -> safety layer -> fan (AC), LED (lights), servo (damper) | the selected controller -> the same safety layer -> simulated AC and lights |
+| Energy | measured by the INA226 | computed by the physics |
+
+## <a id="provenance"></a>3. What is real, simulated, predicted, estimated
+
+| Class | Examples | Shown as |
+|---|---|---|
+| `room101_measured` | the board's readings (source `sensor_node`) | LIVE ESP32 |
+| `synthetic` | the 25 simulated rooms, the HTTP test sender, the MQTT device harness | SIMULATED / TEST SENDER |
+| `prediction` | occupancy probability, 30-min temperature forecast, shadow-model outputs | "estimate", "forecast (prediction)" |
+| `public_real` | UCI occupancy, BDG2 electricity and weather (training and evaluation only) | model cards |
+| unavailable | a disconnected or stale board | NOT CONNECTED, values "—" |
+
+The twin's weather is synthetic (Colombo monthly normals), not measured; measured Colombo weather could not be
+downloaded from the development environment (docs/DATASETS.md).
+
+## 4. Run it
+
+Windows (development PC): double-click **`run_local.bat`** (checks the venv and packages, frees ports
+8001/3000, starts the edge brain and the dashboard, opens http://localhost:3000; `run_local.bat test` adds the
+HTTP test sender). Linux / Raspberry Pi:
+
+```
+python3 -m pip install -r requirements/edge.txt     # Pi: flask, numpy, paho-mqtt only
+python3 -m pip install -r requirements/train.txt    # development PC (adds pandas, scikit-learn, gymnasium)
+python3 -m pip install -r requirements/dev.txt      # + tests
+scripts/start.sh dev | edge | live | harness        # see docs/DEPLOYMENT.md
+```
 
 | URL | What |
 |---|---|
-| http://localhost:3000 | Dashboard with the 3D digital twin |
-| http://localhost:3000/twin3d/index.html?standalone=1 | The 3D view on its own (reads the edge brain directly) |
-| http://127.0.0.1:8001/health | Edge brain health |
-| http://127.0.0.1:8001/api/stream | Live SSE stream (what the dashboard uses) |
+| http://localhost:3000 | dashboard with the 3D twin |
+| http://127.0.0.1:8001/health | edge brain health |
+| http://127.0.0.1:8001/api/stream | the SSE stream the dashboard uses |
+| http://127.0.0.1:8001/api/models | registry, live models, shadow comparison, drift |
 
-The dashboard and the 3D view need no internet: three.js is served from
-`public/twin3d/vendor/three`, all textures are generated in the browser, and the page uses
-system fonts. To open the dashboard from another device on the same network
-(http://&lt;this PC's IP&gt;:3000), nothing is needed: this PC's addresses are allowed in
-`next.config.ts`; other host names can be added with `NEXT_ALLOWED_DEV_ORIGINS=a,b`.
+The first start runs the AI's 7-day learning week (cached in `output/twin_cache/`). Offline training is never
+started by the run scripts. Full install, modes, environment variables and Raspberry Pi steps:
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). API: [docs/API.md](docs/API.md).
 
-**Edge brain on a Raspberry Pi:** run `raspberry_pi/run_edge.sh` on the Pi, set the ESP32's
-`server_url` to the Pi's address, and start the dashboard with
-`set NEXT_PUBLIC_EDGE_URL=http://<pi-ip>:8001` then `npm run dev`.
+## 5. The dashboard and the 3D twin
 
-Edge brain settings (environment variables): `SPEED_FACTOR` (simulated seconds per real second,
-default 360), `TWIN_SEED` (7), `TWIN_WARMUP` (1 = learning week), `AI_DEFAULT`,
-`TARIFF_LKR_PER_KWH` (50, an assumption), `API_HOST`/`API_PORT` (0.0.0.0:8001), `HW_TIMEOUT_S` (10),
-`HW_LED_LUX_FULL`, `OUTDOOR_TEMP_C` (30, assumed for the real room).
+Header: simulated clock, the **AI CONTROL** master switch (all rooms, simulated and real), the AI controller
+(thesis optimiser, Random Forest rule, PPO - offered only once approved), edge and board status, Viva demo.
+KPI strip: same-period energy, cost, discomfort, peak, lights in empty rooms, estimation accuracy (AI vs AI off).
+3D twin: building, floor and room views (furnished rooms, people, AC units, airflow layer, daylight), driven
+only by the streamed state. Building list (room numbers), room panel (readings with provenance badges, the AI's
+decision and reasons, the 30-min forecast, AI vs AI off, scenario buttons), bottom panels: decisions, energy
+meter, analytics, **Models & data** (models in use, shadow comparison, live forecast accuracy, drift, data
+sources). AI ON vs AI OFF: two copies of the building run in lock-step with identical weather, occupants and
+sensor noise, so every minute has both results.
 
-## 3. The dashboard
+## 6. Results
 
-- **Header:** simulated clock (pause, speed, fast-forward one hour, restart the scenario), the
-  **AI CONTROL** master switch (every room, simulated and real, at once), the AI controller in use,
-  edge brain and board status, and the **Viva demo** (guided scenarios).
-- **KPI strip:** the building's energy meter, energy and cost with AI vs AI off, uncomfortable
-  time, peak demand, lights on in empty rooms and occupancy-estimation accuracy — every figure
-  for the same minutes under both modes.
-- **3D digital twin** (centre) with three views — building, floor, room — described in
-  [docs/twin3d.md](docs/twin3d.md): a modern five-storey building on a city site, floor
-  cutaways with a card per room, and furnished room interiors with people, AC units, thermostat,
-  a qualitative airflow layer, lighting and daylight, all driven by the edge brain's state.
-  **Presentation** mode fills the screen; **Auto tour** flies through the building.
-- **Building list** (left): floors and rooms with people, temperature, AI estimate, lights and AC.
-  Click a room to select it, double-click to open it in 3D.
-- **Room panel** (right): live readings, the AI's decision and why, AI on vs AI off for this room,
-  scenario buttons (add people, empty it, add heat, CO2 source, open a window, overcast, heat wave).
-- **Bottom panels:** the decision log, the energy meter (segments per switch position) and
-  analytics. "Larger 3D view" folds them away.
+### Machine learning (held-out evaluation; [docs/ML.md](docs/ML.md))
 
-## 4. AI ON vs AI OFF and the energy meter
+| Model | Data and split | Result | Baseline |
+|---|---|---|---|
+| Occupancy, random forest, 5 UCI inputs (`occupancy_rf` v1, used by the RF rule) | UCI; trained 2-10 Feb, tested on 11-18 Feb 2015 | F1 0.973, AUC 0.997, accuracy 0.989 | legacy deployed RF scored 0.997 on the same week but had been trained on it (Kaggle copies) - not a held-out result |
+| Occupancy, best on validation: gradient boosting + trends (`occupancy_best` v1) | same | F1 0.981, AUC 0.998 | - |
+| Occupancy from CO2 only (any model) | same | F1 0.47-0.52 | deployed CO2 tree F1 0.530: CO2 alone is weak; the candidate `occupancy_co2_temporal` failed its acceptance test and was not promoted |
+| Learned PIR+CO2 fusion, simulated rooms (`occupancy_twin_fusion` v1, shadow mode) | twin seed 31 (MO) -> seed 32 (schedule controller) | F1 0.962 (precision 0.957, recall 0.967) | hand-built fusion F1 0.932 (precision 0.883) |
+| UCI-trained models on the twin | domain check | F1 0.005-0.62 | large gap between the domains in both directions |
+| Room temperature 15 min ahead (`thermal_h15` v1) | twin, unseen seeds 21-23 (incl. unseen scenario) | MAE 0.158 K | persistence 0.226, grey-box 1R1C 0.214 |
+| Room temperature 30 min ahead (`thermal_h30` v1, live) | same | MAE 0.267 K (unseen scenario 0.292) | persistence 0.341, grey-box 0.332 |
+| Same method on the real UCI office (no HVAC data) | UCI later week | MAE 0.071 K (15 min), 0.114 K (30 min) | persistence 0.076, 0.126 |
+| Day-ahead hourly electricity (`energy_dayahead` v1) | BDG2, 18 offices Jun 2016-May 2017 -> Jun-Dec 2017 | CV(RMSE) 15.4 %, NMBE 0.1 %; 17/18 buildings <= 30 % | seasonal naive 22.5 %, persistence 22.6 % |
+| Same, 5 buildings never seen in training | | CV(RMSE) 13.5 % | persistence 14.0 % (little gain on unseen buildings) |
 
-Two copies of the simulated building run in lock-step with identical weather, occupants and
-sensor noise. The **building** follows the switch; the **twin copy** always runs the other mode.
-So every minute has an AI result and a conventional result for exactly the same conditions,
-whatever the switch position. The meter keeps one segment per switch position (start, duration,
-kWh used, what the other mode used over the same minutes, peak, discomfort). While AI is off it
-keeps observing, and the room panel shows what it would do.
+### Control (digital twin, synthetic; 7 days x 3 seeds, matched conditions; [docs/RL.md](docs/RL.md))
 
-Office A follows the same switch: AI ON = the same estimator and controller on the board's real
-readings; AI OFF = the schedule on real time. Its INA226 energy is kept per segment.
+<!-- CONTROL_RESULTS -->
 
-## 5. Board connection status
+## 7. Self-learning, safety and the hardware path
 
-| Status | Rule |
-|---|---|
-| **CONNECTED** | A reading from the firmware (`"source": "sensor_node"`) arrived in the last `HW_TIMEOUT_S` seconds (10 s; the firmware posts every 3 s). |
-| **TEST SENDER** | Same, but from `raspberry_pi/esp32_test_sender.py` (`"source": "test_sender"`). Never shown as the real board. |
-| **NOT CONNECTED** | No reading since start, or the last one is older than the timeout. Office A then has no sensor values, no AI result and no decision; the 3D view shows the room empty with a red LIVE frame and "board not connected". |
-| **EDGE BRAIN OFFLINE** | The dashboard is not receiving the stream (stopped or unreachable, or no message for 3 s). It reconnects by itself. |
+* Models are trained offline, evaluated on held-out data, versioned in `models/registry/`, run in shadow mode,
+  and promoted only after acceptance tests (`python -m ml.registry evaluate|promote|rollback`); history and
+  every rejection are kept ([docs/RETRAINING.md](docs/RETRAINING.md)). No learning agent explores on the real room.
+* Every controller sits behind `InputGuard` + `GuardedController` (fall-back to the rule-based schedule on
+  missing, implausible, stuck or stale inputs, an exception or an invalid action) and the `SafetyLayer` (valid
+  values and 22-27 C set-points, equipment rooms always cooled, heat-stress guard, CO2 fresh-air rule).
+* The edge needs only flask + numpy (+ paho-mqtt): models are numpy-only JSON; tested with the training stack
+  blocked. Credentials live in the environment (MQTT) or a git-ignored `secrets.h` (Wi-Fi).
+* Hardware status ([docs/HARDWARE.md](docs/HARDWARE.md)): firmware implemented (HTTP); edge HTTP and MQTT paths
+  implemented and tested with a test sender and a simulated MQTT board; **firmware not compiled and no physical
+  bench test in this work** (no toolchain or board available here).
 
-Fields the board does not send are shown as "—"; nothing is filled in with default values.
+## 8. Reproduce
 
-## 6. How everything stays in sync
-
-1. The ESP32 POSTs a reading to `/api/hardware/sensor-data`; the edge brain decides and replies
-   with the actuator commands (fan PWM = AC, LED PWM = lights, servo = fresh-air damper). The same
-   decision is what the dashboard shows for Office A.
-2. The digital twin advances in 60-s control steps (physics step 15 s) at the chosen speed.
-3. After every step and every board reading the edge brain pushes the full state on `/api/stream`.
-4. The page holds **one** SSE connection. It feeds the panels and forwards each state, and once the
-   building configuration, to the 3D view (`postMessage`). The 3D view has no connection of its own.
-5. The 3D view reports how many of the backend's rooms it found ("3D rooms 26/26" in the footer).
-
-## 7. Testing
-
-```cmd
-python -m pytest twin\tests raspberry_pi\test_edge_brain.py -q   :: 27 tests (pip install pytest)
-python raspberry_pi\esp32_test_sender.py                         :: readings every 3 s, shown as TEST SENDER
-python tests\e2e\twin_flows.py                                  :: 3D twin flows A-F in the running dashboard (Playwright)
+```
+python3 scripts/fetch_datasets.py && python3 scripts/preprocess_datasets.py   # public data (internet), checksums
+scripts/make_synthetic_corpus.sh                                              # simulator corpus
+python3 -m ml.occupancy ; python3 -m ml.thermal ; python3 -m ml.energy ; python3 -m ml.registry init
+python3 -m rl.cartpole_check ; python3 -m rl.train --seed 0                   # PPO (about 1 h per run on 2 vCPUs)
+python3 experiments/run.py --all                                              # experiments 1-10
+python3 -m pytest -q                                                          # tests (docs/TESTING.md)
 ```
 
-Stop the test sender and Office A turns NOT CONNECTED about 10 s later.
-
-## 8. API reference (API version 3)
-
-| Method | Path | Use |
-|---|---|---|
-| POST | `/api/hardware/sensor-data` | Board reading in, decision out (only `f2_office_a`) |
-| GET | `/api/hardware/status` | Board link status |
-| POST | `/api/hardware/calibrate-led` | Measure the lux the board's LED adds at the BH1750 |
-| GET / POST | `/api/ai` | Read / set the AI master switch `{"enabled": true}` |
-| GET | `/api/meter` | Energy meter (segments, same-hour comparison, real room meter) |
-| GET | `/api/stream` | SSE: full building state on every change |
-| GET | `/api/rooms/current-state` | Same state, once |
-| GET | `/api/building/config` | Floors and rooms (geometry used by the 3D view) |
-| GET | `/api/rooms/history?room_id=…` | Recent states of a room |
-| GET | `/api/timeline` | Decision log |
-| GET | `/api/analytics` | AI vs AI-off results so far |
-| GET | `/api/system/summary` | System part of the state |
-| POST | `/api/simulation/control` | `pause`, `resume`, `speed {speed}`, `fast_forward {minutes | until, weekday}`, `reset`, `restart_comparison`, `watch` |
-| POST | `/api/simulation/controller` | Choose the AI controller (`mo` or `threshold_rf`) |
-| POST | `/api/scenario` | Apply / clear a demonstration scenario (applied to both copies) |
-| GET | `/api/physical/outputs` | Output state per room (recorded only) |
-| GET | `/health` | Health and platform |
-
-## Measured results
-
-From runs on 20 October 2026 on a Linux test machine (headless Chromium with software WebGL):
-
-| What | Result |
-|---|---|
-| Backend tests (`twin/tests`, `raspberry_pi/test_edge_brain.py`) | 27 / 27 passed |
-| One simulated weekday after the learning week (seed 7): energy, AI vs schedule | 1405 vs 1536 kWh (8.5 % less) |
-| Same day: uncomfortable occupied time | 4.6 % vs 15.2 % |
-| Same day: peak demand | 94 vs 147 kW |
-| Same day: occupancy estimation accuracy, PIR+CO2 fusion vs Random Forest | 92 % vs 72 % |
-| 3D twin interaction flows A–F of the redesign brief, automated in the real dashboard (`tests/e2e/twin_flows.py`) | 35 / 35 checks passed, no console errors or failed requests |
-| Rooms matched between backend and 3D model | 26 / 26 |
-
-Frame rates could not be measured meaningfully on the test machine (no GPU).
-
-## 9. Known limitations
-
-- **Simulated rooms are simulated.** Their physics follows the thesis model, but occupants,
-  weather and equipment are models, not measurements; the dashboard labels them so.
-- **3D furnishing and activities are a visual interpretation** of each room's type; numbers of
-  people, light levels, AC states and temperatures come from the data. The airflow layer is
-  qualitative (not CFD); see `docs/twin3d.md` §8.
-- **Firmware changes are not compiled here.** Compile and flash in the Arduino IDE.
-- **GPIO outputs on the Raspberry Pi are not wired** (`_drive_gpio` is empty).
-
-## 10. Repository layout
+## 9. Repository layout
 
 | Path | What |
 |---|---|
-| `raspberry_pi/edge_brain.py` | Edge brain: board link, digital twin, AI switch, meter, API, SSE |
-| `twin/` | Digital twin: physics (`physics.py`, `building.py`), climate, occupants, sensors, controllers, safety layer, live twin (`live.py`), the real room's controller (`hardware_room.py`); tests in `twin/tests` |
-| `raspberry_pi/test_edge_brain.py` | Tests of the edge brain |
-| `raspberry_pi/esp32_test_sender.py` | Test sender (not the real board) |
-| `raspberry_pi/run_edge.sh`, `requirements.txt` | Running on a Raspberry Pi |
-| `integration/building_config.py` | The 5 floors / 26 rooms and their geometry (single source) |
-| `models/occupancy/co2/` | CO2 occupancy model used by the fusion estimator |
-| `firmware/esp32_smart_building/` | ESP32-S3 firmware for Office A |
-| `dashboard/fyp-research-twin/` | Next.js dashboard; `public/twin3d/` is the 3D digital twin ([docs/twin3d.md](docs/twin3d.md)); `public/3d-twin/` is the earlier 3D app, kept but no longer used |
-| `run_local.bat` | Starts both on Windows |
+| `raspberry_pi/` | edge brain, store, MQTT bridge, device harness, HTTP test sender, Pi run script |
+| `twin/` | digital twin (`building_config.py` = the 26 rooms), controllers, safety, scenarios, runner, validation |
+| `ml/`, `rl/` | training, evaluation and inference code |
+| `models/registry/` | approved and candidate model versions (JSON + metadata + model card); `models/ppo_runs/` training runs |
+| `data/manifest.json` | dataset provenance and checksums (raw and processed data are regenerated, git-ignored) |
+| `experiments/configs/`, `experiments/results/` | experiments 1-10 and their recorded results |
+| `docs/` | technical documents; `COMPLETION_MATRIX.md`, `COMPLETION_LOG.md`, `ACCEPTANCE_GATE.md`, `FINAL_REPORT.md` |
+| `tests/` | automated tests; `tests/e2e/twin_flows.py` browser flows |
+| `archive/legacy_v1/` | the first architecture, superseded (see `archive/README.md`, `docs/CLEANUP.md`) |
+| `Dataset/` | the original dataset copies (UCI and its "Kaggle" duplicates) |
 
-Kept, but not used by the live system: the Docker / WSO2 / FastAPI stack (`docker-compose.yml`,
-`Dockerfile`, `k8s/`, `wso2/`, `app/`, `auth/`, `edge_gateway/`, `ai/`), the older Flask server
-`smart_building_api_flask.py` with `integration/*` and `hardware/`, the PPO research code
-(`agents/`, `control/`, `sim/`, `main.py`), `experiments/`, and the model training and comparison
-scripts (`train_*.py`, `compare_*.py`, `evaluate_*.py`).
+## 10. Known limitations
 
-### Removed on 19 October 2026 (old simulations)
-
-Panda3D app (`panda3d_simulation/`), its launcher `run_system.py`, the old simulation engine
-(`simulation/`, `sensors/`, `decisions/`, `models/__init__.py`), `smart_building_api.py`,
-`simulation_control_evaluator.py`, `validate_demo_readiness.py`, tests of the old stack
-(`test_system.py`, `test_synchronization.py`, `test_integration.py`, `test_api.py`,
-`test_evaluator.py`), the old static dashboard (`dashboard/index.html`, `style.css`,
-`dashboard/archive/`), the build leftovers in `dashboard-next/`, and unused Next.js files
-(`src/lib/SmartBuildingTwin.js`, the "Viva Demo Mode" that injected made-up values,
-`app_backup_before_sync_rebuild.js`, template SVGs). Everything that was tracked by git is in
-the commit "Snapshot of G: working tree as found on 2026-10-19" and can be restored with
-`git checkout <that commit> -- <path>`.
+* Simulated rooms are simulated: a 5R1C model with synthetic weather and stochastic occupants, not a validated
+  building model or CFD; the 3D furnishing and airflow are illustrative.
+* Models trained on the simulator learn the simulator; the UCI data is one office in a Belgian winter; the
+  real room has no labelled occupancy data yet, so its controller stays rule-based plus the optimiser.
+* PPO is a single policy shared by the rooms (not a multi-agent system) and controls simulated rooms only.
+* Firmware not compiled and not bench-tested in this work; the board uses HTTP (MQTT is implemented on the edge).
+* Raspberry Pi GPIO outputs are recorded, not driven (`gpio_driving: false`).
+* This is a research prototype without safety certification ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).

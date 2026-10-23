@@ -1,0 +1,15 @@
+== exp03_thermal: Experiment 3 - Thermal prediction
+  twin h=15 persistence   MAE 0.226 RMSE 0.605 (unseen scenario hvac_reduced MAE 0.232)
+  twin h=15 greybox_1r1c  MAE 0.214 RMSE 0.493 (unseen scenario hvac_reduced MAE 0.266)
+  twin h=15 ridge         MAE 0.204 RMSE 0.513 (unseen scenario hvac_reduced MAE 0.253)
+  twin h=15 hist_gbt      MAE 0.158 RMSE 0.413 (unseen scenario hvac_reduced MAE 0.193)
+  twin h=30 persistence   MAE 0.341 RMSE 0.907 (unseen scenario hvac_reduced MAE 0.333)
+  twin h=30 greybox_1r1c  MAE 0.332 RMSE 0.772 (unseen scenario hvac_reduced MAE 0.372)
+  twin h=30 ridge         MAE 0.354 RMSE 0.823 (unseen scenario hvac_reduced MAE 0.373)
+  twin h=30 hist_gbt      MAE 0.267 RMSE 0.641 (unseen scenario hvac_reduced MAE 0.292)
+  UCI  h=15 persistence   MAE 0.0756 RMSE 0.1190
+  UCI  h=15 ridge         MAE 0.0758 RMSE 0.1047
+  UCI  h=15 hist_gbt      MAE 0.0714 RMSE 0.1014
+  UCI  h=30 persistence   MAE 0.1264 RMSE 0.2029
+  UCI  h=30 ridge         MAE 0.1176 RMSE 0.1683
+  UCI  h=30 hist_gbt      MAE 0.1141 RMSE 0.1647

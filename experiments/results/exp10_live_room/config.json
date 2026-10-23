@@ -1,0 +1,8 @@
+{
+  "title": "Experiment 10 - Live-room integration (test harness)",
+  "type": "live_room",
+  "messages": 40,
+  "interval_s": 0.2,
+  "question": "Room 101 data path over HTTP and MQTT with a simulated board: ingestion, validation, dedupe, acks, status, staleness, storage, provenance.",
+  "id": "exp10_live_room"
+}

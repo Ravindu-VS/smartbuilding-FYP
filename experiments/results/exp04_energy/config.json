@@ -1,0 +1,7 @@
+{
+  "title": "Experiment 4 - Energy prediction",
+  "type": "ml_script",
+  "module": "ml.energy",
+  "question": "Day-ahead hourly electricity of real office buildings (BDG2) vs seasonal-naive and persistence baselines.",
+  "id": "exp04_energy"
+}
