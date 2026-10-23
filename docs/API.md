@@ -42,6 +42,7 @@ sensor value `null` - never a default.
 | POST | `/api/hardware/sensor-data` | a board's reading (firmware payload, see docs/HARDWARE.md); reply = that room's decision (< 300 bytes for the firmware's JSON buffer) |
 | GET | `/api/hardware/status` | link status of every real room |
 | POST | `/api/hardware/calibrate-led` | measure the LED's lux contribution |
+| POST | `/api/hardware/override` | manual control of a real room: `{"room_id", "fan_speed" 0-255, "light_level" 0-255, "servo_angle" 0-180, "minutes" 1-240, "reason"}` (bounded, ends by itself) or `{"room_id", "clear": true}` |
 | GET | `/api/hardware/mqtt` | MQTT bridge status (connected, counters, pending acks, rejections) or `{"enabled": false}` |
 | GET | `/api/physical/outputs` | GPIO output state on the Pi |
 

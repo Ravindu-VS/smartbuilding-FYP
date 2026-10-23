@@ -12,7 +12,8 @@ shared policy; 7 200 room-decisions per episode).  After each episode one PPO up
 Every `--eval-every` episodes the deterministic policy is scored on a fixed validation episode
 (seed 999, normal scenario); the best-scoring policy is kept.
 
-Outputs: models/ppo_runs/seed<k>/{policy_best.json, policy_last.json, train_log.csv, config.json}
+Outputs: models/ppo_runs/v2_seed<k>/{policy_best.json, policy_last.json, train_log.csv, config.json}
+(models/ppo_runs/seed0, seed1: the first runs with reward v1, kept for the record)
 Register the chosen run with `python -m rl.evaluate --register` (after the comparison).
 """
 from __future__ import annotations
@@ -136,7 +137,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
     cfg = PPOConfig(lr=args.lr, epochs=args.epochs, minibatch=args.minibatch, ent_coef=args.ent)
-    out = args.out or os.path.join(RUNS, f"seed{args.seed}")
+    out = args.out or os.path.join(RUNS, f"v2_seed{args.seed}")      # reward v2 (rl/env.py); v1 runs: seed0, seed1
     res = train(args.seed, args.episodes, args.days, args.eval_every, cfg, out)
     print(json.dumps(res, indent=2))
     return 0

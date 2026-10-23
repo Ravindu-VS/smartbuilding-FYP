@@ -59,7 +59,7 @@ import math
 import logging
 import platform
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from collections import deque
 
@@ -263,6 +263,9 @@ class HardwareLink:
         self.history: deque = deque(maxlen=600)
         self.connected_last = False
         self.led_cal: Optional[Dict[str, Any]] = None
+        self.override: Optional[Dict[str, Any]] = None      # manual override {until_mono, fan, led, servo, reason}
+        self.last_command: Optional[Dict[str, int]] = None  # last actuator command sent to the board
+        self.verify_mismatches = 0
         self.segments: List[Dict[str, Any]] = []
 
     def status(self, now_mono: float) -> Dict[str, Any]:
@@ -448,6 +451,37 @@ class EdgeBrain:
         logger.info("LED calibration started (%s)", link.room_id)
         return {"status": "started", "room_id": link.room_id}
 
+    def set_override(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        link = self._link_for(data.get("room_id"))
+        with self._lock:
+            if data.get("clear"):
+                link.override = None
+                self.twin.add_event(self._sys_event(link, "manual override cleared by the operator"))
+                self._notify()
+                return {"status": "cleared", "room_id": link.room_id}
+
+            def bounded(key, hi, default=0):
+                v = data.get(key, default)
+                if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+                    raise ValueError(f"{key} must be a number")
+                return int(max(0, min(hi, round(v))))
+            minutes = data.get("minutes", 30)
+            if isinstance(minutes, bool) or not isinstance(minutes, (int, float)) or not 1 <= minutes <= 240:
+                raise ValueError("minutes must be between 1 and 240")
+            until = datetime.now() + timedelta(minutes=float(minutes))
+            link.override = {"fan": bounded("fan_speed", 255), "led": bounded("light_level", 255),
+                             "servo": bounded("servo_angle", 180), "until_mono": time.monotonic() + 60.0 * float(minutes),
+                             "until_iso": until.isoformat(timespec="seconds"),
+                             "reason": str(data.get("reason", "manual override"))[:120]}
+            self.twin.add_event(self._sys_event(link, f"manual override until {until:%H:%M}: fan {link.override['fan']}, LED {link.override['led']}, "
+                                  f"damper {link.override['servo']} ({link.override['reason']})"))
+            if self.store is not None:
+                self.store.add_event("manual_override", "override set", link.room_id,
+                                     data={k: v for k, v in link.override.items() if k != "until_mono"})
+            self._notify()
+            return {"status": "ok", "room_id": link.room_id, "override": {k: v for k, v in link.override.items()
+                                                                          if k != "until_mono"}}
+
     def _calibration_step(self, link: HardwareLink, lux: Optional[float], actuator_light: Optional[int]) -> Optional[int]:
         c = link.led_cal
         if c is None:
@@ -551,6 +585,27 @@ class EdgeBrain:
             cal_level = self._calibration_step(link, lux, actuator_light)
             if cal_level is not None:
                 control = dict(control, light_level=cal_level, calibrating=True)
+            ov = link.override
+            if ov is not None and now_mono < ov["until_mono"]:
+                # manual override: the operator's levels go to the board (bounded), the AI is bypassed
+                control = dict(control, fan_speed=ov["fan"], light_level=ov["led"], servo_angle=ov["servo"],
+                               hvac_action="NORMAL" if ov["fan"] > 0 else "ECO",
+                               light_action="ON" if ov["led"] > 127 else ("DIM" if ov["led"] > 0 else "OFF"),
+                               mode="manual", manual_override={"reason": ov["reason"], "until": ov["until_iso"]})
+            elif ov is not None:
+                link.override = None
+                self.twin.add_event(self._sys_event(link, "manual override ended; control returns to the "
+                                      f"{'AI' if ai_on else 'conventional schedule'}"))
+            # actuator-state verification: the board reports what it applied before this reading
+            verified = None
+            if link.last_command is not None and actuator_fan is not None and actuator_light is not None:
+                verified = (actuator_fan == link.last_command["fan"] and actuator_light == link.last_command["led"])
+                link.verify_mismatches = 0 if verified else link.verify_mismatches + 1
+                if link.verify_mismatches == 3:
+                    self.twin.add_event(self._sys_event(link, "the board's reported fan/LED levels have not matched the commands for 3 "
+                                          "readings (check wiring or firmware)", kind="hardware"))
+            control = dict(control, previous_command_verified=verified)
+            link.last_command = {"fan": int(control["fan_speed"]), "led": int(control["light_level"])}
             link.ctrl.due_outcomes(now, temp, lux, presence, co2)
             reading = {
                 "received_at": now_iso,
@@ -619,7 +674,8 @@ class EdgeBrain:
                                             "setpoint_c": control["setpoint_c"], "fan": control["fan_speed"],
                                             "led": control["light_level"], "servo": control["servo_angle"]},
                                         safety_notes=control.get("safety_notes") or [],
-                                        model_version=(self.models.rf.version if self.models and self.models.rf.model else None))
+                                        model_version=(self.models.rf.version if self.models and self.models.rf.model else None),
+                                        verified=control.get("previous_command_verified"))
             except Exception as e:
                 logger.error("store write failed: %s", e)
         if self.models is not None and reading_provenance(link.sender) == "room101_measured":
@@ -902,6 +958,17 @@ def calibrate_led():
     data = request.get_json(force=True, silent=True) or {}
     try:
         return jsonify(brain.start_led_calibration(data.get("room_id")))
+    except ValueError as e:
+        return _err(str(e))
+
+
+@app.route('/api/hardware/override', methods=['POST'])
+def hardware_override():
+    """Manual control of a real room: {"room_id", "fan_speed" 0-255, "light_level" 0-255, "servo_angle" 0-180,
+    "minutes" 1-240, "reason"} or {"room_id", "clear": true}.  Values are bounded; the override ends by itself."""
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        return jsonify(brain.set_override(data))
     except ValueError as e:
         return _err(str(e))
 

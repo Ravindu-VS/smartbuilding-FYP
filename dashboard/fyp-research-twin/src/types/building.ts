@@ -61,7 +61,9 @@ export interface ControlDecision {
   vent_boost: boolean;
   control_mode: string;
   controller: string;               // "mo" | "threshold_rf" | "schedule"
-  mode?: 'ai' | 'conventional';
+  mode?: 'ai' | 'conventional' | 'manual';
+  manual_override?: { reason: string; until: string };
+  previous_command_verified?: boolean | null;
   ai_would?: AiWould | null;        // while AI is off: what it would do
   reason: string;
   safety_notes: string[];

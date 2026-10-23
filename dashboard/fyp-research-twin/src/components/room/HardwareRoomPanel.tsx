@@ -98,7 +98,15 @@ export default function HardwareRoomPanel({ room, events, history }: { room: Roo
         )}
       </Section>
 
-      <Section icon={<Zap size={12} />} title={control?.mode === 'conventional' ? 'Decision sent to the board (AI off)' : 'AI decision sent to the board'}>
+      <Section icon={<Zap size={12} />} title={control?.mode === 'manual' ? 'Manual override sent to the board' : control?.mode === 'conventional' ? 'Decision sent to the board (AI off)' : 'AI decision sent to the board'}>
+        {control?.mode === 'manual' && control.manual_override && (
+          <div className="mb-2 text-[10.5px] px-2 py-1.5 rounded border border-amber-700 bg-amber-950/30 text-amber-200" data-testid="manual-override">
+            Manual override until {control.manual_override.until.slice(11, 16)} ({control.manual_override.reason}); the AI is bypassed.
+          </div>
+        )}
+        {control && control.previous_command_verified === false && (
+          <div className="mb-2 text-[10.5px] text-orange-300" data-testid="verify-mismatch">The board reported different fan/LED levels than the last command.</div>
+        )}
         {control ? (
           <>
             {control.mode === 'conventional' && (

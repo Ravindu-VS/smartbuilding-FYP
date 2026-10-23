@@ -241,6 +241,10 @@ def evaluate_uci() -> Dict:
 
 
 def main(argv=None) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--no-register", action="store_true", help="evaluate only; do not add a registry version")
+    args = ap.parse_args(argv)
     os.makedirs(RESULTS, exist_ok=True)
     twin = evaluate_twin()
     uci = evaluate_uci()
@@ -278,10 +282,12 @@ def main(argv=None) -> int:
                 "\n\n## Limitations\n\n- Trained on simulator output only: it learns the 5R1C model's behaviour, not a real "
                 "building's. Its real-data check on the UCI office (no HVAC data there) is in docs/results/thermal.md.\n"
                 "- Assumes the AC command at time t is held for the horizon.\n")
+        if args.no_register:
+            continue
         write_artifact(task, version, meta, card, portable=portable, sk_object=m)
         registered[task] = version
         print("registered", task, version)
-    write_report(twin, uci, registered)
+    write_report(twin, uci, registered or None)
     with open(os.path.join(RESULTS, "results.json"), "w", encoding="utf-8") as f:
         json.dump(rounded({"twin": {h: twin["horizons"][h] for h in HORIZONS_MIN}, "uci": uci,
                            "registered": registered, "generated_utc": utc_now(), "git_commit": git_commit()}), f, indent=2)
@@ -307,7 +313,11 @@ def write_report(twin: Dict, uci: Dict, registered: Dict) -> None:
     for h in HORIZONS_MIN:
         rows = [{"method": k, "MAE": v["mae"], "RMSE": v["rmse"], "R2": v["r2"]} for k, v in uci[h].items()]
         L += [f"### Horizon {h} min (degC)", "", md_table(rows, ["method", "MAE", "RMSE", "R2"], {"MAE": ".4f", "RMSE": ".4f"}), ""]
-    L += ["## Registered", ""] + [f"- `{t}` {v}" for t, v in registered.items()]
+    if registered:
+        L += ["## Registered", ""] + [f"- `{t}` {v}" for t, v in registered.items()]
+    else:
+        from ml.common import registry_note
+        L += ["## Registry", "", registry_note([f"thermal_h{h}" for h in HORIZONS_MIN])]
     with open(REPORT, "w", encoding="utf-8") as f:
         f.write("\n".join(L) + "\n")
 

@@ -152,6 +152,7 @@ class Portable:
             fo = spec["forest"]
             self._trees = [{k: np.asarray(v, dtype=float if k in ("threshold", "value") else int)
                             for k, v in t.items()} for t in fo["trees"]]
+            self._stack_trees()
             self._combine, self._base = fo["combine"], float(fo.get("base", 0.0))
             self._link = fo.get("link", "identity")
             self._f32 = bool(fo.get("float32_inputs", False))
@@ -196,6 +197,48 @@ class Portable:
             X = (X - self._mean) / self._scale
         return X
 
+    def _stack_trees(self) -> None:
+        """All trees padded into (n_trees, max_nodes) arrays, evaluated together level by level."""
+        T = len(self._trees)
+        M = max(len(t["left"]) for t in self._trees)
+        self._L = np.full((T, M), -1, dtype=np.int64)
+        self._R = np.full((T, M), -1, dtype=np.int64)
+        self._F = np.zeros((T, M), dtype=np.int64)
+        self._TH = np.zeros((T, M))
+        self._V = np.zeros((T, M))
+        self._MS = np.zeros((T, M), dtype=bool)
+        depth = 0
+        for i, t in enumerate(self._trees):
+            n = len(t["left"])
+            self._L[i, :n], self._R[i, :n] = t["left"], t["right"]
+            self._F[i, :n] = np.where(t["feature"] < 0, 0, t["feature"])
+            self._TH[i, :n], self._V[i, :n] = t["threshold"], t["value"]
+            self._MS[i, :n] = t["missing_left"] == 1
+            d = np.zeros(n, dtype=int)                      # node depths (children come after parents)
+            for j in range(n):
+                if t["left"][j] != -1:
+                    d[t["left"][j]] = d[j] + 1
+                    d[t["right"][j]] = d[j] + 1
+            depth = max(depth, int(d.max()) if n else 0)
+        self._depth = depth
+
+    def _forest_eval(self, X: np.ndarray) -> np.ndarray:
+        """(n_trees, n_rows) leaf values."""
+        T, n = self._L.shape[0], X.shape[0]
+        tix = np.arange(T)[:, None]
+        rows = np.arange(n)[None, :]
+        idx = np.zeros((T, n), dtype=np.int64)
+        for _ in range(self._depth):
+            left = self._L[tix, idx]
+            leaf = left == -1
+            if leaf.all():
+                break
+            x = X[rows, self._F[tix, idx]]
+            nan = np.isnan(x)
+            go_left = np.where(nan, self._MS[tix, idx], x <= self._TH[tix, idx])
+            idx = np.where(leaf, idx, np.where(go_left, left, self._R[tix, idx]))
+        return self._V[tix, idx]
+
     @staticmethod
     def _tree_eval(t: Dict, X: np.ndarray) -> np.ndarray:
         n = X.shape[0]
@@ -229,7 +272,7 @@ class Portable:
             return 1.0 / (1.0 + np.exp(-a)) if self._out == "logistic" else a
         if self._f32:
             Z = Z.astype(np.float32).astype(np.float64)
-        vals = np.stack([self._tree_eval(t, Z) for t in self._trees])
+        vals = self._forest_eval(Z)
         raw = vals.mean(axis=0) if self._combine == "mean" else self._base + vals.sum(axis=0)
         if self._link == "logistic":
             return 1.0 / (1.0 + np.exp(-raw))

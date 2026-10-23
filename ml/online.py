@@ -31,8 +31,8 @@ class OnlineFeatures:
     def update(self, room_id: str, ts: datetime, values: Dict[str, Optional[float]]) -> Dict[str, float]:
         now = ts.timestamp()
         h = self._hist.setdefault(room_id, deque())
-        if h and now - h[-1][0] > MAX_GAP_S:
-            h.clear()
+        if h and (now - h[-1][0] > MAX_GAP_S or now <= h[-1][0]):
+            h.clear()                       # gap or time went backwards: start a new segment
         row = {k: (np.nan if values.get(k) is None else float(values[k])) for k in BASE}
         h.append((now, row))
         while h and now - h[0][0] > self.window_s:

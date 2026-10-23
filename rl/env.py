@@ -14,10 +14,12 @@ value of the last state is bootstrapped.
 Reward per room and decision (all terms dimensionless, see docs/RL.md):
    r = -( w_E * E / E_max              energy: AC + boost fan + lighting over the 5 min, divided by
                                        the room's maximum AC + lighting energy over 5 min
-          + w_C * mean_occ max(0, |PMV| - 0.5)          thermal discomfort (ISO 7730 cat. B limit)
+          + w_C * mean_occ max(0, |PMV| - 0.5)          thermal discomfort severity (ISO 7730 cat. B limit)
+          + w_T * share of minutes occupied with |PMV| > 0.5     discomfort duration (reward v2)
           + w_V * mean_occ max(0, 300 - lux) / 300      visual: task illuminance below 300 lux
           + w_Q * mean_occ max(0, CO2 - 1000) / 500     indoor air (true CO2)
-          + w_S * (number of command changes) )         switching / cycling
+          + w_SL * light changes + w_SA * AC changes )  switching / cycling
+   Weights (v2): w_E 1, w_C 2, w_T 1, w_V 1, w_Q 1, w_SL 0.1, w_SA 0.3 (v1: 1, 3, 0, 1, 1, 0.05, 0.05).
    mean_occ averages over the minutes with people present (zero when the room is empty);
    transit rooms (corridors) have no comfort terms, as in the evaluation metrics.
 The reward uses the simulator's true state; the policy only sees the observation.
@@ -44,7 +46,14 @@ try:                                  # gymnasium is a training dependency, not 
 except ImportError:                   # pragma: no cover
     _gym, _spaces, _EnvBase = None, None, object
 
-REWARD_WEIGHTS = {"energy": 1.0, "comfort": 3.0, "visual": 1.0, "iaq": 1.0, "switch": 0.05}
+# Reward v1 (first training runs, models/ppo_runs/seed0, seed1): its policies saved 16 % energy but
+# spent more of the occupied time outside |PMV| <= 0.5 and cycled the AC often, and failed the
+# registry's comfort acceptance test.  v2 adds the duration of discomfort (the quantity the acceptance
+# test and the evaluation report) and separate, larger switching penalties.
+REWARD_WEIGHTS_V1 = {"energy": 1.0, "comfort": 3.0, "comfort_time": 0.0, "visual": 1.0, "iaq": 1.0,
+                     "switch_light": 0.05, "switch_ac": 0.05}
+REWARD_WEIGHTS = {"energy": 1.0, "comfort": 2.0, "comfort_time": 1.0, "visual": 1.0, "iaq": 1.0,
+                  "switch_light": 0.1, "switch_ac": 0.3}
 TRAIN_SCENARIOS = ("normal", "hot_weather", "cool_weather", "high_occupancy", "low_occupancy", "sudden_occupancy",
                    "unusual_demand")
 
@@ -111,7 +120,7 @@ class BuildingVecEnv:
             out[rid] = (o, p, problems)
         return out
 
-    def _apply(self, rid: str, light: str, hvac: str, sp: Optional[float], ob) -> int:
+    def _apply(self, rid: str, light: str, hvac: str, sp: Optional[float], ob) -> tuple:
         o, p, _ = ob
         rs = self.b.specs[rid]
         if hvac == "NORMAL" and sp is None:
@@ -120,8 +129,8 @@ class BuildingVecEnv:
         new = _cmd(va.light, va.hvac, va.setpoint, va.vent_boost)
         prev = self.cmd[rid]
         if new == prev:
-            return 0
-        changes = int(new["light"] != prev["light"]) + int((new["hvac"], new["sp"]) != (prev["hvac"], prev["sp"]))
+            return 0, 0
+        changes = (int(new["light"] != prev["light"]), int((new["hvac"], new["sp"]) != (prev["hvac"], prev["sp"])))
         self.cmd[rid] = new
         self.b.apply(rid, new["light"], new["hvac"], new["sp"], new["vent"])
         return changes
@@ -146,7 +155,8 @@ class BuildingVecEnv:
             light, hvac, sp = action_command(int(a), b.specs[rid].design_setpoint)
             targets[rid] = apply_dwell(self.builder, o, light, hvac, sp)[:3]
         e0 = {rid: self._ctrl_energy(rid) for rid in self.ids}
-        acc = {rid: np.zeros(5) for rid in self.ids}          # comfort, visual, iaq, switches, occupied minutes
+        # comfort excess, visual, iaq, light switches, occupied minutes, uncomfortable minutes, AC changes
+        acc = {rid: np.zeros(7) for rid in self.ids}
         obs = self._last_obs
         fallbacks = 0
         for k in range(self.n_steps_per_decision):
@@ -158,7 +168,9 @@ class BuildingVecEnv:
                     d = self.fallback.decide(obs[rid][0])
                     light, hvac, sp = d.light_action, d.hvac_action, d.setpoint_c
                     fallbacks += 1
-                acc[rid][3] += self._apply(rid, light, hvac, sp, obs[rid])
+                ch_light, ch_ac = self._apply(rid, light, hvac, sp, obs[rid])
+                acc[rid][3] += ch_light
+                acc[rid][6] += ch_ac
             self._advance()
             for rid in self.ids:
                 rs = b.specs[rid]
@@ -166,6 +178,7 @@ class BuildingVecEnv:
                     tr = b.truth(rid)
                     pmv = tr["pmv"] if tr["pmv"] is not None else 0.0
                     acc[rid][0] += max(0.0, abs(pmv) - 0.5)
+                    acc[rid][5] += abs(pmv) > 0.5
                     acc[rid][1] += max(0.0, 300.0 - (tr["daylight_lux"] + tr["electric_lux"])) / 300.0
                     acc[rid][2] += max(0.0, tr["co2"] - 1000.0) / 500.0
                     acc[rid][4] += 1
@@ -177,9 +190,8 @@ class BuildingVecEnv:
             e = self._ctrl_energy(rid) - e0[rid]
             e_max = (ov["ac_max_electric_w"] + ov["lighting_w_full"]) * n * CONTROL_DT / 3600.0
             c = acc[rid]
-            occ_share = c[4] / n
-            terms = (w["energy"] * e / e_max + w["comfort"] * c[0] / n + w["visual"] * c[1] / n
-                     + w["iaq"] * c[2] / n + w["switch"] * c[3])
+            terms = (w["energy"] * e / e_max + w["comfort"] * c[0] / n + w["comfort_time"] * c[5] / n
+                     + w["visual"] * c[1] / n + w["iaq"] * c[2] / n + w["switch_light"] * c[3] + w["switch_ac"] * c[6])
             rewards[i] = -terms
             info["energy_wh"] += e
             info["discomfort"] += c[0] / n

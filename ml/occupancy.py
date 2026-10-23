@@ -451,7 +451,12 @@ def write_report(comp: pd.DataFrame, tests: pd.DataFrame, legacy: Dict, syn: Dic
                            ["method", "f1", "precision", "recall", "balanced_accuracy", "roc_auc"]),
                   "", "This model learns the simulator's sensor models; it is registered as a candidate for the "
                   "simulated rooms only and runs in shadow mode until it passes the promotion gate."]
-    lines += ["", "## Registered models", ""] + [f"- `{t}` {v} (models/registry/{t}/{v}/)" for t, v in registered.items()]
+    if registered:
+        lines += ["", "## Registered models", ""] + [f"- `{t}` {v} (models/registry/{t}/{v}/)" for t, v in registered.items()]
+    else:
+        from ml.common import registry_note
+        lines += ["", "## Registry", "", registry_note(["occupancy_rf", "occupancy_best", "occupancy_co2_temporal",
+                                                        "occupancy_twin_fusion"])]
     with open(REPORT, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 

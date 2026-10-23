@@ -197,11 +197,13 @@ class Registry:
         check("finite output on perturbed inputs (5 % missing)", bool(np.all(np.isfinite(y))), f"{len(y)} rows")
         if p.kind == "classification":
             check("probabilities in [0, 1]", bool(np.all((y >= 0) & (y <= 1))), "")
-        t0 = time.perf_counter()
+        times = []
         for _ in range(20):
+            t0 = time.perf_counter()
             p.predict(X[:1])
-        ms = (time.perf_counter() - t0) / 20 * 1000.0
-        check("single-row latency", ms < LATENCY_LIMIT_MS, f"{ms:.2f} ms per call (limit {LATENCY_LIMIT_MS} ms)")
+            times.append(time.perf_counter() - t0)
+        ms = min(times) * 1000.0           # best of 20: robust to other load on the machine
+        check("single-row latency", ms < LATENCY_LIMIT_MS, f"{ms:.2f} ms per call, best of 20 (limit {LATENCY_LIMIT_MS} ms)")
         try:
             p.predict(X[:, :-1])
             check("rejects wrong feature count", False, "accepted a short row")

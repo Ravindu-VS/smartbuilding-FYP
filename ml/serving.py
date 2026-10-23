@@ -130,6 +130,15 @@ class LiveModels:
             return
         try:
             with self.lock:
+                ts = twin.ctrl.time
+                last = getattr(self, "_last_twin_time", None)
+                if last is not None and (ts <= last or (ts - last).total_seconds() > 600):
+                    # the twin was reset or jumped: per-room histories no longer apply
+                    self.features = OnlineFeatures()
+                    self.thermal_online = ThermalOnline()
+                    self.pending.clear()
+                    self.latest_thermal.clear()
+                self._last_twin_time = ts
                 self._step += 1
                 self._shadow_step(twin, obs)
                 if self._step % 5 == 0:

@@ -179,3 +179,14 @@ def feature_reference(X: np.ndarray, features: Sequence[str]) -> Dict[str, Dict]
         out[f] = {"deciles": [float(v) for v in q], "mean": float(ok.mean()), "std": float(ok.std()),
                   "min": float(ok.min()), "max": float(ok.max()), "missing_share": float(1 - len(ok) / len(col))}
     return out
+
+
+def registry_note(tasks: Sequence[str]) -> str:
+    """One line naming the registry's active version of each task (for reports of evaluation-only runs)."""
+    try:
+        from ml.registry import Registry
+        reg = Registry()
+        parts = [f"`{t}` {(reg.active(t) or {}).get('version') or 'no active version'}" for t in tasks]
+    except Exception as e:                       # pragma: no cover
+        return f"registry not readable ({e})"
+    return "Evaluation-only run (nothing registered). Registry active versions: " + ", ".join(parts)

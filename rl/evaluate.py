@@ -45,7 +45,44 @@ KEYS = ["energy_kwh", "hvac_kwh", "lighting_kwh", "plug_kwh", "controllable_kwh"
         "consistency_room_sum_minus_total_kwh"]
 
 
+CACHE_DIR = os.path.join(ROOT, "experiments", "results", "run_cache")
+
+
+def _source_hash(controller: str, policy: Optional[str]) -> str:
+    """Hash of everything a run depends on: simulator and controller code, the policy file, and the
+    registry's active occupancy_rf (used by threshold_rf).  A cached run is reused only on a match."""
+    import glob
+    import hashlib
+    h = hashlib.sha256()
+    files = sorted(glob.glob(os.path.join(ROOT, "twin", "*.py"))) + [os.path.join(ROOT, "rl", f) for f in
+                                                                    ("policy.py", "ppo.py", "evaluate.py")]
+    for f in files + ([policy] if policy else []):
+        with open(f, "rb") as fh:
+            h.update(fh.read().replace(b"\r\n", b"\n"))
+    if controller == "threshold_rf":
+        from ml.registry import Registry
+        h.update(str((Registry().active("occupancy_rf") or {}).get("version")).encode())
+    return h.hexdigest()[:16]
+
+
 def _job(args) -> Dict:
+    controller, scenario, seed, days, policy, start = args
+    key = f"{controller}_{scenario}_s{seed}_d{days:g}_{start:%Y%m%d}_{_source_hash(controller, policy if controller == 'ppo' else None)}"
+    cache = os.path.join(CACHE_DIR, key + ".json")
+    if os.path.exists(cache):
+        with open(cache, encoding="utf-8") as f:
+            r = json.load(f)
+        r["cached"] = True
+        return r
+    r = _run(args)
+    if r["status"] == "ok":
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(cache, "w", encoding="utf-8") as f:
+            json.dump(r, f, default=str)
+    return r
+
+
+def _run(args) -> Dict:
     controller, scenario, seed, days, policy, start = args
     t0 = time.perf_counter()
     try:

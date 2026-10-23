@@ -71,7 +71,11 @@ Controller -> proposed action -> SafetyLayer (R1 valid values and set-point 22-2
 R3 heat-stress guard, R4 CO2 fresh-air rule) -> command to the board -> the next reading reports the
 actuator state (`actuator_fan_speed`, `actuator_light_level`, `actuator_servo_angle`) -> event log.
 Over MQTT the board also acknowledges each command (`sb.ack/1`); an unacknowledged command is marked
-`timeout` after 10 s. When the board cannot reach the edge, the firmware itself switches the fan and LED
+`timeout` after 10 s. Each reading's reported actuator levels are compared with the previous command
+(`control.previous_command_verified`, stored as `decisions.verified`); three mismatches in a row raise an event.
+Manual control: `POST /api/hardware/override` sets bounded fan/LED/damper levels for 1-240 min (the AI is bypassed,
+the room shows MANUAL OVERRIDE, the override ends by itself or with `clear`). The AI switch (AI OFF) returns
+every room to the conventional schedule. When the board cannot reach the edge, the firmware itself switches the fan and LED
 off (`apply_actuation("ECO", "OFF", 0, 0, -1)`) and shows a red status LED.
 
 ## MQTT topics and schemas

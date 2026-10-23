@@ -141,3 +141,23 @@ def test_end_to_end_flow(brain):
     st2 = brain.get_current_state()
     assert [x["room_id"] for x in st2["rooms"]] == [x["room_id"] for x in st["rooms"]]
     assert threading.active_count() <= threads0 + 1
+
+
+def test_manual_override_and_actuator_verification(brain):
+    c = _client(brain)
+    d = brain.inject_hardware_data(dict(READING, source="sensor_node", msg_id="v-1"))
+    # the board reports exactly what it was told -> verified
+    brain.inject_hardware_data(dict(READING, source="sensor_node", msg_id="v-2",
+                                    actuator_fan_speed=d["fan_speed"], actuator_light_level=d["light_level"]))
+    hw = next(r for r in brain.get_current_state()["rooms"] if r["source"] == "hardware")
+    assert hw["control"]["previous_command_verified"] is True
+    assert c.post("/api/hardware/override", json={"room_id": HARDWARE_ROOM_ID, "fan_speed": 999,
+                                                   "light_level": 40, "minutes": 5}).status_code == 200
+    r = brain.inject_hardware_data(dict(READING, source="sensor_node", msg_id="v-3"))
+    assert r["fan_speed"] == 255 and r["light_level"] == 40          # bounded and applied
+    hw = next(x for x in brain.get_current_state()["rooms"] if x["source"] == "hardware")
+    assert hw["control"]["mode"] == "manual"
+    assert c.post("/api/hardware/override", json={"room_id": HARDWARE_ROOM_ID, "minutes": 999}).status_code == 400
+    assert c.post("/api/hardware/override", json={"room_id": HARDWARE_ROOM_ID, "clear": True}).status_code == 200
+    r = brain.inject_hardware_data(dict(READING, source="sensor_node", msg_id="v-4"))
+    assert next(x for x in brain.get_current_state()["rooms"] if x["source"] == "hardware")["control"]["mode"] != "manual"

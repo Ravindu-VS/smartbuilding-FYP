@@ -64,7 +64,7 @@ def run_control(cfg, out_dir):
         from ml.registry import Registry
         act = Registry().active("ppo_policy")
         if act is None:
-            cand = sorted(glob.glob(os.path.join(ROOT, "models", "ppo_runs", "*", "policy_best.json")))
+            cand = sorted(glob.glob(os.path.join(ROOT, "models", "ppo_runs", "v2_seed*", "policy_best.json")))
             if not cand:
                 return "BLOCKED", {"reason": "no PPO policy (train with python -m rl.train)"}
             policy = cfg.get("policy") or cand[0]
@@ -130,7 +130,7 @@ def extra_ppo_seed_variability():
     """Every PPO training run's best policy on the same evaluation (normal scenario, seeds 1-3)."""
     from rl.evaluate import compare
     out = {}
-    for path in sorted(glob.glob(os.path.join(ROOT, "models", "ppo_runs", "seed*", "policy_best.json"))):
+    for path in sorted(glob.glob(os.path.join(ROOT, "models", "ppo_runs", "v2_seed*", "policy_best.json"))):
         run = os.path.basename(os.path.dirname(path))
         res = compare(["ppo"], ["normal"], [1, 2, 3], 7.0, path, workers=2)
         m = res["summary"]["normal"]["ppo"]
@@ -147,7 +147,7 @@ EXTRA = {"controller_failure": extra_controller_failure, "model_load_failure": e
 def run_ml(cfg, out_dir):
     import importlib
     mod = importlib.import_module(cfg["module"])
-    rc = mod.main([])
+    rc = mod.main(["--no-register"])        # reproduce the evaluation; registering is a separate decision
     report = {"ml.occupancy": "occupancy.md", "ml.thermal": "thermal.md", "ml.energy": "energy.md"}[cfg["module"]]
     src = os.path.join(ROOT, "docs", "results", report)
     if os.path.exists(src):
