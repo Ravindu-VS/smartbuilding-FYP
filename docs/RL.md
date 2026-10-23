@@ -29,13 +29,21 @@ described as one. `RoomControlEnv` is the gymnasium view of one room (passes gym
 * **Actions (12)** - light {OFF, DIM, ON} x AC {ECO, LOW (27 C), NORMAL at design + 1 C, NORMAL at design};
   set-points 22-27 C only; the AC command may change at most once per 10 min. No actuator the building does
   not have (the fresh-air fan stays under the safety rule R4).
-* **Reward** per room and decision, all terms dimensionless:
-  `r = -(1.0 E/E_max + 3.0 D + 1.0 V + 1.0 Q + 0.05 S)` with E = AC + boost fan + lighting energy over the
-  5 min, E_max = the room's maximum AC + lighting energy over 5 min; D = mean over occupied minutes of
-  max(0, |PMV| - 0.5); V = mean over occupied minutes of max(0, 300 lux - illuminance)/300; Q = mean over
-  occupied minutes of max(0, CO2 - 1000 ppm)/500; S = number of command changes. Comfort terms are zero in
-  empty rooms and in transit rooms (corridors). The reward uses the simulator's true state; the policy sees
-  only the observation. Weights mirror the multi-objective controller's (comfort weighted 3 x energy).
+* **Reward (v2)** per room and decision, all terms dimensionless:
+  `r = -(1.0 E/E_max + 2.0 D + 1.0 T + 1.0 V + 1.0 Q + 0.1 S_light + 0.3 S_AC)` with E = AC + boost fan +
+  lighting energy over the 5 min, E_max = the room's maximum AC + lighting energy over 5 min; D = mean over
+  occupied minutes of max(0, |PMV| - 0.5) (severity); T = share of the 5 min with people present and
+  |PMV| > 0.5 (duration); V = mean over occupied minutes of max(0, 300 lux - illuminance)/300; Q = mean over
+  occupied minutes of max(0, CO2 - 1000 ppm)/500; S = number of light / AC command changes. Comfort terms are
+  zero in empty rooms and in transit rooms (corridors). The reward uses the simulator's true state; the policy
+  sees only the observation.
+* **Reward v1 and why it was changed.** The first runs used `-(1.0 E/E_max + 3.0 D + 1.0 V + 1.0 Q + 0.05 S)`
+  (severity only, small switching cost). On the registration evaluation (normal, hot, high occupancy; seeds
+  1-3; 7 days) that policy saved 16.0 % / 10.6 % / 14.6 % energy against the schedule but people spent more of
+  the occupied time outside |PMV| <= 0.5 (25.5 % vs 21.7 % in the normal scenario) and the AC switched on/off
+  2,066 times a week (schedule 324). It failed the registry's comfort test and stays a rejected candidate
+  (`models/registry/ppo_policy/v1`, `experiments/results/ppo_registration/`). v2 adds the duration term and
+  larger switching costs; it was trained from scratch with the same settings.
 * **Episodes** 1 simulated day after a 12-h warm-up under the schedule; truncated (not terminated) at the
   horizon, so the last state is bootstrapped. Training scenarios: normal, hot, cool, high, low and sudden
   occupancy, unusual demand; random start dates in 2026; simulator seeds 1000 + 1000 x run + episode
@@ -46,9 +54,12 @@ described as one. `RoomControlEnv` is the gymnasium view of one room (passes gym
 
 PPO: clipped surrogate (0.2), GAE (gamma 0.99, lambda 0.95), Adam lr 1e-3 decaying, 10 epochs, minibatch
 512, entropy 0.005 -> 0.001, value coefficient 0.5, gradient-norm clip 0.5, actor and critic 64-64 tanh.
-160 one-day episodes per run (1.15 M room-decisions). Every 5 episodes the deterministic policy is scored on
-a fixed validation day (seed 999); the best is kept (`models/ppo_runs/seed<k>/policy_best.json`, training
-log `train_log.csv`).
+160 one-day episodes per run (1.15 M room-decisions, about 50 min per run on 2 vCPUs). Every 5 episodes the
+deterministic policy is scored on a fixed validation day (seed 999); the best is kept
+(`models/ppo_runs/v2_seed<k>/policy_best.json`, training log `train_log.csv`). Two training seeds per reward
+version. Selection rule, fixed in advance: the run with the best validation return - v2 seed 0 (episode 159,
+validation return -93.9; seed 1: -94.1). The selected policy is then evaluated on the held-out seeds 1-3 and
+registered only if it passes the acceptance test: `ppo_policy` v2 passed and is the approved version.
 
 ## Deployment
 

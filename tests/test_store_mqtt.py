@@ -141,3 +141,37 @@ def test_export_keeps_provenance_classes_apart(tmp_path):
     assert r.returncode == 0
     rows = list(csv.DictReader(open(out)))
     assert len(rows) == 1 and rows[0]["provenance"] == "room101_measured"
+
+
+def test_bridge_reconnects_after_broker_restart(tmp_path):
+    """The broker goes away and comes back on the same port: the bridge reports the disconnect and
+    reconnects by itself (paho back-off 1-30 s)."""
+    import asyncio, threading
+    amqtt_broker = pytest.importorskip("amqtt.broker")
+    from tests.conftest import free_port
+    port = free_port()
+    cfg = {"listeners": {"default": {"type": "tcp", "bind": f"127.0.0.1:{port}"}}, "sys_interval": 0,
+           "auth": {"allow-anonymous": True, "plugins": ["auth_anonymous"]}, "topic-check": {"enabled": False}}
+
+    def start_broker():
+        loop = asyncio.new_event_loop()
+        b = amqtt_broker.Broker(cfg, loop=loop)
+        threading.Thread(target=lambda: (asyncio.set_event_loop(loop), loop.run_until_complete(b.start()),
+                                         loop.run_forever()), daemon=True).start()
+        return loop, b
+
+    loop, b = start_broker()
+    time.sleep(1.5)
+    events = []
+    bridge = MqttBridge(lambda p: {}, [ROOM], host="127.0.0.1", port=port, client_id="edge-reconnect",
+                        on_event=lambda k, t, r: events.append(t))
+    bridge.start()
+    assert wait_for(lambda: bridge.connected)
+    asyncio.run_coroutine_threadsafe(b.shutdown(), loop).result(timeout=10)
+    assert wait_for(lambda: not bridge.connected, timeout=15)
+    loop2, b2 = start_broker()
+    assert wait_for(lambda: bridge.connected, timeout=40)
+    assert bridge.status()["stats"]["reconnects"] >= 1
+    assert any("disconnected" in e for e in events)
+    bridge.stop()
+    asyncio.run_coroutine_threadsafe(b2.shutdown(), loop2)

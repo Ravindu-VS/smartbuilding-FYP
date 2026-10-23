@@ -1,0 +1,46 @@
+{
+  "seed": 1,
+  "episodes": 160,
+  "days_per_episode": 1.0,
+  "ppo": {
+    "gamma": 0.99,
+    "lam": 0.95,
+    "clip": 0.2,
+    "lr": 0.001,
+    "epochs": 10,
+    "minibatch": 512,
+    "ent_coef": 0.005,
+    "vf_coef": 0.5,
+    "max_grad_norm": 0.5,
+    "hidden": [
+      64,
+      64
+    ]
+  },
+  "reward_weights": {
+    "energy": 1.0,
+    "comfort": 2.0,
+    "comfort_time": 1.0,
+    "visual": 1.0,
+    "iaq": 1.0,
+    "switch_light": 0.1,
+    "switch_ac": 0.3
+  },
+  "train_scenarios": [
+    "normal",
+    "hot_weather",
+    "cool_weather",
+    "high_occupancy",
+    "low_occupancy",
+    "sudden_occupancy",
+    "unusual_demand"
+  ],
+  "n_obs": 24,
+  "n_act": 12,
+  "validation": {
+    "seed": 999,
+    "start": "2026-04-06T00:00:00",
+    "scenario": "normal"
+  },
+  "started": "2026-10-23T15:16:30"
+}

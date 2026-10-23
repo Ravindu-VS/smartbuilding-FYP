@@ -1,0 +1,402 @@
+{
+  "kind": "classification",
+  "target": "Occupancy (1 = occupied)",
+  "features": [
+    "Temperature",
+    "Humidity",
+    "Light",
+    "CO2",
+    "HumidityRatio",
+    "CO2_d5",
+    "CO2_d15",
+    "CO2_std15",
+    "T_d15",
+    "HR_d15",
+    "Light_d1",
+    "Light_mean5"
+  ],
+  "feature_units": {
+    "Temperature": "degC",
+    "Humidity": "%RH",
+    "Light": "lux",
+    "CO2": "ppm",
+    "HumidityRatio": "kg/kg",
+    "CO2_d5": "ppm/5min",
+    "CO2_d15": "ppm/15min",
+    "CO2_std15": "ppm",
+    "T_d15": "K/15min",
+    "HR_d15": "kg/kg per 15min",
+    "Light_d1": "lux/min",
+    "Light_mean5": "lux"
+  },
+  "feature_set": "env_temporal",
+  "feature_code": "ml/features.py (add_features for tables, OnlineFeatures for live readings)",
+  "model_family": "hist_gbt",
+  "estimator": "HistGradientBoostingClassifier",
+  "params": {
+    "categorical_features": "from_dtype",
+    "class_weight": null,
+    "early_stopping": false,
+    "interaction_cst": null,
+    "l2_regularization": 1.0,
+    "learning_rate": 0.05,
+    "loss": "log_loss",
+    "max_bins": 255,
+    "max_depth": null,
+    "max_features": 1.0,
+    "max_iter": 250,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "monotonic_cst": null,
+    "n_iter_no_change": 10,
+    "random_state": 42,
+    "scoring": "loss",
+    "tol": 0.0,
+    "validation_fraction": 0.1,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "threshold": 0.5,
+  "seed": 42,
+  "selection": "highest validation F1 over all models and feature sets",
+  "training": {
+    "dataset": "uci_occupancy",
+    "file": "data/processed/uci_occupancy.csv",
+    "sha256": "eafa3a795bd85c8253ac8536de1fcb002f848f5e67b752f4d5d256ee498e1923",
+    "split": "protocol B train+validation (datatest + datatraining)",
+    "rows": 10808,
+    "first": "2015-02-02 14:19:00",
+    "last": "2015-02-10 09:33:00",
+    "positive_share": 0.249907,
+    "provenance": "public_real"
+  },
+  "test_metrics": {
+    "B_test": {
+      "n": 9752,
+      "positive_share": 0.210111,
+      "accuracy": 0.991797,
+      "balanced_accuracy": 0.9923,
+      "precision": 0.968586,
+      "recall": 0.993167,
+      "f1": 0.980723,
+      "roc_auc": 0.997651,
+      "average_precision": 0.987437,
+      "confusion": {
+        "tn": 7637,
+        "fp": 66,
+        "fn": 14,
+        "tp": 2035
+      },
+      "threshold": 0.5,
+      "predict_us_per_row": 20.663694
+    },
+    "A_test1": {
+      "n": 2665,
+      "positive_share": 0.364728,
+      "accuracy": 0.951595,
+      "balanced_accuracy": 0.944815,
+      "precision": 0.946032,
+      "recall": 0.919753,
+      "f1": 0.932707,
+      "roc_auc": 0.989798,
+      "average_precision": 0.973001,
+      "confusion": {
+        "tn": 1642,
+        "fp": 51,
+        "fn": 78,
+        "tp": 894
+      },
+      "threshold": 0.5,
+      "predict_us_per_row": 35.233869
+    },
+    "A_test2": {
+      "n": 9752,
+      "positive_share": 0.210111,
+      "accuracy": 0.97621,
+      "balanced_accuracy": 0.954134,
+      "precision": 0.969024,
+      "recall": 0.916057,
+      "f1": 0.941796,
+      "roc_auc": 0.997279,
+      "average_precision": 0.986778,
+      "confusion": {
+        "tn": 7643,
+        "fp": 60,
+        "fn": 172,
+        "tp": 1877
+      },
+      "threshold": 0.5,
+      "predict_us_per_row": 41.109541
+    }
+  },
+  "feature_reference": {
+    "Temperature": {
+      "deciles": [
+        19.0,
+        19.39,
+        19.79,
+        20.2,
+        20.4175,
+        20.7,
+        20.89,
+        21.29,
+        21.79,
+        22.39,
+        24.408333
+      ],
+      "mean": 20.819992,
+      "std": 1.07836,
+      "min": 19.0,
+      "max": 24.408333,
+      "missing_share": 0.0
+    },
+    "Humidity": {
+      "deciles": [
+        16.745,
+        19.1,
+        20.5,
+        22.5,
+        24.5,
+        25.68,
+        26.7,
+        27.525,
+        30.55,
+        33.0,
+        39.1175
+      ],
+      "mean": 25.638407,
+      "std": 4.953563,
+      "min": 16.745,
+      "max": 39.1175,
+      "missing_share": 0.0
+    },
+    "Light": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        140.45,
+        433.0,
+        467.333333,
+        1697.25
+      ],
+      "mean": 137.694088,
+      "std": 212.165667,
+      "min": 0.0,
+      "max": 1697.25,
+      "missing_share": 0.0
+    },
+    "CO2": {
+      "deciles": [
+        412.75,
+        434.0,
+        438.666667,
+        444.0,
+        451.5,
+        464.0,
+        493.5,
+        636.975,
+        853.433333,
+        1088.0,
+        2028.5
+      ],
+      "mean": 634.00507,
+      "std": 312.802798,
+      "min": 412.75,
+      "max": 2028.5,
+      "missing_share": 0.0
+    },
+    "HumidityRatio": {
+      "deciles": [
+        0.002674,
+        0.002835,
+        0.003126,
+        0.003389,
+        0.003699,
+        0.003805,
+        0.004001,
+        0.004295,
+        0.004565,
+        0.004939,
+        0.006476
+      ],
+      "mean": 0.003903,
+      "std": 0.000803,
+      "min": 0.002674,
+      "max": 0.006476,
+      "missing_share": 0.0
+    },
+    "CO2_d5": {
+      "deciles": [
+        -568.5,
+        -13.633333,
+        -6.5,
+        -4.0,
+        -2.0,
+        -0.5,
+        1.0,
+        3.0,
+        5.666667,
+        15.5,
+        739.5
+      ],
+      "mean": 0.310027,
+      "std": 19.654995,
+      "min": -568.5,
+      "max": 739.5,
+      "missing_share": 0.00111
+    },
+    "CO2_d15": {
+      "deciles": [
+        -517.333333,
+        -36.0,
+        -10.75,
+        -5.5,
+        -3.0,
+        -1.0,
+        1.0,
+        3.0,
+        6.5,
+        40.0,
+        731.0
+      ],
+      "mean": 0.661572,
+      "std": 37.471316,
+      "min": -517.333333,
+      "max": 731.0,
+      "missing_share": 0.002776
+    },
+    "CO2_std15": {
+      "deciles": [
+        1.248809,
+        2.289448,
+        2.612509,
+        2.88,
+        3.19278,
+        3.577451,
+        4.275314,
+        7.658421,
+        13.21536,
+        20.034115,
+        259.668517
+      ],
+      "mean": 8.278168,
+      "std": 12.938761,
+      "min": 1.248809,
+      "max": 259.668517,
+      "missing_share": 0.00037
+    },
+    "T_d15": {
+      "deciles": [
+        -0.45,
+        -0.11,
+        -0.091667,
+        -0.05,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.059333,
+        0.123333,
+        0.71
+      ],
+      "mean": -0.002101,
+      "std": 0.121558,
+      "min": -0.45,
+      "max": 0.71,
+      "missing_share": 0.002776
+    },
+    "HR_d15": {
+      "deciles": [
+        -0.000304,
+        -5.7e-05,
+        -3.1e-05,
+        -1.8e-05,
+        -1e-05,
+        -1e-06,
+        3e-06,
+        1.3e-05,
+        2.7e-05,
+        6.2e-05,
+        0.000344
+      ],
+      "mean": 1e-06,
+      "std": 6.2e-05,
+      "min": -0.000304,
+      "max": 0.000344,
+      "missing_share": 0.002776
+    },
+    "Light_d1": {
+      "deciles": [
+        -1011.5,
+        -3.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        3.0,
+        934.833333
+      ],
+      "mean": 0.129158,
+      "std": 29.27495,
+      "min": -1011.5,
+      "max": 934.833333,
+      "missing_share": 0.00037
+    },
+    "Light_mean5": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        143.831667,
+        433.0,
+        466.62,
+        1148.443333
+      ],
+      "mean": 137.590966,
+      "std": 210.613726,
+      "min": 0.0,
+      "max": 1148.443333,
+      "missing_share": 0.0
+    }
+  },
+  "synthetic_domain_metrics": null,
+  "inference": {
+    "input_validation": "missing feature -> ModelError; NaN -> imputed median (trees/linear) or native missing handling (gradient boosting); inf -> ModelError",
+    "runtime": "numpy only (ml/portable.py)"
+  },
+  "training_code": "ml/occupancy.py",
+  "trained_utc": "2026-10-23T09:22:47Z",
+  "git_commit": "cbd03a3",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "provenance": "prediction",
+  "task": "occupancy_best",
+  "version": "v1",
+  "files": {
+    "model.json": {
+      "sha256": "d921a57226121498fa94f4072a221b458b8bf0538281f581525eb36fb4aedbaa",
+      "bytes": 297634
+    },
+    "model.joblib": {
+      "sha256": "38bc791244c005b29432cc0bb992f3d5a7162ee385c328ee786b04a9f9c4dfa7",
+      "bytes": 168976
+    }
+  }
+}

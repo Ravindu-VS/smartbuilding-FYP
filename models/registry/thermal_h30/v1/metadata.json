@@ -1,0 +1,725 @@
+{
+  "kind": "regression",
+  "target": "room air temperature change over the next 30 min (degC); prediction = current measured temperature + model output",
+  "horizon_min": 30,
+  "features": [
+    "T",
+    "T_lag5",
+    "T_lag10",
+    "T_lag15",
+    "dT5",
+    "dT15",
+    "RH",
+    "CO2",
+    "CO2_d15",
+    "pir_recent",
+    "ac_on",
+    "ac_low",
+    "setpoint_gap",
+    "ac_power_frac",
+    "min_since_hvac_change",
+    "light_level",
+    "vent",
+    "t_out",
+    "t_out_gap",
+    "ghi",
+    "hour_sin",
+    "hour_cos",
+    "area_m2",
+    "ac_w_per_m3",
+    "window_m2"
+  ],
+  "feature_units": {
+    "T": "degC",
+    "T_lag5": "degC",
+    "T_lag10": "degC",
+    "T_lag15": "degC",
+    "dT5": "K (T - T 5 min ago)",
+    "dT15": "K (T - T 15 min ago)",
+    "RH": "%",
+    "CO2": "ppm",
+    "CO2_d15": "ppm/15min",
+    "pir_recent": "0/1 (motion in last 10 min)",
+    "ac_on": "0/1 (NORMAL)",
+    "ac_low": "0/1 (LOW = 27 C setback)",
+    "setpoint_gap": "K (T - active set-point, 0 when AC off)",
+    "ac_power_frac": "AC sub-meter power / AC maximum electric power",
+    "min_since_hvac_change": "min (capped at 120)",
+    "light_level": "0/0.4/1",
+    "vent": "0/1",
+    "t_out": "degC",
+    "t_out_gap": "K (t_out - T)",
+    "ghi": "W/m2",
+    "hour_sin": "-",
+    "hour_cos": "-",
+    "area_m2": "m2",
+    "ac_w_per_m3": "W/m3",
+    "window_m2": "m2"
+  },
+  "feature_code": "ml/thermal.py twin_frame()",
+  "model_family": "hist_gbt",
+  "estimator": "HistGradientBoostingRegressor",
+  "seed": 42,
+  "training": {
+    "dataset": "synthetic twin corpus",
+    "files": [
+      "normal_seed11_mo",
+      "normal_seed12_schedule",
+      "hot_weather_seed13_mo",
+      "cool_weather_seed14_mo",
+      "high_occupancy_seed15_mo",
+      "low_occupancy_seed16_schedule"
+    ],
+    "rows": 402300,
+    "sha256": {
+      "normal_seed11_mo": "737398fbce2d484b80e6a70e70baf807e072b8c1f8b108257d0682f1a919abdb",
+      "normal_seed12_schedule": "c2109a342fd5e6532580f326bde881c52c8e2b947aef6ddabc92d2a0d5ea2118",
+      "hot_weather_seed13_mo": "d542e9a74bb8495efd300183c8c854fe7519c9dac2b390864e8d6774a77f6528",
+      "cool_weather_seed14_mo": "7b8bb86856fb1098d84b01db7edfc963db08f42c3abba818ff0c0187c72a026b",
+      "high_occupancy_seed15_mo": "d5045d31a1ca4035662de82c012dd14e072ec0b0e6ca9ae8cda491cb5ac22523",
+      "low_occupancy_seed16_schedule": "4ac71bde21215c87b5a8636bf39cdc9dee09224387160216e5b1e13add3e0c5e"
+    },
+    "provenance": "synthetic"
+  },
+  "test_files": [
+    "normal_seed21_mo",
+    "hot_weather_seed22_schedule",
+    "hvac_reduced_seed23_mo"
+  ],
+  "feature_reference": {
+    "T": {
+      "deciles": [
+        21.38,
+        22.99,
+        23.65,
+        23.8,
+        24.01,
+        24.69,
+        25.36,
+        25.73,
+        26.46,
+        28.25,
+        38.0
+      ],
+      "mean": 25.264741,
+      "std": 2.54159,
+      "min": 21.38,
+      "max": 38.0,
+      "missing_share": 0.0
+    },
+    "T_lag5": {
+      "deciles": [
+        21.38,
+        22.99,
+        23.65,
+        23.8,
+        24.01,
+        24.69,
+        25.36,
+        25.73,
+        26.46,
+        28.25,
+        38.0
+      ],
+      "mean": 25.264634,
+      "std": 2.541576,
+      "min": 21.38,
+      "max": 38.0,
+      "missing_share": 0.000373
+    },
+    "T_lag10": {
+      "deciles": [
+        21.38,
+        22.99,
+        23.65,
+        23.8,
+        24.01,
+        24.69,
+        25.36,
+        25.73,
+        26.46,
+        28.25,
+        38.0
+      ],
+      "mean": 25.264532,
+      "std": 2.541566,
+      "min": 21.38,
+      "max": 38.0,
+      "missing_share": 0.000746
+    },
+    "T_lag15": {
+      "deciles": [
+        21.38,
+        22.99,
+        23.65,
+        23.8,
+        24.01,
+        24.69,
+        25.36,
+        25.73,
+        26.46,
+        28.25,
+        38.0
+      ],
+      "mean": 25.26442,
+      "std": 2.541547,
+      "min": 21.38,
+      "max": 38.0,
+      "missing_share": 0.001119
+    },
+    "dT5": {
+      "deciles": [
+        -3.36,
+        -0.19,
+        -0.12,
+        -0.07,
+        -0.03,
+        0.01,
+        0.05,
+        0.09,
+        0.14,
+        0.21,
+        2.63
+      ],
+      "mean": -0.000128,
+      "std": 0.271373,
+      "min": -3.36,
+      "max": 2.63,
+      "missing_share": 0.000373
+    },
+    "dT15": {
+      "deciles": [
+        -7.91,
+        -0.2,
+        -0.12,
+        -0.07,
+        -0.03,
+        0.02,
+        0.06,
+        0.11,
+        0.17,
+        0.27,
+        5.17
+      ],
+      "mean": -0.00043,
+      "std": 0.553723,
+      "min": -7.91,
+      "max": 5.17,
+      "missing_share": 0.001119
+    },
+    "RH": {
+      "deciles": [
+        35.4,
+        62.0,
+        66.3,
+        69.5,
+        72.6,
+        75.4,
+        77.9,
+        80.4,
+        83.2,
+        86.8,
+        100.0
+      ],
+      "mean": 74.661402,
+      "std": 10.022345,
+      "min": 35.4,
+      "max": 100.0,
+      "missing_share": 0.0
+    },
+    "CO2": {
+      "deciles": [
+        380.0,
+        415.0,
+        424.0,
+        433.0,
+        443.0,
+        456.0,
+        476.0,
+        505.0,
+        541.0,
+        592.0,
+        1057.0
+      ],
+      "mean": 485.654912,
+      "std": 82.27108,
+      "min": 380.0,
+      "max": 1057.0,
+      "missing_share": 0.0
+    },
+    "CO2_d15": {
+      "deciles": [
+        -161.0,
+        -29.0,
+        -19.0,
+        -12.0,
+        -6.0,
+        0.0,
+        6.0,
+        12.0,
+        19.0,
+        29.0,
+        151.0
+      ],
+      "mean": 0.001538,
+      "std": 23.416072,
+      "min": -161.0,
+      "max": 151.0,
+      "missing_share": 0.001119
+    },
+    "pir_recent": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.590537,
+      "std": 0.491735,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "ac_on": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.675165,
+      "std": 0.468313,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "ac_low": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "mean": 0.004074,
+      "std": 0.063698,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "setpoint_gap": {
+      "deciles": [
+        -2.69,
+        -0.42,
+        -0.33,
+        -0.25,
+        -0.17,
+        -0.09,
+        0.0,
+        0.0,
+        0.0,
+        0.01,
+        13.65
+      ],
+      "mean": -0.11285,
+      "std": 0.501045,
+      "min": -2.69,
+      "max": 13.65,
+      "missing_share": 0.0
+    },
+    "ac_power_frac": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.152181,
+        0.239674,
+        0.319846,
+        0.414704,
+        0.520264,
+        0.634292,
+        1.325437
+      ],
+      "mean": 0.274406,
+      "std": 0.26603,
+      "min": 0.0,
+      "max": 1.325437,
+      "missing_share": 0.0
+    },
+    "min_since_hvac_change": {
+      "deciles": [
+        0.0,
+        40.0,
+        110.0,
+        120.0,
+        120.0,
+        120.0,
+        120.0,
+        120.0,
+        120.0,
+        120.0,
+        120.0
+      ],
+      "mean": 104.888441,
+      "std": 33.533233,
+      "min": 0.0,
+      "max": 120.0,
+      "missing_share": 0.0
+    },
+    "light_level": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.410069,
+      "std": 0.485813,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "vent": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "missing_share": 0.0
+    },
+    "t_out": {
+      "deciles": [
+        21.803,
+        24.628,
+        25.335,
+        26.283,
+        27.399,
+        28.411,
+        29.359,
+        30.372,
+        31.256,
+        32.204,
+        36.129
+      ],
+      "mean": 28.386799,
+      "std": 2.971605,
+      "min": 21.803,
+      "max": 36.129,
+      "missing_share": 0.0
+    },
+    "t_out_gap": {
+      "deciles": [
+        -7.089,
+        -1.45,
+        -0.245,
+        0.846,
+        1.746,
+        2.834,
+        4.059,
+        5.377,
+        6.652,
+        8.084,
+        14.348
+      ],
+      "mean": 3.122058,
+      "std": 3.647531,
+      "min": -7.089,
+      "max": 14.348,
+      "missing_share": 0.0
+    },
+    "ghi": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        196.24,
+        412.14,
+        694.13,
+        896.78,
+        1020.01
+      ],
+      "mean": 271.712913,
+      "std": 355.601496,
+      "min": 0.0,
+      "max": 1020.01,
+      "missing_share": 0.0
+    },
+    "hour_sin": {
+      "deciles": [
+        -0.99999,
+        -0.952396,
+        -0.809017,
+        -0.587785,
+        -0.317305,
+        0.004363,
+        0.317305,
+        0.587785,
+        0.809017,
+        0.952396,
+        0.99999
+      ],
+      "mean": 0.000161,
+      "std": 0.707887,
+      "min": -0.99999,
+      "max": 0.99999,
+      "missing_share": 0.0
+    },
+    "hour_cos": {
+      "deciles": [
+        -0.99999,
+        -0.952396,
+        -0.809017,
+        -0.587785,
+        -0.317305,
+        -0.004363,
+        0.304864,
+        0.587785,
+        0.803857,
+        0.948324,
+        0.99999
+      ],
+      "mean": -0.00223,
+      "std": 0.706322,
+      "min": -0.99999,
+      "max": 0.99999,
+      "missing_share": 0.0
+    },
+    "area_m2": {
+      "deciles": [
+        40.0,
+        48.0,
+        63.2,
+        80.0,
+        80.0,
+        120.0,
+        120.0,
+        120.0,
+        160.0,
+        180.0,
+        240.0
+      ],
+      "mean": 113.28,
+      "std": 54.596352,
+      "min": 40.0,
+      "max": 240.0,
+      "missing_share": 0.0
+    },
+    "ac_w_per_m3": {
+      "deciles": [
+        45.789931,
+        45.789931,
+        45.789931,
+        45.789931,
+        45.789931,
+        45.789931,
+        45.789931,
+        45.789931,
+        45.789931,
+        45.789931,
+        45.789931
+      ],
+      "mean": 45.789931,
+      "std": 0.0,
+      "min": 45.789931,
+      "max": 45.789931,
+      "missing_share": 0.0
+    },
+    "window_m2": {
+      "deciles": [
+        0.0,
+        4.0,
+        5.44,
+        6.4,
+        8.0,
+        12.8,
+        17.6,
+        21.12,
+        23.552,
+        34.56,
+        35.84
+      ],
+      "mean": 14.8224,
+      "std": 10.852283,
+      "min": 0.0,
+      "max": 35.84,
+      "missing_share": 0.0
+    }
+  },
+  "test_metrics": {
+    "persistence": {
+      "all": {
+        "n": 150750,
+        "mae": 0.340627,
+        "rmse": 0.906883,
+        "bias": 0.000488,
+        "r2": 0.895486,
+        "cv_rmse_pct": 3.546188,
+        "nmbe_pct": 0.00191
+      },
+      "hvac_reduced_unseen": {
+        "n": 50250,
+        "mae": 0.333497,
+        "rmse": 0.793045,
+        "bias": 0.000939,
+        "r2": 0.885561,
+        "cv_rmse_pct": 3.114807,
+        "nmbe_pct": 0.003689
+      }
+    },
+    "greybox_1r1c": {
+      "all": {
+        "n": 150750,
+        "mae": 0.332209,
+        "rmse": 0.771802,
+        "bias": -0.044495,
+        "r2": 0.924302,
+        "cv_rmse_pct": 3.017981,
+        "nmbe_pct": -0.173991
+      },
+      "hvac_reduced_unseen": {
+        "n": 50250,
+        "mae": 0.372481,
+        "rmse": 0.77929,
+        "bias": -0.140027,
+        "r2": 0.889497,
+        "cv_rmse_pct": 3.060781,
+        "nmbe_pct": -0.549979
+      }
+    },
+    "ridge": {
+      "all": {
+        "n": 150750,
+        "mae": 0.353532,
+        "rmse": 0.823344,
+        "bias": -0.049444,
+        "r2": 0.913854,
+        "cv_rmse_pct": 3.219523,
+        "nmbe_pct": -0.193341
+      },
+      "hvac_reduced_unseen": {
+        "n": 50250,
+        "mae": 0.373308,
+        "rmse": 0.841321,
+        "bias": -0.115436,
+        "r2": 0.871204,
+        "cv_rmse_pct": 3.304417,
+        "nmbe_pct": -0.453391
+      }
+    },
+    "hist_gbt": {
+      "all": {
+        "n": 150750,
+        "mae": 0.266669,
+        "rmse": 0.640737,
+        "bias": -0.032845,
+        "r2": 0.947829,
+        "cv_rmse_pct": 2.505476,
+        "nmbe_pct": -0.128432
+      },
+      "hvac_reduced_unseen": {
+        "n": 50250,
+        "mae": 0.291966,
+        "rmse": 0.668252,
+        "bias": -0.039948,
+        "r2": 0.918743,
+        "cv_rmse_pct": 2.624663,
+        "nmbe_pct": -0.1569
+      }
+    }
+  },
+  "real_data_check_uci": {
+    "persistence": {
+      "n": 9722,
+      "mae": 0.126431,
+      "rmse": 0.20285,
+      "bias": 0.003115,
+      "r2": 0.960544,
+      "cv_rmse_pct": 0.965991,
+      "nmbe_pct": 0.014833
+    },
+    "ridge": {
+      "n": 9722,
+      "mae": 0.117623,
+      "rmse": 0.168327,
+      "bias": -0.029157,
+      "r2": 0.972831,
+      "cv_rmse_pct": 0.801589,
+      "nmbe_pct": -0.138846
+    },
+    "hist_gbt": {
+      "n": 9722,
+      "mae": 0.114104,
+      "rmse": 0.164722,
+      "bias": 0.01951,
+      "r2": 0.973983,
+      "cv_rmse_pct": 0.784421,
+      "nmbe_pct": 0.09291
+    }
+  },
+  "training_code": "ml/thermal.py",
+  "trained_utc": "2026-10-23T09:26:54Z",
+  "git_commit": "cbd03a3",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "provenance": "prediction",
+  "task": "thermal_h30",
+  "version": "v1",
+  "files": {
+    "model.json": {
+      "sha256": "49e93d68ec0902218dba90a61a90b6d782843bc9ce5e93db20f5255a0f39567f",
+      "bytes": 973699
+    },
+    "model.joblib": {
+      "sha256": "6478b4089a1c4386967a39a725e5e5a84d121cf18b1eb2f9d7a56c26b28906ee",
+      "bytes": 641345
+    }
+  }
+}

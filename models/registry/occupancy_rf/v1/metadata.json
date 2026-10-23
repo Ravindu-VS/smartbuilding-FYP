@@ -1,0 +1,246 @@
+{
+  "kind": "classification",
+  "target": "Occupancy (1 = occupied)",
+  "features": [
+    "Temperature",
+    "Humidity",
+    "Light",
+    "CO2",
+    "HumidityRatio"
+  ],
+  "feature_units": {
+    "Temperature": "degC",
+    "Humidity": "%RH",
+    "Light": "lux",
+    "CO2": "ppm",
+    "HumidityRatio": "kg/kg"
+  },
+  "feature_set": "env",
+  "feature_code": "ml/features.py (add_features for tables, OnlineFeatures for live readings)",
+  "model_family": "random_forest",
+  "estimator": "RandomForestClassifier",
+  "params": {
+    "bootstrap": true,
+    "ccp_alpha": 0.0,
+    "class_weight": null,
+    "criterion": "gini",
+    "max_depth": 12,
+    "max_features": "sqrt",
+    "max_leaf_nodes": null,
+    "max_samples": null,
+    "min_impurity_decrease": 0.0,
+    "min_samples_leaf": 5,
+    "min_samples_split": 2,
+    "min_weight_fraction_leaf": 0.0,
+    "monotonic_cst": null,
+    "n_estimators": 150,
+    "n_jobs": 2,
+    "oob_score": false,
+    "random_state": 42,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "threshold": 0.5,
+  "seed": 42,
+  "selection": "random forest on the project's original five inputs",
+  "training": {
+    "dataset": "uci_occupancy",
+    "file": "data/processed/uci_occupancy.csv",
+    "sha256": "eafa3a795bd85c8253ac8536de1fcb002f848f5e67b752f4d5d256ee498e1923",
+    "split": "protocol B train+validation (datatest + datatraining)",
+    "rows": 10808,
+    "first": "2015-02-02 14:19:00",
+    "last": "2015-02-10 09:33:00",
+    "positive_share": 0.249907,
+    "provenance": "public_real"
+  },
+  "test_metrics": {
+    "B_test": {
+      "n": 9752,
+      "positive_share": 0.210111,
+      "accuracy": 0.988515,
+      "balanced_accuracy": 0.991118,
+      "precision": 0.951937,
+      "recall": 0.995608,
+      "f1": 0.973282,
+      "roc_auc": 0.996731,
+      "average_precision": 0.985714,
+      "confusion": {
+        "tn": 7600,
+        "fp": 103,
+        "fn": 9,
+        "tp": 2040
+      },
+      "threshold": 0.5,
+      "predict_us_per_row": 9.887553
+    },
+    "A_test1": {
+      "n": 2665,
+      "positive_share": 0.364728,
+      "accuracy": 0.935835,
+      "balanced_accuracy": 0.922552,
+      "precision": 0.946488,
+      "recall": 0.873457,
+      "f1": 0.908507,
+      "roc_auc": 0.985874,
+      "average_precision": 0.959078,
+      "confusion": {
+        "tn": 1645,
+        "fp": 48,
+        "fn": 123,
+        "tp": 849
+      },
+      "threshold": 0.5,
+      "predict_us_per_row": 33.540464
+    },
+    "A_test2": {
+      "n": 9752,
+      "positive_share": 0.210111,
+      "accuracy": 0.979389,
+      "balanced_accuracy": 0.961698,
+      "precision": 0.969512,
+      "recall": 0.931186,
+      "f1": 0.949963,
+      "roc_auc": 0.995543,
+      "average_precision": 0.983675,
+      "confusion": {
+        "tn": 7643,
+        "fp": 60,
+        "fn": 141,
+        "tp": 1908
+      },
+      "threshold": 0.5,
+      "predict_us_per_row": 11.639805
+    }
+  },
+  "feature_reference": {
+    "Temperature": {
+      "deciles": [
+        19.0,
+        19.39,
+        19.79,
+        20.2,
+        20.4175,
+        20.7,
+        20.89,
+        21.29,
+        21.79,
+        22.39,
+        24.408333
+      ],
+      "mean": 20.819992,
+      "std": 1.07836,
+      "min": 19.0,
+      "max": 24.408333,
+      "missing_share": 0.0
+    },
+    "Humidity": {
+      "deciles": [
+        16.745,
+        19.1,
+        20.5,
+        22.5,
+        24.5,
+        25.68,
+        26.7,
+        27.525,
+        30.55,
+        33.0,
+        39.1175
+      ],
+      "mean": 25.638407,
+      "std": 4.953563,
+      "min": 16.745,
+      "max": 39.1175,
+      "missing_share": 0.0
+    },
+    "Light": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        140.45,
+        433.0,
+        467.333333,
+        1697.25
+      ],
+      "mean": 137.694088,
+      "std": 212.165667,
+      "min": 0.0,
+      "max": 1697.25,
+      "missing_share": 0.0
+    },
+    "CO2": {
+      "deciles": [
+        412.75,
+        434.0,
+        438.666667,
+        444.0,
+        451.5,
+        464.0,
+        493.5,
+        636.975,
+        853.433333,
+        1088.0,
+        2028.5
+      ],
+      "mean": 634.00507,
+      "std": 312.802798,
+      "min": 412.75,
+      "max": 2028.5,
+      "missing_share": 0.0
+    },
+    "HumidityRatio": {
+      "deciles": [
+        0.002674,
+        0.002835,
+        0.003126,
+        0.003389,
+        0.003699,
+        0.003805,
+        0.004001,
+        0.004295,
+        0.004565,
+        0.004939,
+        0.006476
+      ],
+      "mean": 0.003903,
+      "std": 0.000803,
+      "min": 0.002674,
+      "max": 0.006476,
+      "missing_share": 0.0
+    }
+  },
+  "synthetic_domain_metrics": null,
+  "inference": {
+    "input_validation": "missing feature -> ModelError; NaN -> imputed median (trees/linear) or native missing handling (gradient boosting); inf -> ModelError",
+    "runtime": "numpy only (ml/portable.py)"
+  },
+  "training_code": "ml/occupancy.py",
+  "trained_utc": "2026-10-23T09:22:46Z",
+  "git_commit": "cbd03a3",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "provenance": "prediction",
+  "task": "occupancy_rf",
+  "version": "v1",
+  "files": {
+    "model.json": {
+      "sha256": "6a58089fb1a61cb6b074ccebf57aa7cd8457adae1454d8c598b6e5b9cc38897f",
+      "bytes": 652266
+    },
+    "model.joblib": {
+      "sha256": "732938e0eb60d14be3b5c56711d7c1e28391fd67805ed7ed1894d3e7f03a4331",
+      "bytes": 419235
+    }
+  }
+}

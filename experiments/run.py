@@ -79,7 +79,7 @@ def run_control(cfg, out_dir):
         with open(os.path.join(out_dir, "extra.json"), "w", encoding="utf-8") as f:
             json.dump(extra, f, indent=1, default=str)
         with open(os.path.join(out_dir, "summary.md"), "a", encoding="utf-8") as f:
-            f.write("\n## Additional failure cases\n\n")
+            f.write("\n## Additional checks\n\n")
             for k, v in extra.items():
                 f.write(f"- **{k}**: {v['result']}\n")
     errors = [r for r in res["runs"] if r["status"] != "ok"]
@@ -140,8 +140,31 @@ def extra_ppo_seed_variability():
     return {"passed": bool(out), "runs": out, "result": f"best policy of each training run on normal/seeds 1-3 - {txt}"}
 
 
+def extra_ppo_confirmation_new_seeds():
+    """The approved PPO policy against the schedule and the optimiser on seeds 4-6. The reward was redesigned
+    (v1 -> v2) after v1's evaluation on seeds 1-3, so this checks the result on seeds that played no part in
+    that decision (and were never used for training: training uses simulator seeds >= 1000)."""
+    from ml.registry import Registry
+    from rl.evaluate import compare
+    act = Registry().active("ppo_policy")
+    if act is None:
+        return {"passed": False, "result": "no approved ppo_policy version"}
+    res = compare(["schedule", "mo", "ppo"], ["normal"], [4, 5, 6], 7.0, os.path.join(act["path"], "policy.json"),
+                  workers=2)
+    errors = [r.get("error") for r in res["runs"] if r["status"] != "ok"]
+    s = res["summary"]["normal"]
+    keys = ("energy_kwh", "energy_kwh_sd", "savings_vs_schedule_pct", "discomfort_share", "discomfort_pmv_h",
+            "iaq_min", "ac_cycles", "light_switches")
+    out = {c: {k: s[c].get(k) for k in keys} for c in ("schedule", "mo", "ppo") if c in s}
+    txt = "; ".join(f"{c}: {v['energy_kwh']:.0f} kWh ({v['savings_vs_schedule_pct']:+.1f} % vs schedule), "
+                    f"discomfort {100 * v['discomfort_share']:.1f} %, AC cycles {v['ac_cycles']:.0f}" for c, v in out.items())
+    return {"passed": not errors, "errors": errors, "version": act.get("version"), "runs": out,
+            "result": f"ppo_policy {act.get('version')} on normal / seeds 4-6 (not used in the reward redesign) - {txt}"}
+
+
 EXTRA = {"controller_failure": extra_controller_failure, "model_load_failure": extra_model_load_failure,
-         "ppo_seed_variability": extra_ppo_seed_variability}
+         "ppo_seed_variability": extra_ppo_seed_variability,
+         "ppo_confirmation_new_seeds": extra_ppo_confirmation_new_seeds}
 
 
 def run_ml(cfg, out_dir):

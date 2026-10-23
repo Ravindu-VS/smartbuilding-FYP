@@ -1,0 +1,1116 @@
+{
+  "format": "smartbuilding-registry/1",
+  "tasks": {
+    "energy_dayahead": {
+      "active": "v1",
+      "history": [
+        {
+          "action": "promotion_rejected",
+          "version": "v1",
+          "utc": "2026-10-23T09:27:12Z",
+          "report": {
+            "task": "energy_dayahead",
+            "version": "v1",
+            "utc": "2026-10-23T09:27:12Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "20 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "single-row latency",
+                "passed": false,
+                "detail": "15.75 ms per call (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 2.89e-15"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.hist_gbt_lags.test_seen_buildings.cv_rmse_pct = 15.372497"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "15.3725 vs reference 22.5094 (CV(RMSE) below the seasonal-naive baseline on the 2017 test months)"
+              }
+            ],
+            "passed": false
+          }
+        },
+        {
+          "action": "promote",
+          "version": "v1",
+          "previous": null,
+          "utc": "2026-10-23T09:31:59Z",
+          "forced": null,
+          "report": {
+            "task": "energy_dayahead",
+            "version": "v1",
+            "utc": "2026-10-23T09:31:59Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "20 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "single-row latency",
+                "passed": true,
+                "detail": "0.26 ms per call, best of 20 (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 2.89e-15"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.hist_gbt_lags.test_seen_buildings.cv_rmse_pct = 15.372497"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "15.3725 vs reference 22.5094 (CV(RMSE) below the seasonal-naive baseline on the 2017 test months)"
+              }
+            ],
+            "passed": true
+          }
+        }
+      ]
+    },
+    "occupancy_best": {
+      "active": "v1",
+      "history": [
+        {
+          "action": "promotion_rejected",
+          "version": "v1",
+          "utc": "2026-10-23T09:27:13Z",
+          "report": {
+            "task": "occupancy_best",
+            "version": "v1",
+            "utc": "2026-10-23T09:27:13Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "12 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "probabilities in [0, 1]",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "check": "single-row latency",
+                "passed": false,
+                "detail": "11.33 ms per call (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 2.22e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.B_test.f1 = 0.980723"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.9807 vs reference 0.8000 (held-out week F1 >= 0.80 and not worse than the active version by > 0.01)"
+              }
+            ],
+            "passed": false
+          }
+        },
+        {
+          "action": "promote",
+          "version": "v1",
+          "previous": null,
+          "utc": "2026-10-23T09:31:59Z",
+          "forced": null,
+          "report": {
+            "task": "occupancy_best",
+            "version": "v1",
+            "utc": "2026-10-23T09:31:59Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "12 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "probabilities in [0, 1]",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "check": "single-row latency",
+                "passed": true,
+                "detail": "0.27 ms per call, best of 20 (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 2.22e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.B_test.f1 = 0.980723"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.9807 vs reference 0.8000 (held-out week F1 >= 0.80 and not worse than the active version by > 0.01)"
+              }
+            ],
+            "passed": true
+          }
+        }
+      ]
+    },
+    "occupancy_co2_temporal": {
+      "active": null,
+      "history": [
+        {
+          "action": "promotion_rejected",
+          "version": "v1",
+          "utc": "2026-10-23T09:27:13Z",
+          "report": {
+            "task": "occupancy_co2_temporal",
+            "version": "v1",
+            "utc": "2026-10-23T09:27:13Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "4 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "probabilities in [0, 1]",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "check": "single-row latency",
+                "passed": true,
+                "detail": "0.03 ms per call (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 1.36e-20"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.B_test.f1 = 0.464761"
+              },
+              {
+                "check": "beats reference",
+                "passed": false,
+                "detail": "0.4648 vs reference 0.5296 (must beat the deployed CO2 decision tree on the held-out week (F1 0.5296, docs/results/occupancy.md))"
+              }
+            ],
+            "passed": false
+          }
+        },
+        {
+          "action": "promotion_rejected",
+          "version": "v1",
+          "utc": "2026-10-23T09:31:59Z",
+          "report": {
+            "task": "occupancy_co2_temporal",
+            "version": "v1",
+            "utc": "2026-10-23T09:31:59Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "4 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "probabilities in [0, 1]",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "check": "single-row latency",
+                "passed": true,
+                "detail": "0.03 ms per call, best of 20 (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 1.36e-20"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.B_test.f1 = 0.464761"
+              },
+              {
+                "check": "beats reference",
+                "passed": false,
+                "detail": "0.4648 vs reference 0.5296 (must beat the deployed CO2 decision tree on the held-out week (F1 0.5296, docs/results/occupancy.md))"
+              }
+            ],
+            "passed": false
+          }
+        }
+      ]
+    },
+    "occupancy_rf": {
+      "active": "v1",
+      "history": [
+        {
+          "action": "promotion_rejected",
+          "version": "v1",
+          "utc": "2026-10-23T09:27:13Z",
+          "report": {
+            "task": "occupancy_rf",
+            "version": "v1",
+            "utc": "2026-10-23T09:27:13Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "5 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "probabilities in [0, 1]",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "check": "single-row latency",
+                "passed": false,
+                "detail": "10.98 ms per call (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 1.11e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.B_test.f1 = 0.973282"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.9733 vs reference 0.8000 (held-out week F1 >= 0.80 (UCI 11-18 Feb) and not worse than the active version by > 0.01)"
+              }
+            ],
+            "passed": false
+          }
+        },
+        {
+          "action": "promote",
+          "version": "v1",
+          "previous": null,
+          "utc": "2026-10-23T09:31:59Z",
+          "forced": null,
+          "report": {
+            "task": "occupancy_rf",
+            "version": "v1",
+            "utc": "2026-10-23T09:31:59Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "5 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "probabilities in [0, 1]",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "check": "single-row latency",
+                "passed": true,
+                "detail": "0.22 ms per call, best of 20 (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 1.11e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.B_test.f1 = 0.973282"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.9733 vs reference 0.8000 (held-out week F1 >= 0.80 (UCI 11-18 Feb) and not worse than the active version by > 0.01)"
+              }
+            ],
+            "passed": true
+          }
+        }
+      ]
+    },
+    "occupancy_twin_fusion": {
+      "active": "v1",
+      "history": [
+        {
+          "action": "promotion_rejected",
+          "version": "v1",
+          "utc": "2026-10-23T09:27:13Z",
+          "report": {
+            "task": "occupancy_twin_fusion",
+            "version": "v1",
+            "utc": "2026-10-23T09:27:13Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "13 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "probabilities in [0, 1]",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "check": "single-row latency",
+                "passed": false,
+                "detail": "15.02 ms per call (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 2.22e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.learned_fusion_hist_gbt.f1 = 0.961972"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.9620 vs reference 0.9321 (must beat the hand-built PIR+CO2 fusion estimator on the same synthetic test seed)"
+              }
+            ],
+            "passed": false
+          }
+        },
+        {
+          "action": "promote",
+          "version": "v1",
+          "previous": null,
+          "utc": "2026-10-23T09:31:59Z",
+          "forced": null,
+          "report": {
+            "task": "occupancy_twin_fusion",
+            "version": "v1",
+            "utc": "2026-10-23T09:31:59Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "13 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "probabilities in [0, 1]",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "check": "single-row latency",
+                "passed": true,
+                "detail": "0.24 ms per call, best of 20 (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 2.22e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.learned_fusion_hist_gbt.f1 = 0.961972"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.9620 vs reference 0.9321 (must beat the hand-built PIR+CO2 fusion estimator on the same synthetic test seed)"
+              }
+            ],
+            "passed": true
+          }
+        }
+      ]
+    },
+    "thermal_h15": {
+      "active": "v1",
+      "history": [
+        {
+          "action": "promotion_rejected",
+          "version": "v1",
+          "utc": "2026-10-23T09:27:14Z",
+          "report": {
+            "task": "thermal_h15",
+            "version": "v1",
+            "utc": "2026-10-23T09:27:14Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "25 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "single-row latency",
+                "passed": false,
+                "detail": "17.82 ms per call (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 1.11e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.hist_gbt.all.mae = 0.157741"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.1577 vs reference 0.2265 (MAE below persistence on unseen simulator seeds)"
+              }
+            ],
+            "passed": false
+          }
+        },
+        {
+          "action": "promote",
+          "version": "v1",
+          "previous": null,
+          "utc": "2026-10-23T09:31:59Z",
+          "forced": null,
+          "report": {
+            "task": "thermal_h15",
+            "version": "v1",
+            "utc": "2026-10-23T09:31:59Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "25 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "single-row latency",
+                "passed": true,
+                "detail": "0.19 ms per call, best of 20 (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 1.11e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.hist_gbt.all.mae = 0.157741"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.1577 vs reference 0.2265 (MAE below persistence on unseen simulator seeds)"
+              }
+            ],
+            "passed": true
+          }
+        }
+      ]
+    },
+    "thermal_h30": {
+      "active": "v1",
+      "history": [
+        {
+          "action": "promotion_rejected",
+          "version": "v1",
+          "utc": "2026-10-23T09:27:14Z",
+          "report": {
+            "task": "thermal_h30",
+            "version": "v1",
+            "utc": "2026-10-23T09:27:14Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "25 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "single-row latency",
+                "passed": false,
+                "detail": "13.43 ms per call (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 1.11e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.hist_gbt.all.mae = 0.266669"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.2667 vs reference 0.3406 (MAE below persistence on unseen simulator seeds)"
+              }
+            ],
+            "passed": false
+          }
+        },
+        {
+          "action": "promote",
+          "version": "v1",
+          "previous": null,
+          "utc": "2026-10-23T09:31:59Z",
+          "forced": null,
+          "report": {
+            "task": "thermal_h30",
+            "version": "v1",
+            "utc": "2026-10-23T09:31:59Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "file model.joblib intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "25 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "single-row latency",
+                "passed": true,
+                "detail": "0.21 ms per call, best of 20 (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "portable == scikit-learn",
+                "passed": true,
+                "detail": "max difference 1.11e-16"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.hist_gbt.all.mae = 0.266669"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.2667 vs reference 0.3406 (MAE below persistence on unseen simulator seeds)"
+              }
+            ],
+            "passed": true
+          }
+        }
+      ]
+    },
+    "ppo_policy": {
+      "active": "v2",
+      "history": [
+        {
+          "action": "promotion_rejected",
+          "version": "v1",
+          "report": {
+            "task": "ppo_policy",
+            "version": "v1",
+            "utc": "2026-10-23T09:39:36Z",
+            "checks": [
+              {
+                "check": "file policy.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "held-out evaluation present",
+                "passed": true,
+                "detail": "3 scenario(s)"
+              },
+              {
+                "check": "normal: no controller errors",
+                "passed": true,
+                "detail": "F2 0.0, F3 0.0"
+              },
+              {
+                "check": "normal: comfort",
+                "passed": false,
+                "detail": "discomfort share 0.255 vs schedule 0.217"
+              },
+              {
+                "check": "normal: energy",
+                "passed": true,
+                "detail": "9207 kWh vs schedule 10964 kWh"
+              },
+              {
+                "check": "hot_weather: no controller errors",
+                "passed": true,
+                "detail": "F2 0.0, F3 0.0"
+              },
+              {
+                "check": "hot_weather: comfort",
+                "passed": false,
+                "detail": "discomfort share 0.328 vs schedule 0.270"
+              },
+              {
+                "check": "hot_weather: energy",
+                "passed": true,
+                "detail": "10940 kWh vs schedule 12242 kWh"
+              },
+              {
+                "check": "high_occupancy: no controller errors",
+                "passed": true,
+                "detail": "F2 0.0, F3 0.0"
+              },
+              {
+                "check": "high_occupancy: comfort",
+                "passed": false,
+                "detail": "discomfort share 0.261 vs schedule 0.225"
+              },
+              {
+                "check": "high_occupancy: energy",
+                "passed": true,
+                "detail": "9586 kWh vs schedule 11228 kWh"
+              }
+            ],
+            "passed": false
+          }
+        },
+        {
+          "action": "promote",
+          "version": "v2",
+          "previous": null,
+          "utc": "2026-10-23T10:54:58Z",
+          "forced": null,
+          "report": {
+            "task": "ppo_policy",
+            "version": "v2",
+            "utc": "2026-10-23T10:54:58Z",
+            "checks": [
+              {
+                "check": "file policy.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "held-out evaluation present",
+                "passed": true,
+                "detail": "3 scenario(s)"
+              },
+              {
+                "check": "normal: no controller errors",
+                "passed": true,
+                "detail": "F2 0.0, F3 0.0"
+              },
+              {
+                "check": "normal: comfort",
+                "passed": true,
+                "detail": "discomfort share 0.052 vs schedule 0.217"
+              },
+              {
+                "check": "normal: energy",
+                "passed": true,
+                "detail": "9721 kWh vs schedule 10964 kWh"
+              },
+              {
+                "check": "hot_weather: no controller errors",
+                "passed": true,
+                "detail": "F2 0.0, F3 0.0"
+              },
+              {
+                "check": "hot_weather: comfort",
+                "passed": true,
+                "detail": "discomfort share 0.095 vs schedule 0.270"
+              },
+              {
+                "check": "hot_weather: energy",
+                "passed": true,
+                "detail": "11384 kWh vs schedule 12242 kWh"
+              },
+              {
+                "check": "high_occupancy: no controller errors",
+                "passed": true,
+                "detail": "F2 0.0, F3 0.0"
+              },
+              {
+                "check": "high_occupancy: comfort",
+                "passed": true,
+                "detail": "discomfort share 0.058 vs schedule 0.225"
+              },
+              {
+                "check": "high_occupancy: energy",
+                "passed": true,
+                "detail": "10055 kWh vs schedule 11228 kWh"
+              }
+            ],
+            "passed": true
+          }
+        }
+      ]
+    }
+  }
+}

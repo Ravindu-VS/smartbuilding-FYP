@@ -1,0 +1,227 @@
+{
+  "kind": "classification",
+  "target": "Occupancy (1 = occupied)",
+  "features": [
+    "CO2",
+    "CO2_d5",
+    "CO2_d15",
+    "CO2_std15"
+  ],
+  "feature_units": {
+    "CO2": "ppm",
+    "CO2_d5": "ppm/5min",
+    "CO2_d15": "ppm/15min",
+    "CO2_std15": "ppm"
+  },
+  "feature_set": "co2_temporal",
+  "feature_code": "ml/features.py (add_features for tables, OnlineFeatures for live readings)",
+  "model_family": "mlp",
+  "estimator": "MLPClassifier",
+  "params": {
+    "activation": "relu",
+    "alpha": 0.001,
+    "batch_size": "auto",
+    "beta_1": 0.9,
+    "beta_2": 0.999,
+    "early_stopping": false,
+    "epsilon": 0.0,
+    "learning_rate": "constant",
+    "learning_rate_init": 0.001,
+    "max_fun": 15000,
+    "max_iter": 300,
+    "momentum": 0.9,
+    "n_iter_no_change": 10,
+    "nesterovs_momentum": true,
+    "power_t": 0.5,
+    "random_state": 42,
+    "shuffle": true,
+    "solver": "adam",
+    "tol": 0.0001,
+    "validation_fraction": 0.1,
+    "verbose": false,
+    "warm_start": false
+  },
+  "threshold": 0.5,
+  "seed": 42,
+  "selection": "highest validation F1 using CO2 level and trends only",
+  "training": {
+    "dataset": "uci_occupancy",
+    "file": "data/processed/uci_occupancy.csv",
+    "sha256": "eafa3a795bd85c8253ac8536de1fcb002f848f5e67b752f4d5d256ee498e1923",
+    "split": "protocol B train+validation (datatest + datatraining)",
+    "rows": 10808,
+    "first": "2015-02-02 14:19:00",
+    "last": "2015-02-10 09:33:00",
+    "positive_share": 0.249907,
+    "provenance": "public_real"
+  },
+  "test_metrics": {
+    "B_test": {
+      "n": 9752,
+      "positive_share": 0.210111,
+      "accuracy": 0.633203,
+      "balanced_accuracy": 0.678978,
+      "precision": 0.335132,
+      "recall": 0.757931,
+      "f1": 0.464761,
+      "roc_auc": 0.741362,
+      "average_precision": 0.371693,
+      "confusion": {
+        "tn": 4622,
+        "fp": 3081,
+        "fn": 496,
+        "tp": 1553
+      },
+      "threshold": 0.5,
+      "predict_us_per_row": 7.207777
+    },
+    "A_test1": {
+      "n": 2665,
+      "positive_share": 0.364728,
+      "accuracy": 0.927955,
+      "balanced_accuracy": 0.92577,
+      "precision": 0.888446,
+      "recall": 0.917695,
+      "f1": 0.902834,
+      "roc_auc": 0.974401,
+      "average_precision": 0.955026,
+      "confusion": {
+        "tn": 1581,
+        "fp": 112,
+        "fn": 80,
+        "tp": 892
+      },
+      "threshold": 0.5,
+      "predict_us_per_row": 21.549765
+    },
+    "A_test2": {
+      "n": 9752,
+      "positive_share": 0.210111,
+      "accuracy": 0.626948,
+      "balanced_accuracy": 0.674481,
+      "precision": 0.330561,
+      "recall": 0.756467,
+      "f1": 0.460077,
+      "roc_auc": 0.751502,
+      "average_precision": 0.416029,
+      "confusion": {
+        "tn": 4564,
+        "fp": 3139,
+        "fn": 499,
+        "tp": 1550
+      },
+      "threshold": 0.5,
+      "predict_us_per_row": 8.670798
+    }
+  },
+  "feature_reference": {
+    "CO2": {
+      "deciles": [
+        412.75,
+        434.0,
+        438.666667,
+        444.0,
+        451.5,
+        464.0,
+        493.5,
+        636.975,
+        853.433333,
+        1088.0,
+        2028.5
+      ],
+      "mean": 634.00507,
+      "std": 312.802798,
+      "min": 412.75,
+      "max": 2028.5,
+      "missing_share": 0.0
+    },
+    "CO2_d5": {
+      "deciles": [
+        -568.5,
+        -13.633333,
+        -6.5,
+        -4.0,
+        -2.0,
+        -0.5,
+        1.0,
+        3.0,
+        5.666667,
+        15.5,
+        739.5
+      ],
+      "mean": 0.310027,
+      "std": 19.654995,
+      "min": -568.5,
+      "max": 739.5,
+      "missing_share": 0.00111
+    },
+    "CO2_d15": {
+      "deciles": [
+        -517.333333,
+        -36.0,
+        -10.75,
+        -5.5,
+        -3.0,
+        -1.0,
+        1.0,
+        3.0,
+        6.5,
+        40.0,
+        731.0
+      ],
+      "mean": 0.661572,
+      "std": 37.471316,
+      "min": -517.333333,
+      "max": 731.0,
+      "missing_share": 0.002776
+    },
+    "CO2_std15": {
+      "deciles": [
+        1.248809,
+        2.289448,
+        2.612509,
+        2.88,
+        3.19278,
+        3.577451,
+        4.275314,
+        7.658421,
+        13.21536,
+        20.034115,
+        259.668517
+      ],
+      "mean": 8.278168,
+      "std": 12.938761,
+      "min": 1.248809,
+      "max": 259.668517,
+      "missing_share": 0.00037
+    }
+  },
+  "synthetic_domain_metrics": null,
+  "inference": {
+    "input_validation": "missing feature -> ModelError; NaN -> imputed median (trees/linear) or native missing handling (gradient boosting); inf -> ModelError",
+    "runtime": "numpy only (ml/portable.py)"
+  },
+  "training_code": "ml/occupancy.py",
+  "trained_utc": "2026-10-23T09:22:47Z",
+  "git_commit": "cbd03a3",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "provenance": "prediction",
+  "task": "occupancy_co2_temporal",
+  "version": "v1",
+  "files": {
+    "model.json": {
+      "sha256": "09db99d302b8f628ba0aaadd8c5c3fa1df2abffc2f68e4a324617f35ef0bd1a2",
+      "bytes": 17393
+    },
+    "model.joblib": {
+      "sha256": "54eab74a553830e613ab24ee7e5e16b11994d7d0454cecddc9521ec47c793ddb",
+      "bytes": 27800
+    }
+  }
+}

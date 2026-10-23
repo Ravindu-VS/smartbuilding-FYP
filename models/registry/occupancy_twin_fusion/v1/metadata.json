@@ -1,0 +1,398 @@
+{
+  "kind": "classification",
+  "target": "true simulated head count > 0",
+  "features": [
+    "pir_2min",
+    "pir_10min",
+    "pir_20min",
+    "pir_log",
+    "CO2",
+    "CO2_d5",
+    "CO2_d15",
+    "CO2_std15",
+    "T_d15",
+    "HR_d15",
+    "hour_sin",
+    "hour_cos",
+    "weekday"
+  ],
+  "feature_units": {
+    "pir_2min": "0/1 motion in last 2 min",
+    "pir_10min": "0/1 motion in last 10 min",
+    "pir_20min": "0/1 motion in last 20 min",
+    "pir_log": "ln(1 + seconds since motion), capped at 1 day",
+    "CO2": "ppm",
+    "CO2_d5": "ppm/5min",
+    "CO2_d15": "ppm/15min",
+    "CO2_std15": "ppm",
+    "T_d15": "K/15min",
+    "HR_d15": "kg/kg per 15min",
+    "hour_sin": "-",
+    "hour_cos": "-",
+    "weekday": "0/1"
+  },
+  "feature_set": "twin_fusion",
+  "feature_code": "ml/features.py (CO2/T/HR trends) + ml/occupancy.py pir_features()",
+  "model_family": "hist_gbt",
+  "estimator": "HistGradientBoostingClassifier",
+  "threshold": 0.5,
+  "seed": 42,
+  "selection": "single candidate; compared with the hand-built FusionEstimator on a different seed and controller",
+  "training": {
+    "dataset": "synthetic twin, one-minute rows",
+    "file": "data/synthetic/normal_seed31_mo.csv.gz",
+    "sha256": "957a6231e130ea7ea439d92fabb814a9b56e5f73e783e927ba6794a792661607",
+    "rows": 231840,
+    "first": "2026-03-02 00:01:00",
+    "last": "2026-03-09 00:00:00",
+    "positive_share": 0.523331,
+    "split": "seed 31 (MO controller); test seed 32 (schedule controller)",
+    "provenance": "synthetic"
+  },
+  "test_metrics": {
+    "learned_fusion_hist_gbt": {
+      "n": 132480,
+      "positive_share": 0.533107,
+      "accuracy": 0.959224,
+      "balanced_accuracy": 0.958642,
+      "precision": 0.956572,
+      "recall": 0.967434,
+      "f1": 0.961972,
+      "roc_auc": 0.990114,
+      "average_precision": 0.991667,
+      "confusion": {
+        "tn": 58752,
+        "fp": 3102,
+        "fn": 2300,
+        "tp": 68326
+      },
+      "threshold": 0.5
+    },
+    "handbuilt_fusion_estimator": {
+      "n": 132480,
+      "positive_share": 0.533107,
+      "accuracy": 0.923324,
+      "balanced_accuracy": 0.91878,
+      "precision": 0.88268,
+      "recall": 0.987413,
+      "f1": 0.932113,
+      "roc_auc": 0.976186,
+      "average_precision": 0.967617,
+      "confusion": {
+        "tn": 52585,
+        "fp": 9269,
+        "fn": 889,
+        "tp": 69737
+      },
+      "threshold": 0.5
+    },
+    "pir_only_10min": {
+      "n": 132480,
+      "positive_share": 0.533107,
+      "accuracy": 0.923279,
+      "balanced_accuracy": 0.918761,
+      "precision": 0.882904,
+      "recall": 0.986988,
+      "f1": 0.932049,
+      "roc_auc": 0.918761,
+      "average_precision": 0.878352,
+      "confusion": {
+        "tn": 52609,
+        "fp": 9245,
+        "fn": 919,
+        "tp": 69707
+      },
+      "threshold": 0.5
+    }
+  },
+  "feature_reference": {
+    "pir_2min": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.510477,
+      "std": 0.49989,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "pir_10min": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.583907,
+      "std": 0.492909,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "pir_20min": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.627981,
+      "std": 0.483344,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "pir_log": {
+      "deciles": [
+        2.772589,
+        2.772589,
+        2.772589,
+        3.433987,
+        3.828641,
+        4.663439,
+        6.679599,
+        7.976252,
+        8.963928,
+        9.759964,
+        11.366755
+      ],
+      "mean": 5.734179,
+      "std": 2.791394,
+      "min": 2.772589,
+      "max": 11.366755,
+      "missing_share": 0.0
+    },
+    "CO2": {
+      "deciles": [
+        380.0,
+        414.0,
+        424.0,
+        432.0,
+        442.0,
+        456.0,
+        477.0,
+        507.0,
+        542.0,
+        594.0,
+        873.0
+      ],
+      "mean": 484.592042,
+      "std": 78.216058,
+      "min": 380.0,
+      "max": 873.0,
+      "missing_share": 0.0
+    },
+    "CO2_d5": {
+      "deciles": [
+        -91.0,
+        -27.0,
+        -18.0,
+        -11.0,
+        -5.0,
+        0.0,
+        5.0,
+        11.0,
+        18.0,
+        27.0,
+        117.0
+      ],
+      "mean": -0.000138,
+      "std": 21.394853,
+      "min": -91.0,
+      "max": 117.0,
+      "missing_share": 0.000496
+    },
+    "CO2_d15": {
+      "deciles": [
+        -155.0,
+        -29.0,
+        -19.0,
+        -12.0,
+        -6.0,
+        0.0,
+        6.0,
+        12.0,
+        19.0,
+        29.0,
+        150.0
+      ],
+      "mean": 0.003179,
+      "std": 23.448532,
+      "min": -155.0,
+      "max": 150.0,
+      "missing_share": 0.001488
+    },
+    "CO2_std15": {
+      "deciles": [
+        3.696846,
+        11.096117,
+        12.285105,
+        13.174651,
+        13.963217,
+        14.710864,
+        15.480249,
+        16.319139,
+        17.363618,
+        18.907544,
+        40.448321
+      ],
+      "mean": 14.905233,
+      "std": 3.140163,
+      "min": 3.696846,
+      "max": 40.448321,
+      "missing_share": 0.000198
+    },
+    "T_d15": {
+      "deciles": [
+        -7.78,
+        -0.21,
+        -0.13,
+        -0.07,
+        -0.03,
+        0.01,
+        0.06,
+        0.1,
+        0.17,
+        0.29,
+        5.59
+      ],
+      "mean": -1.9e-05,
+      "std": 0.634078,
+      "min": -7.78,
+      "max": 5.59,
+      "missing_share": 0.001488
+    },
+    "HR_d15": {
+      "deciles": [
+        -0.004672,
+        -0.00047,
+        -0.00029,
+        -0.000171,
+        -7.3e-05,
+        1.9e-05,
+        0.000111,
+        0.000209,
+        0.000326,
+        0.000494,
+        0.00204
+      ],
+      "mean": 2e-06,
+      "std": 0.00044,
+      "min": -0.004672,
+      "max": 0.00204,
+      "missing_share": 0.001488
+    },
+    "hour_sin": {
+      "deciles": [
+        -1.0,
+        -0.951057,
+        -0.809017,
+        -0.587785,
+        -0.309017,
+        0.0,
+        0.309017,
+        0.587785,
+        0.809017,
+        0.951057,
+        1.0
+      ],
+      "mean": 0.0,
+      "std": 0.707107,
+      "min": -1.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "hour_cos": {
+      "deciles": [
+        -1.0,
+        -0.951057,
+        -0.809017,
+        -0.587785,
+        -0.309017,
+        -0.0,
+        0.309017,
+        0.587785,
+        0.809017,
+        0.951057,
+        1.0
+      ],
+      "mean": -0.0,
+      "std": 0.707107,
+      "min": -1.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "weekday": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.714286,
+      "std": 0.451754,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    }
+  },
+  "inference": {
+    "runtime": "numpy only (ml/portable.py)",
+    "scope": "simulated rooms only"
+  },
+  "training_code": "ml/occupancy.py twin_fusion()",
+  "trained_utc": "2026-10-23T09:24:06Z",
+  "git_commit": "cbd03a3",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "provenance": "prediction",
+  "extra_limitations": "Trained on simulator labels: valid for the simulated rooms only (sim-to-real gap).",
+  "task": "occupancy_twin_fusion",
+  "version": "v1",
+  "files": {
+    "model.json": {
+      "sha256": "c581a6046ac38bc6c0ddd4132e6e9f3e1fd09d79ff42353aca223a195f7ec957",
+      "bytes": 756306
+    },
+    "model.joblib": {
+      "sha256": "99e89af13d0912d39e27a6e530a661a6ca278e8f4e6222e93e8909018507a7ca",
+      "bytes": 481617
+    }
+  }
+}
