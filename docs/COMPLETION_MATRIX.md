@@ -1,0 +1,77 @@
+# Project completion matrix
+
+Audit of the repository against the final master prompt (23 Oct 2026), before any change in this phase.
+Repository: `G:/projects/Final Year Project Smart Building/Project` (worked on in a copy, applied back to G:).
+Commit at audit: `35a384b`.
+
+Status classes: **verified** (implemented and verified by a test or a run in this audit), **unverified**
+(implemented, no evidence it works), **partial**, **missing**, **obsolete** (superseded or duplicated).
+The *Final status* column is filled in at the end of the phase from the evidence in
+[`COMPLETION_LOG.md`](COMPLETION_LOG.md) and [`ACCEPTANCE_GATE.md`](ACCEPTANCE_GATE.md).
+
+## Live system at audit (what actually runs)
+
+```
+ESP32-S3 board (Office A) --HTTP POST every 3 s--> raspberry_pi/edge_brain.py (Flask :8001, API v3, SSE)
+                                                       |-- twin/live.py LiveTwin: 25 simulated rooms x 2 copies
+                                                       |     (AI copy and conventional copy, lock-step)
+                                                       |-- twin/hardware_room.py: the real room's controller
+                                                       '-- dashboard/fyp-research-twin (Next.js :3000)
+                                                              '-- public/twin3d (three.js digital twin, iframe)
+```
+
+Everything else in the repository (FastAPI `app/`, `sim/`, `integration/` except `building_config.py`,
+`control/`, `agents/`, `hardware/`, `ai/`, `wso2/`, `k8s/`, `edge_gateway/`, `auth/`, top-level `train_*.py`,
+`compare_*.py`, `evaluate_*.py`, `smart_building_*.py`, `main.py`) is an earlier architecture that the live
+system does not import (checked with `grep` of every import in `raspberry_pi/`, `twin/`, `tests/`; the only
+link is `integration/building_config.py`, the 26-room configuration).
+
+## Matrix
+
+| # | Component | Existing implementation | Evidence it works (audit) | Missing | Action | Depends on | Validation | Audit status | Final status |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | Room configuration (5 floors, 26 rooms) | `integration/building_config.py` (26 rooms, `f2_office_a` = `data_source: hardware`) | `get_all_rooms()` returns 26 rooms on floors 0-4; twin tests pass | Room numbers 101-126 asked for by the prompt do not exist in the code | Add number aliases (101 = Office A, the real room; 102-126 = the 25 simulated rooms in configuration order), keep the ids; move the file next to the twin | - | test: 26 unique ids, 25 simulated + 1 hardware, aliases unique | verified (ids) / missing (numbers) | |
+| 2 | Thermal model | `twin/physics.py` ISO 13790 5R1C per room, partitions between neighbours, 15 s explicit step | 27 backend tests incl. thesis reference values | Prompt mentions 2R2C: the repository's verified model is 5R1C, kept. No reduced-capacity (HVAC fault) input | Keep 5R1C; add an HVAC capacity factor for fault scenarios; document equations and units | - | unit tests: units, stability (dt 5-30 s), response to set-point and occupancy | verified | |
+| 3 | HVAC and energy | split AC, capacity 5.3 kW, COP 3.2, proportional band, fan, latent load, condensation; fresh-air boost fan | tests; meter totals | Energy-consistency check not automated across rooms/floors/building | Add consistency tests and Experiment 9 | 2 | sum(rooms) = building = sum(end uses) | verified | |
+| 4 | Lighting | 3 levels (OFF / DIM 40 % / ON), daylight factor, lux at desk, LED power | tests | - | Keep | 2 | tests | verified | |
+| 5 | Comfort and IAQ | PMV/PPD (ISO 7730) on true state, CO2 mass balance, CO2 rule in the safety layer (NDIR only for the real room; MQ-2 never used as CO2) | tests | - | Keep; document | 2 | tests | verified | |
+| 6 | Weather | `twin/climate.py` synthetic Colombo climate from published monthly normals (not measured) | deterministic per seed | No measured weather series | Try public measured weather (see 10) ; keep synthetic as the twin's driver and say so | 10 | provenance doc | verified (synthetic) | |
+| 7 | Occupancy simulation | `twin/occupancy.py` per-type stochastic schedules (seeded), forced occupancy scenarios | tests | High/low occupancy scaling, sudden changes as reusable scenarios | Add occupancy scale and sudden-change scenarios | - | generator tests | verified | |
+| 8 | Sensor and network simulation | `twin/sensors.py` noise + lag, PIR | tests | Sensor dropout, stale data, network interruption | Add fault injection (dropout, stuck, network outage) | - | generator + controller tests | partial | |
+| 9 | Synthetic data generator | none (twin runs live only; `data/generator.py`, `generate_simulated_occupancy_data.py` belong to the old `sim/`) | - | Reproducible dataset generator with scenarios, validation checks, provenance | New `simulation/generate.py` on top of the twin | 2-8 | determinism test, physical validation checks | missing | |
+| 10 | Public datasets | `Dataset/UCI/...` (3 files), `Dataset/Kaggle_Room_Occupancy/...` (5 files), `data/raw/kaggle_occupancy/Occupancy.csv` | files present | Source URLs, licences, checksums, access dates, raw/processed split, duplicate check (the Kaggle files look like re-uploads of UCI) | Verify against the original source, fetch a building-energy dataset (BDG2), write `data/manifest.json` + `docs/DATASETS.md` + fetch/preprocess scripts | network | checksums, duplicate report | partial | |
+| 11 | Occupancy model (deployed) | `models/final_unified_occupancy_pipeline.pkl` (RF, used by `threshold_rf` and the real room's RF view), CO2 decision tree `models/occupancy/co2` (used by the fusion estimator) | loads; tests | Training mixed UCI + Kaggle copies + old simulated data (duplicate rows across train/test likely); no chronological evaluation; no model card | New reproducible pipeline: chronological splits, LR / RF / GBT / temporal, model cards, registry; keep the deployed RF as a reference | 10 | experiments + tests | partial | |
+| 12 | Thermal prediction | none (the MO controller has an internal 1R1C predictor, not evaluated) | - | Model + baselines (persistence, physical 1R1C) | New `ml/thermal.py` | 9 | MAE/RMSE per horizon | missing | |
+| 13 | Energy prediction | `ai/forecasting.py` (old architecture, not used) | not run | Model on real data + baseline | New `ml/energy.py` on BDG2 | 10 | MAE/RMSE/CV(RMSE)/NMBE | missing / obsolete | |
+| 14 | RL (PPO) | `agents/` + `control/ppo_controller.py` + `models/ppo_building_controller.zip` (stable-baselines3 on the old `sim/` environment) | cannot run: torch / SB3 not installed, environment is the old simulator | PPO on the current twin, validation, baselines, multiple seeds, integration behind the safety layer | New `rl/` (gymnasium env on `TwinBuilding`, PPO in numpy, CartPole check), `ppo` controller in the live twin | 2-9 | env checks, CartPole, experiments | obsolete (old) / missing (new) | |
+| 15 | Rule / MO controllers | `twin/controllers.py` schedule, threshold (RF), multi-objective J = aE + bPD + gS, `SafetyLayer` R1-R4 | tests, live meter | MPC-like baseline exists only as the MO controller's 30-min horizon search | Keep; report MO as the MPC-like controller | - | experiments | verified | |
+| 16 | Multi-agent | `agents/room_agent.py`, `floor_agent.py`, `building_agent.py` (old) | not run | - | Live system is per-room controllers sharing one policy; no coordinator. Say so; do not claim multi-agent | - | doc | obsolete | |
+| 17 | Self-learning lifecycle | MO controller learns occupancy prior and room thermal response online (inside the simulator) | tests | Model registry, shadow mode, drift checks, offline retrain, acceptance tests, promote / rollback, provenance logging | New `ml/registry.py`, `ml/drift.py`, shadow mode in the edge brain, `scripts/retrain.py` | 11, 18 | tests | missing | |
+| 18 | Database | `output/smart_building.db` (old FastAPI), live system keeps history in memory only | - | Persistent store with migrations, provenance on every row | New `raspberry_pi/store.py` (SQLite, schema versions) | - | tests incl. restart | missing | |
+| 19 | Backend API | `edge_brain.py` 17 routes, SSE, validation of board payloads (`_num` never invents defaults), board timeout 10 s | 27 tests; browser flows | Model status/version, provenance, experiments, persistent history, MQTT status, sensor freshness per value | Add routes; keep existing ones | 17, 18, 20 | API tests | partial | |
+| 20 | MQTT | `hardware/mqtt_*.py` (old architecture, not used). Board uses HTTP POST | - | MQTT telemetry/command/ack with schema, dedupe, reconnect, stale detection, test harness | New `raspberry_pi/mqtt_bridge.py` feeding the same ingestion function; simulated device; broker-based tests | - | tests with a local broker | missing | |
+| 21 | Firmware (ESP32-S3) | `firmware/esp32_smart_building/*.ino`: BME280 + BH1750 + SCD41 (I2C 17/18), LD2410C (UART 16/15), MQ-2 (GPIO1), PIR (GPIO4), fan PWM 14, LED 12, servo 13, RGB 6/7/5; HTTP POST every 3 s; Wi-Fi secrets in git-ignored `secrets.h` | not compilable here (no Arduino toolchain reachable) | Prompt's pin list (DHT22 GPIO4, BH1750 8/9, MQ135 ADC1, PIR GPIO2, relay 5, LED 6, MQTT 10 s) does not match the repository firmware | Keep the firmware's pins (source of truth); document the difference; no silent change | - | doc | unverified (compile/physical) | |
+| 22 | Raspberry Pi deployment | `raspberry_pi/run_edge.sh`, `requirements.txt` (flask pinned, rest loose, pytest mixed in) | runs on the dev container | Split edge / training / dev dependencies, pin versions | New `requirements/` | - | install in a fresh venv | partial | |
+| 23 | Dashboard + 3D twin | Next.js 16 + three.js twin: building/floor/room views, 25 sim + 1 live, live/sim badges, no invented values | 35/35 Playwright flows, tsc/eslint clean (previous phase) | Shows no model version / prediction-vs-measurement distinction for predicted values; stale shown as "not connected" | Add model status panel and "predicted" / "stale" labels | 19 | e2e flows | verified (views) / partial (provenance labels) | |
+| 24 | Experiments | `experiments/` (old: A/B/C on old simulator), `output/experiments/*` results of those | old results only | Experiments 1-10 on the current system with saved configs and results | New `experiments/run.py` + `experiments/configs/` + `experiments/results/` | all | runs | obsolete (old) / missing (new) | |
+| 25 | Tests | `twin/tests/test_twin.py`, `raspberry_pi/test_edge_brain.py` (27 pass), `tests/e2e/twin_flows.py` | `pytest` 27 passed (37 s) | Simulation-unit, ML, RL, MQTT, DB, registry, e2e backend flow | New `tests/` suite | all | `pytest` | partial | |
+| 26 | Documentation | README (current system), `docs/twin3d.md`; `docs/*ARCHITECTURE*.md`, `DEPLOYMENT_GUIDE.md`, `memory/MEMORY.md` describe the old system | - | Datasets, ML, RL, MQTT, API, deployment, retraining, acceptance gate | New docs; mark old docs as archived | all | review | partial | |
+| 27 | Repository hygiene | ~40 legacy files/directories at top level; `output/` mixes old results and generated files | - | Clean structure | Move superseded code into `archive/` with `git mv` (recoverable, nothing deleted); generated files git-ignored | 25 | full test run after the move | obsolete content present | |
+| 28 | Security | Wi-Fi secrets in ignored `secrets.h`; history rewritten earlier; no MQTT credentials yet | `git log -p` clean of the password (previous phase) | MQTT credentials from environment; log redaction | Env-based config; test that logs do not contain the password | 20 | test | partial | |
+
+## Hard-coded / placeholder search
+
+`grep -rn "TODO|FIXME|mock|random.random|np.random.rand("` over `raspberry_pi/`, `twin/` and the dashboard:
+no placeholders or mock responses in the live path. `Math.random` appears only in the 3D twin for visual
+variety (people walking phase, particle seeds, a texture's noise) and never sets a displayed value.
+
+## Discrepancies with the prompt (documented, not silently changed)
+
+1. **Room numbering.** The code has room ids, not numbers. Room 101 = `f2_office_a` (Office A, the real room,
+   floor 2); 102-126 = the other 25 ids in configuration order. Numbers are labels for the report; the ids stay.
+2. **Thermal model.** 5R1C (ISO 13790), not 2R2C. It is the verified model and is kept.
+3. **Sensors and pins.** The firmware in the repository (BME280, BH1750, SCD41, LD2410C, MQ-2, PIR, INA226,
+   fan/LED/servo outputs, HTTP every 3 s) is the source of truth; the prompt's DHT22/MQ135/relay list is an
+   older design. MQ-2 readings are never used as CO2.
+4. **Transport.** The board posts HTTP; MQTT is added on the edge side with a test harness. The firmware
+   still uses HTTP (compile and bench test not possible in this environment).

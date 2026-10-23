@@ -1,0 +1,205 @@
+{
+  "uci_occupancy": {
+    "rows": 20560,
+    "duplicate_timestamps": 0,
+    "files": {
+      "datatest.txt": {
+        "rows": 2665,
+        "first": "2015-02-02 14:19:00",
+        "last": "2015-02-04 10:43:00",
+        "occupied_share": 0.3647
+      },
+      "datatraining.txt": {
+        "rows": 8143,
+        "first": "2015-02-04 17:51:00",
+        "last": "2015-02-10 09:33:00",
+        "occupied_share": 0.2123
+      },
+      "datatest2.txt": {
+        "rows": 9752,
+        "first": "2015-02-11 14:48:00",
+        "last": "2015-02-18 09:19:00",
+        "occupied_share": 0.2101
+      }
+    },
+    "gaps_over_5min": 2,
+    "missing_values": {
+      "timestamp": 0,
+      "Temperature": 0,
+      "Humidity": 0,
+      "Light": 0,
+      "CO2": 0,
+      "HumidityRatio": 0,
+      "Occupancy": 0,
+      "source_file": 0,
+      "provenance": 0
+    },
+    "occupied_share": 0.231
+  },
+  "bdg2_panther_office": {
+    "site": "Panther",
+    "office_buildings_at_site": 28,
+    "without_cleaned_electricity": [
+      "Panther_office_Bryce",
+      "Panther_office_Daina",
+      "Panther_office_Gino",
+      "Panther_office_Woodrow"
+    ],
+    "selected": [
+      "Panther_office_Antonette",
+      "Panther_office_Brent",
+      "Panther_office_Catherine",
+      "Panther_office_Christian",
+      "Panther_office_Christin",
+      "Panther_office_Clementine",
+      "Panther_office_Danica",
+      "Panther_office_Garth",
+      "Panther_office_Graham",
+      "Panther_office_Hannah",
+      "Panther_office_Jeane",
+      "Panther_office_Jesus",
+      "Panther_office_Karla",
+      "Panther_office_Kristen",
+      "Panther_office_Larry",
+      "Panther_office_Lauretta",
+      "Panther_office_Lavinia",
+      "Panther_office_Lois",
+      "Panther_office_Patti",
+      "Panther_office_Ruthie",
+      "Panther_office_Shauna",
+      "Panther_office_Taryn",
+      "Panther_office_Valarie"
+    ],
+    "selection_rule": ">= 90% of hours present in the study period 2016-06-01 00:00:00 - 2017-12-31 23:00:00",
+    "completeness": {
+      "Panther_office_Antonette": {
+        "2016": 0.6153,
+        "2017": 0.9987,
+        "study_period": 0.9991
+      },
+      "Panther_office_Brent": {
+        "2016": 0.6153,
+        "2017": 0.9438,
+        "study_period": 0.9645
+      },
+      "Panther_office_Catherine": {
+        "2016": 0.6156,
+        "2017": 0.9986,
+        "study_period": 0.9991
+      },
+      "Panther_office_Christian": {
+        "2016": 0.6154,
+        "2017": 0.9986,
+        "study_period": 0.9991
+      },
+      "Panther_office_Christin": {
+        "2016": 0.6154,
+        "2017": 0.9331,
+        "study_period": 0.9578
+      },
+      "Panther_office_Clementine": {
+        "2016": 0.639,
+        "2017": 0.9989,
+        "study_period": 0.9993
+      },
+      "Panther_office_Danica": {
+        "2016": 0.6154,
+        "2017": 0.9989,
+        "study_period": 0.9992
+      },
+      "Panther_office_Garth": {
+        "2016": 0.6156,
+        "2017": 0.9987,
+        "study_period": 0.9992
+      },
+      "Panther_office_Graham": {
+        "2016": 0.6154,
+        "2017": 0.9825,
+        "study_period": 0.9889
+      },
+      "Panther_office_Hannah": {
+        "2016": 0.6154,
+        "2017": 0.9986,
+        "study_period": 0.9991
+      },
+      "Panther_office_Jeane": {
+        "2016": 0.6159,
+        "2017": 0.9987,
+        "study_period": 0.9992
+      },
+      "Panther_office_Jesus": {
+        "2016": 0.6156,
+        "2017": 0.9987,
+        "study_period": 0.9992
+      },
+      "Panther_office_Karla": {
+        "2016": 0.6156,
+        "2017": 0.9987,
+        "study_period": 0.9992
+      },
+      "Panther_office_Kristen": {
+        "2016": 0.6156,
+        "2017": 0.9987,
+        "study_period": 0.9992
+      },
+      "Panther_office_Larry": {
+        "2016": 0.6154,
+        "2017": 0.9986,
+        "study_period": 0.9991
+      },
+      "Panther_office_Lauretta": {
+        "2016": 0.6154,
+        "2017": 0.9987,
+        "study_period": 0.9991
+      },
+      "Panther_office_Lavinia": {
+        "2016": 0.6156,
+        "2017": 0.9987,
+        "study_period": 0.9992
+      },
+      "Panther_office_Lois": {
+        "2016": 0.6158,
+        "2017": 0.9987,
+        "study_period": 0.9992
+      },
+      "Panther_office_Otto": {
+        "2016": 0.0134,
+        "2017": 0.9967,
+        "study_period": 0.6295
+      },
+      "Panther_office_Patti": {
+        "2016": 0.6156,
+        "2017": 0.9986,
+        "study_period": 0.9991
+      },
+      "Panther_office_Ruthie": {
+        "2016": 0.6156,
+        "2017": 0.9989,
+        "study_period": 0.9993
+      },
+      "Panther_office_Shauna": {
+        "2016": 0.6154,
+        "2017": 0.9986,
+        "study_period": 0.9991
+      },
+      "Panther_office_Taryn": {
+        "2016": 0.6154,
+        "2017": 0.9987,
+        "study_period": 0.9991
+      },
+      "Panther_office_Valarie": {
+        "2016": 0.6156,
+        "2017": 0.9986,
+        "study_period": 0.9991
+      }
+    },
+    "rows": 319608,
+    "electricity_missing_share": 0.0046,
+    "weather_missing_share_after_fill": 0.0,
+    "weather_interpolated_hours": 0,
+    "period": [
+      "2016-06-01 00:00:00",
+      "2017-12-31 23:00:00"
+    ]
+  }
+}

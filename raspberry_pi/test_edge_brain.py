@@ -189,7 +189,8 @@ def test_api():
     assert len(r.data) < 300                      # the firmware parses the reply into 384 bytes
     cfg = c.get("/api/building/config").get_json()
     assert len(cfg["rooms"]) == 26 and cfg["hardware_room_id"] == HARDWARE_ROOM_ID
-    assert {x["id"] for x in cfg["controllers"]} == {"mo", "threshold_rf"}
+    assert {x["id"] for x in cfg["controllers"]} == {"mo", "threshold_rf", "ppo"}
+    assert all(x["available"] for x in cfg["controllers"] if x["id"] != "ppo")   # ppo only once approved
     assert c.post("/api/simulation/control", json={"action": "pause"}).get_json()["clock"]["running"] is False
     assert c.post("/api/simulation/control", json={"action": "resume"}).get_json()["clock"]["running"] is True
     assert c.post("/api/simulation/control", json={"action": "speed", "speed": 120}).get_json()["clock"]["speed"] == 120

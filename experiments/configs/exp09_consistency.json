@@ -1,0 +1,6 @@
+{
+  "title": "Experiment 9 - Room and building consistency",
+  "type": "consistency",
+  "question": "Room energies add up to floor and building totals and to the end-use split; live meter consistency.",
+  "id": "exp09_consistency"
+}

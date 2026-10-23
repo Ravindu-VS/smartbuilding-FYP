@@ -58,3 +58,14 @@ firmware/esp32_smart_building/secrets.h
 # Digital twin cache and local calibration
 output/twin_cache/
 output/hw_calibration.json
+
+# Public datasets: raw downloads and regenerable processed tables
+# (fetch: scripts/fetch_datasets.py, rebuild: scripts/preprocess_datasets.py; checksums in data/manifest.json)
+data/raw/uci_occupancy/
+data/raw/bdg2/
+data/processed/*.csv
+data/synthetic/
+*.part
+
+# Experiment scratch output (results that are kept are written to experiments/results/)
+experiments/results/*/scratch/

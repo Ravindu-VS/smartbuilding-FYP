@@ -108,6 +108,7 @@ class RoomSpec:
     transit: bool = False
     neighbours: List[Tuple[str, float]] = field(default_factory=list)   # (room_id, shared wall m2)
     sensors: Tuple[str, ...] = ("temperature", "humidity", "light", "co2", "pir")
+    room_number: int = 0                    # report label: 101 = the real room, 102-126 = simulated
 
     @property
     def area(self) -> float:
@@ -181,6 +182,8 @@ def build_spec() -> List[RoomSpec]:
             window_azimuth=AZIMUTH[side], physics_params=params, controller_overrides=overrides,
             schedule_hours=hours, equipment_cooled=t in EQUIPMENT_COOLED_TYPES,
             design_setpoint=design_sp, transit=t in TRANSIT_TYPES))
+    for rs, num in zip(rooms, _numbers(rooms)):
+        rs.room_number = num
     # shared partitions between rooms on the same floor
     by_floor: Dict[int, List[RoomSpec]] = {}
     for rs in rooms:
@@ -199,6 +202,29 @@ def build_spec() -> List[RoomSpec]:
     return rooms
 
 
+FIRST_REAL_ROOM_NUMBER = 101
+FIRST_SIMULATED_ROOM_NUMBER = 102
+
+
+def _numbers(rooms: List[RoomSpec]) -> List[int]:
+    """Room numbers used in the report and the dashboard (labels only; the ids stay the keys).
+    The real room (data_source "hardware", Office A) is Room 101; the 25 simulated rooms
+    are 102-126 in configuration order (floor 0 first).  Numbers are not floor-coded."""
+    out, real, sim = [], FIRST_REAL_ROOM_NUMBER, FIRST_SIMULATED_ROOM_NUMBER
+    for r in rooms:
+        if r.data_source == "hardware":
+            out.append(real)
+            real += 1
+        else:
+            out.append(sim)
+            sim += 1
+    return out
+
+
+def room_number_map(rooms: Optional[List[RoomSpec]] = None) -> Dict[str, int]:
+    return {r.room_id: r.room_number for r in (rooms or build_spec())}
+
+
 def schedule_profiles() -> Dict[str, List[float]]:
     return {k: v["hourly"] for k, v in SCHEDULE_MAP.items()}
 
@@ -215,7 +241,8 @@ def spec_for_frontend(rooms: List[RoomSpec]) -> Dict:
                      "floor_height_m": g["floor_height_m"], "slab_m": g["slab_m"], "floors": len(floors)},
         "floors": floors,
         "rooms": [{
-            "room_id": r.room_id, "name": r.name, "type": r.room_type, "floor_id": r.floor_id,
+            "room_id": r.room_id, "room_number": r.room_number, "name": r.name, "type": r.room_type,
+            "floor_id": r.floor_id,
             "x": r.x, "z": r.z, "w": r.w, "d": r.d, "area_m2": r.area, "max_occupancy": r.max_occupancy,
             "data_source": r.data_source, "window_area_m2": round(r.window_area, 1),
             "lighting_w": round(r.physics_params["lighting_w"]), "ac_capacity_w": round(r.physics_params["ac_cool_capacity_w"]),

@@ -54,7 +54,7 @@ from typing import Dict, List, Optional, Tuple
 
 from twin.building import TwinBuilding
 from twin.controllers import (FusionEstimator, MultiObjectiveController, Observation,
-                              RandomForestEstimator, ScheduleController, ThresholdController,
+                              RandomForestEstimator, load_rf_estimator, ScheduleController, ThresholdController,
                               VISUAL_TARGET_LUX)
 from twin.safety import SafetyLayer
 from twin.spec import RoomSpec, build_spec
@@ -78,6 +78,26 @@ CONTROLLERS = {
     "mo": "AI optimizer: multi-objective (PIR+CO2 estimator, thesis method)",
     "threshold_rf": "Original rule: thresholds on the Random Forest probability",
 }
+CONTROLLERS["ppo"] = ("PPO policy trained in the simulator (registry ppo_policy), behind the fail-safe "
+                      "guard and the safety layer")
+
+
+def controller_available(name: str) -> Tuple[bool, str]:
+    """Whether an AI controller can be selected now (the PPO policy needs an approved registry version)."""
+    if name not in CONTROLLERS:
+        return False, "unknown controller"
+    if name == "ppo":
+        try:
+            from ml.registry import Registry
+            act = Registry().active("ppo_policy")
+        except Exception as e:
+            return False, f"registry not readable: {e}"
+        if act is None:
+            return False, "no approved ppo_policy in models/registry (train: python -m rl.train; evaluate/register: python -m rl.evaluate --register)"
+        return True, f"ppo_policy {act['version']}"
+    return True, ""
+
+
 CONVENTIONAL_LABEL = ("Conventional control (AI off): lights on + AC at the room's design set-point "
                       "(24 C; gym and kitchen 22 C, shop 23 C) during its operating hours")
 MODES = ("ai", "conventional")
@@ -243,9 +263,10 @@ class LiveTwin:
         self.lock = threading.RLock()
         self.specs: List[RoomSpec] = build_spec()
         self.spec_by_id = {r.room_id: r for r in self.specs}
+        self.observers = []                         # callbacks(twin, observations, measure) after each step
+        self.observer_errors: deque = deque(maxlen=20)
         try:
-            self.rf = RandomForestEstimator(lighting_lux_full={
-                r.room_id: r.controller_overrides["lighting_lux_full"] for r in self.specs})
+            self.rf = load_rf_estimator({r.room_id: r.controller_overrides["lighting_lux_full"] for r in self.specs})
         except Exception as e:                       # the comparison is optional
             self.rf, self.rf_error = None, str(e)
         else:
@@ -270,6 +291,14 @@ class LiveTwin:
             if self.rf is None:
                 raise ValueError(f"Random Forest not available: {self.rf_error}")
             return ThresholdController(_BatchedEstimator(self.rf))
+        if name == "ppo":
+            ok, why = controller_available("ppo")
+            if not ok:
+                raise ValueError(f"PPO not available: {why}")
+            from rl.policy import PPOController
+            from twin.safety import GuardedController
+            fallback = ScheduleController(room_hours={r.room_id: r.schedule_hours for r in self.specs})
+            return GuardedController(PPOController.load_active(), fallback)
         raise ValueError(f"unknown AI controller {name!r}; choose from {list(CONTROLLERS)}")
 
     def reset(self, seed: Optional[int] = None, start: Optional[datetime] = None,
@@ -644,6 +673,11 @@ class LiveTwin:
                 self._sample_history()
             if self.steps % 15 == 0:
                 self._sample_series()
+        for cb in self.observers:
+            try:
+                cb(self, obs_c, measure)
+            except Exception as e:                  # an observer can never break the control loop
+                self.observer_errors.append(f"{type(e).__name__}: {e}")
         self.step_ms.append((time.perf_counter() - t0) * 1000.0)
 
     def _meter_step(self, ts: datetime, kwh: float, other_kwh: float) -> None:
@@ -931,8 +965,13 @@ class LiveTwin:
         with self.lock:
             if name not in CONTROLLERS:
                 raise ValueError(f"unknown AI controller {name!r}; choose from {list(CONTROLLERS)}")
+            ok, why = controller_available(name)
+            if not ok:
+                raise ValueError(f"{name} not available: {why}")
             if name == self.ai_name:
                 return
+            if self.phase == "running":
+                self._make_ai(name)                     # fails here (state unchanged) if it cannot load
             self.ai_name = name
             if self.phase != "running":
                 return                                  # applied when measurement starts

@@ -77,8 +77,12 @@ if PROJECT_ROOT not in sys.path:
 from integration.building_config import get_all_rooms                       # noqa: E402
 from twin.controllers import Observation                                     # noqa: E402
 from twin.hardware_room import HardwareRoomController                        # noqa: E402
-from twin.live import CONTROLLERS, SCENARIOS, LiveTwin                       # noqa: E402
-from twin.spec import spec_for_frontend                                      # noqa: E402
+from twin.live import CONTROLLERS, SCENARIOS, LiveTwin, controller_available  # noqa: E402
+from twin.spec import room_number_map, spec_for_frontend                     # noqa: E402
+from raspberry_pi.store import Store                                         # noqa: E402
+
+DEFAULT_DB = os.path.join(PROJECT_ROOT, "output", "edge_store.sqlite3")
+SNAPSHOT_S = float(os.environ.get("SNAPSHOT_S", "60"))     # real seconds between stored room snapshots
 
 API_VERSION = 3
 AI_DEFAULT_ON = os.environ.get("AI_DEFAULT", "on").lower() not in ("off", "0", "false")
@@ -97,6 +101,13 @@ if not HARDWARE_ROOMS:
 HARDWARE_ROOM = HARDWARE_ROOMS[0]                 # the first one (shown in the header)
 HARDWARE_ROOM_ID = HARDWARE_ROOM["room_id"]
 HARDWARE_IDS = [r["room_id"] for r in HARDWARE_ROOMS]
+ROOM_NUMBERS = room_number_map()
+
+
+def reading_provenance(sender: Optional[str]) -> str:
+    """The real board identifies itself as "sensor_node"; anything else (the HTTP test sender,
+    the MQTT device harness) is synthetic, never stored as a measurement of the real room."""
+    return "room101_measured" if sender == "sensor_node" else "synthetic"
 
 HW_TIMEOUT_S = float(os.environ.get("HW_TIMEOUT_S", "10"))
 OUTDOOR_TEMP_C = float(os.environ.get("OUTDOOR_TEMP_C", "30"))
@@ -313,7 +324,7 @@ class EdgeBrain:
     """The digital twin, the real rooms' AI, the board links, the AI switch and the streamed state."""
 
     def __init__(self, speed_factor: float = 360.0, seed: Optional[int] = None, warmup: Optional[bool] = None,
-                 ai_enabled: Optional[bool] = None):
+                 ai_enabled: Optional[bool] = None, store_path: Optional[str] = None, models: bool = True):
         self._lock = threading.Lock()
         self._changed = threading.Condition()
         self._seq = 0
@@ -338,6 +349,31 @@ class EdgeBrain:
         self._last_notify_mono = 0.0
         self._update_interval = 0.25
         self._state_cache: Optional[tuple] = None
+
+        # persistent store (history, decisions, events, predictions, commands); optional
+        self.store: Optional[Store] = None
+        self.store_error: Optional[str] = None
+        if store_path:
+            try:
+                self.store = Store(store_path)
+                self.store.add_event("system", f"edge brain started (schema v{self.store.schema_version()})")
+            except Exception as e:
+                self.store_error = f"{type(e).__name__}: {e}"
+                logger.error("Store unavailable (%s): history is not persisted", self.store_error)
+        self._last_snapshot_mono = 0.0
+        self._last_event_seq = 0
+        # trained models in the running system (shadow mode, thermal forecast, drift)
+        self.models = None
+        self.models_error: Optional[str] = None
+        if models:
+            try:
+                from ml.serving import LiveModels
+                self.models = LiveModels(store=self.store)
+                self.twin.observers.append(self.models.observe_twin)
+            except Exception as e:
+                self.models_error = f"{type(e).__name__}: {e}"
+                logger.error("Model service unavailable: %s", self.models_error)
+        self.mqtt = None                    # set by main() when MQTT_ENABLED=1
 
         logger.info("EdgeBrain initialized (API v%d)", API_VERSION)
         logger.info("  Twin: %d simulated rooms, seed %d, speed %.0fx, learning week: %s",
@@ -456,6 +492,8 @@ class EdgeBrain:
         Fields the board did not send stay None (shown as missing), never a default.
         """
         link = self._link_for(payload.get("room_id"))
+        msg_id = payload.get("msg_id") if isinstance(payload.get("msg_id"), str) else None
+        transport = payload.get("transport") if payload.get("transport") in ("http", "mqtt") else "http"
         now_mono = time.monotonic()
         now = datetime.now()
         now_iso = now.isoformat(timespec="milliseconds")
@@ -565,6 +603,27 @@ class EdgeBrain:
             ev = self.twin.add_event(result["event"])
             link.ctrl.track(ev, now)
         self.physical_output.update_room(link.room_id, control)
+        if self.store is not None:
+            try:
+                prov = reading_provenance(link.sender)
+                self.store.add_reading(now_iso, link.room_id, prov, {
+                    "temperature_c": temp, "humidity_pct": hum, "lux": lux, "co2_ppm": co2,
+                    "co2_source": sensors.get("CO2_source"), "presence": presence, "pir": pir, "power_w": power_w},
+                    room_number=ROOM_NUMBERS.get(link.room_id), source=f"{link.sender}/{transport}", msg_id=msg_id,
+                    flags={"missing": [k for k, v in (("temperature", temp), ("humidity", hum), ("lux", lux),
+                                                      ("co2", co2)) if v is None]})
+                self.store.add_decision(now_iso, link.room_id, prov, controller="ai" if ai_on else "conventional",
+                                        mode=control.get("mode"), p_occupied=result["ai"]["occupancy_probability"],
+                                        proposed=(result.get("event") or {}).get("proposed") or {}, applied={
+                                            "light": control["light_action"], "hvac": control["hvac_action"],
+                                            "setpoint_c": control["setpoint_c"], "fan": control["fan_speed"],
+                                            "led": control["light_level"], "servo": control["servo_angle"]},
+                                        safety_notes=control.get("safety_notes") or [],
+                                        model_version=(self.models.rf.version if self.models and self.models.rf.model else None))
+            except Exception as e:
+                logger.error("store write failed: %s", e)
+        if self.models is not None and reading_provenance(link.sender) == "room101_measured":
+            self.models.observe_real({"Temperature": temp, "Humidity": hum, "Light": lux, "CO2": co2, "HumidityRatio": hr})
         self._notify()
 
         logger.info("HARDWARE %s [%s]: T=%s Lux=%s CO2=%s Pres=%s -> P=%.2f -> lights %s, AC %s%s (fan %d, LED %d, servo %d)",
@@ -632,11 +691,47 @@ class EdgeBrain:
                         self.physical_output.clear_room(link.room_id)
         if steps or changed_hw or time.monotonic() - self._last_notify_mono > 1.0:
             self._notify()
+        if self.store is not None:
+            self._persist(time.monotonic())
         if self._tick_count % 120 == 0:
             c = self.twin.clock()
             logger.info("Tick #%d | %s | AI %s | sim %s %s | %.1f ms/step | boards: %s", self._tick_count, c["phase"],
                         "ON" if self.ai_enabled else "OFF", c["date"], c["time"], c["step_ms_median"] or 0.0,
                         ", ".join(f"{s['room_id']} {s['state']}" for s in self.hardware_rooms()))
+
+    def _persist(self, now_mono: float) -> None:
+        """Copy new timeline events and (every SNAPSHOT_S) a snapshot of every room into the store."""
+        try:
+            for ev in self.twin.get_timeline(after=self._last_event_seq, limit=200):
+                self._last_event_seq = max(self._last_event_seq, ev["seq"])
+                self.store.add_event(ev.get("kind") or "event", ev.get("summary") or ev.get("text") or "", ev.get("room_id"),
+                                     data={k: v for k, v in ev.items() if k not in ("summary", "text")},
+                                     ts=ev.get("real_time") or ev.get("sim_time"))
+            if now_mono - self._last_snapshot_mono < SNAPSHOT_S:
+                return
+            self._last_snapshot_mono = now_mono
+            state = self.get_current_state()
+            rows = []
+            for r in state["rooms"]:
+                sens = r.get("sensors") or {}
+                ctl = r.get("control") or {}
+                hw = r.get("source") == "hardware"
+                if hw and not (r.get("hardware") or {}).get("connected"):
+                    continue                                   # nothing measured: no row (never a default)
+                rows.append({"ts": r.get("timestamp") or state["timestamp"], "room_id": r["room_id"],
+                             "room_number": ROOM_NUMBERS.get(r["room_id"]),
+                             "provenance": reading_provenance(self.links[r["room_id"]].sender) if hw else "synthetic",
+                             "mode": ctl.get("mode"), "temperature_c": sens.get("Temperature"),
+                             "humidity_pct": sens.get("Humidity"), "co2_ppm": sens.get("CO2"), "lux": sens.get("Light"),
+                             "occupants": None if hw else (r.get("ground_truth") or {}).get("true_occupancy"),
+                             "p_occupied": (r.get("ai") or {}).get("occupancy_probability"),
+                             "power_w": (r.get("energy") or {}).get("power_w") if not hw else
+                             (r.get("energy") or {}).get("measured_power_watts"),
+                             "energy_wh": None, "hvac": ctl.get("hvac_action"), "setpoint_c": ctl.get("setpoint_c"),
+                             "light": ctl.get("light_action")})
+            self.store.add_snapshots(rows)
+        except Exception as e:
+            logger.error("persist failed: %s", e)
 
     # ─── state ───
     def get_current_state(self) -> Dict[str, Any]:
@@ -663,8 +758,24 @@ class EdgeBrain:
             timeline = tw.get_timeline(limit=15)
             ai_name = tw.ai_name
             watch = sorted(tw.watch)
+        for r in sim_rooms:
+            r["provenance"] = {"sensors": "synthetic", "ground_truth": "synthetic", "ai": "prediction",
+                               "energy": "synthetic (simulated 5R1C physics)"}
+            pred = self.models.thermal_for(r["room_id"]) if self.models is not None else None
+            r["prediction"] = {"temperature_30min": pred} if pred else None
+        for rid, r in hw_rooms.items():
+            st = r.get("hardware") or {}
+            meas = reading_provenance(self.links[rid].sender) if self.links[rid].sender else None
+            r["provenance"] = {"sensors": meas if st.get("connected") else "unavailable",
+                               "ai": "prediction" if st.get("connected") else "unavailable",
+                               "energy": (meas + " (INA226)") if st.get("connected") and meas else "unavailable"}
+            r["freshness"] = {"age_s": st.get("age_s"), "timeout_s": st.get("timeout_s"),
+                              "stale": st.get("state") == "lost", "state": st.get("state")}
+            r["prediction"] = None
         by_id = {r["room_id"]: r for r in sim_rooms}
         by_id.update(hw_rooms)
+        for rid, r in by_id.items():
+            r["room_number"] = ROOM_NUMBERS.get(rid)
         rooms = [by_id[rid] for rid in ROOM_IDS if rid in by_id]
         with_data = [r for r in rooms if r.get("ai")]
         predicted = sum(1 for r in with_data if r["ai"].get("predicted_occupancy") == 1)
@@ -710,6 +821,10 @@ class EdgeBrain:
                 "gpio_driving": self.physical_output.gpio_driving,
                 "started_at": self._started_iso,
                 "random_forest_loaded": tw.rf is not None,
+                "random_forest_source": getattr(tw.rf, "name", None),
+                "store": {"enabled": self.store is not None, "error": self.store_error},
+                "mqtt": {"enabled": self.mqtt is not None, "connected": bool(self.mqtt and self.mqtt.connected)},
+                "models_loaded": self.models is not None,
                 "hardware": hw_primary,
             },
         }
@@ -848,7 +963,8 @@ def system_summary():
 @app.route('/api/building/config', methods=['GET'])
 def building_config():
     cfg = spec_for_frontend(brain.twin.specs)
-    cfg["controllers"] = [{"id": k, "label": v} for k, v in CONTROLLERS.items()]
+    cfg["controllers"] = [{"id": k, "label": v, "available": controller_available(k)[0],
+                           "availability": controller_available(k)[1]} for k, v in CONTROLLERS.items()]
     cfg["scenarios"] = list(SCENARIOS)
     cfg["hardware_room_id"] = HARDWARE_ROOM_ID
     cfg["hardware_room_ids"] = HARDWARE_IDS
@@ -958,6 +1074,147 @@ def physical_outputs():
 # =============================================================================
 # BACKGROUND TICK LOOP
 # =============================================================================
+# ─── models, history, provenance, experiments (API v3 additions) ───
+def _admin_ok() -> bool:
+    """Model promotion/rollback change what runs: when ADMIN_TOKEN is set, require it."""
+    token = os.environ.get("ADMIN_TOKEN")
+    return not token or request.headers.get("X-Admin-Token") == token
+
+
+@app.route('/api/models', methods=['GET'])
+def models_status():
+    from ml.registry import Registry
+    out = {"registry": Registry().status(), "live": brain.models.summary() if brain.models else None,
+           "live_error": brain.models_error,
+           "controllers": [{"id": k, "label": v, "available": controller_available(k)[0],
+                            "availability": controller_available(k)[1]} for k, v in CONTROLLERS.items()],
+           "active_controller": brain.twin.ai_name, "random_forest_source": getattr(brain.twin.rf, "name", None)}
+    return jsonify(out)
+
+
+@app.route('/api/models/promote', methods=['POST'])
+def models_promote():
+    if not _admin_ok():
+        return _err("admin token required", 403)
+    from ml.registry import Registry
+    data = request.get_json(force=True, silent=True) or {}
+    task, version = str(data.get("task", "")), str(data.get("version", ""))
+    reg = Registry()
+    if task not in reg.tasks() or version not in reg.versions(task):
+        return _err(f"unknown task/version {task} {version}")
+    try:
+        report = reg.promote(task, version)
+    except PermissionError as e:
+        return jsonify({"status": "rejected", "error": str(e), "report": reg.evaluate(task, version)}), 409
+    if brain.models:
+        brain.models.reload()
+    if brain.store:
+        brain.store.add_event("model", f"{task} {version} promoted (acceptance tests passed)", data={"report": report})
+    return jsonify({"status": "promoted", "task": task, "version": version, "report": report})
+
+
+@app.route('/api/models/rollback', methods=['POST'])
+def models_rollback():
+    if not _admin_ok():
+        return _err("admin token required", 403)
+    from ml.registry import Registry
+    data = request.get_json(force=True, silent=True) or {}
+    task = str(data.get("task", ""))
+    try:
+        v = Registry().rollback(task, reason=str(data.get("reason", "rollback via API"))[:200])
+    except ValueError as e:
+        return _err(str(e))
+    if brain.models:
+        brain.models.reload()
+    if brain.store:
+        brain.store.add_event("model", f"{task} rolled back to {v}")
+    return jsonify({"status": "rolled_back", "task": task, "active": v})
+
+
+@app.route('/api/history', methods=['GET'])
+def history():
+    """Persisted history of one room. ?room_id=...&since=ISO&until=ISO&limit=N&table=room_snapshots|readings|decisions|predictions"""
+    if brain.store is None:
+        return jsonify({"error": "no persistent store configured", "store_error": brain.store_error}), 503
+    room_id = request.args.get("room_id", "")
+    if room_id not in ROOM_IDS:
+        return _err(f"unknown room_id {room_id!r}")
+    table = request.args.get("table", "room_snapshots")
+    try:
+        limit = int(request.args.get("limit", "500"))
+        rows = brain.store.history(room_id, request.args.get("since"), request.args.get("until"), limit, table)
+    except ValueError as e:
+        return _err(str(e))
+    return jsonify({"room_id": room_id, "room_number": ROOM_NUMBERS.get(room_id), "table": table, "rows": rows,
+                    "units": {"temperature_c": "degC", "humidity_pct": "%RH", "co2_ppm": "ppm", "lux": "lux",
+                              "power_w": "W", "energy_wh": "Wh", "setpoint_c": "degC"}})
+
+
+@app.route('/api/events', methods=['GET'])
+def events():
+    if brain.store is None:
+        return jsonify({"events": brain.twin.get_timeline(limit=100), "persistent": False})
+    try:
+        limit = int(request.args.get("limit", "100"))
+    except ValueError:
+        return _err("limit must be an integer")
+    return jsonify({"events": brain.store.events(limit, request.args.get("kind")), "persistent": True})
+
+
+@app.route('/api/provenance', methods=['GET'])
+def provenance():
+    manifest_path = os.path.join(PROJECT_ROOT, "data", "manifest.json")
+    manifest = None
+    if os.path.exists(manifest_path):
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+    return jsonify({
+        "classes": (manifest or {}).get("provenance_classes"),
+        "rooms": [{"room_id": rid, "room_number": ROOM_NUMBERS.get(rid),
+                   "source": "hardware" if rid in brain.links else "simulated",
+                   "measurements": "room101_measured (only while its board is connected)" if rid in brain.links
+                   else "synthetic"} for rid in ROOM_IDS],
+        "weather": "synthetic Colombo climate from published monthly normals (twin/climate.py), not measured",
+        "store": brain.store.summary() if brain.store else None,
+        "datasets": {k: {kk: v.get(kk) for kk in ("name", "licence", "accessed", "provenance", "landing_page")}
+                     for k, v in ((manifest or {}).get("raw") or {}).items()},
+    })
+
+
+@app.route('/api/datasets', methods=['GET'])
+def datasets():
+    path = os.path.join(PROJECT_ROOT, "data", "manifest.json")
+    if not os.path.exists(path):
+        return _err("data/manifest.json missing", 404)
+    with open(path, encoding="utf-8") as f:
+        return jsonify(json.load(f))
+
+
+@app.route('/api/experiments', methods=['GET'])
+def experiments():
+    base = os.path.join(PROJECT_ROOT, "experiments", "results")
+    out = []
+    if os.path.isdir(base):
+        for name in sorted(os.listdir(base)):
+            d = os.path.join(base, name)
+            if not os.path.isdir(d):
+                continue
+            item = {"id": name, "files": sorted(os.listdir(d))}
+            st = os.path.join(d, "status.json")
+            if os.path.exists(st):
+                with open(st, encoding="utf-8") as f:
+                    item["status"] = json.load(f)
+            out.append(item)
+    return jsonify({"experiments": out})
+
+
+@app.route('/api/hardware/mqtt', methods=['GET'])
+def mqtt_status():
+    if brain.mqtt is None:
+        return jsonify({"enabled": False, "note": "MQTT bridge not started (set MQTT_ENABLED=1); boards use HTTP POST"})
+    return jsonify(brain.mqtt.status())
+
+
 def run_tick_loop(brain_instance: EdgeBrain, stop_event: threading.Event):
     logger.info("Edge Brain tick loop started")
     next_t = time.monotonic()
@@ -982,7 +1239,16 @@ def main():
     logger.info("  Running on %s %s", platform.system(), platform.machine())
     logger.info("===================================================")
     speed = float(os.environ.get("SPEED_FACTOR", "360"))
-    brain = EdgeBrain(speed_factor=speed)
+    db = os.environ.get("EDGE_DB", DEFAULT_DB)
+    brain = EdgeBrain(speed_factor=speed, store_path=None if db.lower() in ("", "none", "off") else db)
+    if os.environ.get("MQTT_ENABLED", "0") == "1":
+        from raspberry_pi.mqtt_bridge import MqttBridge
+        brain.mqtt = MqttBridge(brain.inject_hardware_data, HARDWARE_IDS, store=brain.store,
+                                on_event=lambda kind, text, room: brain.twin.add_event(
+                                    {"seq": None, "kind": kind, "summary": text, "room_id": room,
+                                     "real_time": datetime.now().isoformat(timespec="seconds"),
+                                     "sim_time": brain.twin.time.isoformat(timespec="minutes")}))
+        brain.mqtt.start()
     stop_event = threading.Event()
     threading.Thread(target=run_tick_loop, args=(brain, stop_event), daemon=True, name="EdgeBrainTickLoop").start()
     port = int(os.environ.get("API_PORT", "8001"))
@@ -1000,6 +1266,8 @@ def main():
         pass
     finally:
         stop_event.set()
+        if brain.mqtt is not None:
+            brain.mqtt.stop()
         brain.physical_output.cleanup()
         logger.info("Edge Brain shutdown complete.")
 

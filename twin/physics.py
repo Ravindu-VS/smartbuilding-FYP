@@ -172,6 +172,8 @@ class RoomPhysics:
         self.extra_gain_w = 0.0
         self.extra_co2_m3s = 0.0
         self.extra_ach = 0.0          # e.g. a window left open
+        self.extra_plug_w = 0.0       # unusual electrical demand (W): electricity and internal heat
+        self.capacity_factor = 1.0    # 1 = rated AC capacity; < 1 = degraded unit, 0 = failed compressor
         self.c_air = RHO_AIR * CP_AIR * self.volume * p["air_capacity_multiplier"]
         self.c_mass = p["cm_per_m2"] * self.area
         self.a_m = p["am_factor"] * self.area
@@ -212,7 +214,7 @@ class RoomPhysics:
             base, per = p["plug_base_w"], p["plug_per_person_w"]
         else:
             base, per = PLUG_LOADS.get(self.zone_type, (20.0, 50.0))
-        s.plug_w = base + per * occupants
+        s.plug_w = base + per * occupants + max(0.0, self.extra_plug_w)
         q_people_s = p["occupant_sensible_w"] * occupants
         q_internal = q_people_s + s.lighting_w + s.plug_w + self.extra_gain_w
         q_solar = p["window_area"] * p["shgc"] * window_irradiance * (1.0 - 0.7 * shading)
@@ -225,7 +227,7 @@ class RoomPhysics:
         if sp is not None:
             band = p["proportional_band"]
             frac_cool = min(1.0, max(0.0, 0.5 + (s.t_air - sp) / band)) if s.t_air > sp - 0.5 * band else 0.0
-            q_hvac = -p["ac_cool_capacity_w"] * frac_cool
+            q_hvac = -p["ac_cool_capacity_w"] * max(0.0, min(1.0, self.capacity_factor)) * frac_cool
             if p["ac_heat_capacity_w"] > 0 and s.t_air < sp - 2.0:
                 q_hvac = p["ac_heat_capacity_w"] * min(1.0, (sp - 2.0 - s.t_air) / band)
             if q_hvac < 0:

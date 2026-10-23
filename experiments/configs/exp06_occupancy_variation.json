@@ -1,0 +1,22 @@
+{
+  "title": "Experiment 6 - Occupancy variation",
+  "type": "control_comparison",
+  "controllers": [
+    "schedule",
+    "mo",
+    "ppo"
+  ],
+  "scenarios": [
+    "low_occupancy",
+    "high_occupancy",
+    "sudden_occupancy"
+  ],
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "days": 7,
+  "question": "Low, high and sudden (unscheduled) occupancy.",
+  "id": "exp06_occupancy_variation"
+}

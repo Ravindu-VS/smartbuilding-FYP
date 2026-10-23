@@ -1,0 +1,21 @@
+{
+  "title": "Experiment 5 - Optimized control vs baseline",
+  "type": "control_comparison",
+  "controllers": [
+    "schedule",
+    "threshold_rf",
+    "mo",
+    "ppo"
+  ],
+  "scenarios": [
+    "normal"
+  ],
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "days": 7,
+  "question": "Matched comparison of the conventional schedule, the original RF rule, the multi-objective optimiser and PPO.",
+  "id": "exp05_control"
+}

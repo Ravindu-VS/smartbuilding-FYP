@@ -280,6 +280,43 @@ class RandomForestEstimator:
         return [float(p[1]) for p in self.pipeline.predict_proba(df)]
 
 
+class PortableRFEstimator(RandomForestEstimator):
+    """
+    The registry's random forest (models/registry/occupancy_rf/<active>/model.json: trained by
+    ml/occupancy.py on the UCI data with a chronological split), evaluated with numpy only.
+    Same five inputs and the same own-light correction as RandomForestEstimator; replaces the
+    legacy pickle, whose training data included its own test rows (see docs/results/occupancy.md).
+    """
+
+    def __init__(self, model_dir: str, lighting_lux_full: Optional[Dict[str, float]] = None):
+        from ml.portable import Portable
+        self.portable = Portable.load(os.path.join(model_dir, "model.json"))     # self-test included
+        if tuple(self.portable.features) != self.FEATURES:
+            raise ValueError(f"occupancy_rf features {self.portable.features} != {list(self.FEATURES)}")
+        self.lux_full = lighting_lux_full or {}
+        self.version = os.path.basename(model_dir.rstrip("/"))
+        self.name = f"RandomForest(registry {self.version})"
+
+    def probabilities(self, observations: List[Observation]) -> List[float]:
+        if not observations:
+            return []
+        import numpy as np
+        X = np.asarray([self._row(o) for o in observations], dtype=float)
+        return [float(p) for p in self.portable.predict(X)]
+
+
+def load_rf_estimator(lighting_lux_full: Optional[Dict[str, float]] = None):
+    """The registry's active occupancy_rf if there is one, else the legacy pickle (for comparison)."""
+    try:
+        from ml.registry import Registry
+        act = Registry().active("occupancy_rf")
+    except Exception:
+        act = None
+    if act is not None:
+        return PortableRFEstimator(act["path"], lighting_lux_full)
+    return RandomForestEstimator(lighting_lux_full=lighting_lux_full)
+
+
 class OracleEstimator:
     """True occupancy (reference upper bound, experiments only)."""
     name = "Oracle(true occupancy)"

@@ -1,0 +1,27 @@
+{
+  "title": "Experiment 8 - Fault tolerance",
+  "type": "control_comparison",
+  "controllers": [
+    "schedule",
+    "mo",
+    "ppo"
+  ],
+  "scenarios": [
+    "sensor_dropout",
+    "network_outage",
+    "hvac_failure",
+    "hvac_reduced"
+  ],
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "days": 7,
+  "extra": [
+    "controller_failure",
+    "model_load_failure"
+  ],
+  "question": "Missing and stuck sensors, stale data (network outage), AC failure and reduced capacity, a crashing controller, a model that fails to load.",
+  "id": "exp08_fault_tolerance"
+}

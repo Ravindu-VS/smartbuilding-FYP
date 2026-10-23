@@ -1,0 +1,21 @@
+{
+  "title": "Experiment 7 - Weather variation",
+  "type": "control_comparison",
+  "controllers": [
+    "schedule",
+    "mo",
+    "ppo"
+  ],
+  "scenarios": [
+    "hot_weather",
+    "cool_weather"
+  ],
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "days": 7,
+  "question": "Hotter (+3 K) and cooler, overcast (-2.5 K, 40 % daylight) weather than the synthetic Colombo normal.",
+  "id": "exp07_weather"
+}
