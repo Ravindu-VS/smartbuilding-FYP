@@ -1,7 +1,7 @@
 """
 Tests for the live digital twin (twin/).
 
-    python -m pytest twin/tests -q
+    python -m pytest tests/test_twin.py -q
 
 The physics test compares the twin's RoomPhysics with a trace computed by the
 thesis code (simulation/room_physics.py and climate.py of the thesis repository,
@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from twin.climate import ColomboClimate, ScenarioClimate                    # noqa: E402
@@ -26,7 +26,7 @@ from twin.occupancy import BuildingOccupancy                                 # n
 from twin.physics import RoomPhysics                                         # noqa: E402
 from twin.safety import SafetyLayer                                          # noqa: E402
 from twin.spec import build_spec, schedule_profiles                          # noqa: E402
-from integration.building_config import get_all_rooms                        # noqa: E402
+from twin.building_config import get_all_rooms                        # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 

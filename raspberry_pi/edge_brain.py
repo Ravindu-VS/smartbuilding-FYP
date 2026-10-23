@@ -10,7 +10,7 @@ One process runs the whole live system:
            with the decision for the room's actuators (fan = AC, LED = lights,
            servo = fresh-air damper).  The project has exactly one real room:
            Office A (f2_office_a, data_source "hardware" in
-           integration/building_config.py); every other room is simulated.
+           twin/building_config.py); every other room is simulated.
         2. Runs the digital twin (twin/live.py): the other 25 rooms of the 5-floor
            building on the thesis's ISO 13790 5R1C physics, with weather, occupants
            and sensor models, on a simulated clock (start/pause/speed/reset).
@@ -74,7 +74,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from integration.building_config import get_all_rooms                       # noqa: E402
+from twin.building_config import get_all_rooms                       # noqa: E402
 from twin.controllers import Observation                                     # noqa: E402
 from twin.hardware_room import HardwareRoomController                        # noqa: E402
 from twin.live import CONTROLLERS, SCENARIOS, LiveTwin, controller_available  # noqa: E402

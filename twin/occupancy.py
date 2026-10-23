@@ -4,7 +4,7 @@ office, meeting, kitchen and bathroom generators are unchanged.  Added for the
 26-room building (see BuildingOccupancy at the end):
   * a profile generator for the other room types (lobby, shop, gym, lounge,
     residential, corridor, server, public bathrooms), driven by the hourly
-    occupancy profiles in integration/building_config.py;
+    occupancy profiles in twin/building_config.py;
   * string room ids (hashed to a stable integer for the random streams);
   * forced occupancy events for the demonstration scenarios.
 

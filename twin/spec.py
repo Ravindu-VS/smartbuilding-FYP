@@ -3,7 +3,7 @@ Building specification for the live digital twin.
 
 Everything about a room (plan geometry, type, capacity, envelope, lighting, air
 conditioning, plug loads, occupant activity, sensors, schedule hours of the
-conventional baseline) is derived here from integration/building_config.py,
+conventional baseline) is derived here from twin/building_config.py,
 which is also what the 3D view draws.  One definition drives the physics, the
 controllers and the renderer.
 
@@ -20,7 +20,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from integration.building_config import (BUILDING_CONFIG, BUILDING_GEOMETRY, SCHEDULE_MAP,
+from twin.building_config import (BUILDING_CONFIG, BUILDING_GEOMETRY, SCHEDULE_MAP,
                                          get_all_rooms)
 from twin.physics import DEFAULT_PARAMS
 

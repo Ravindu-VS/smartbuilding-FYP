@@ -9,7 +9,7 @@ edge brain (the same data as the panels); the 3D view has no connection of its o
 ## 1. Architectural concept
 
 A 30 m × 20 m, five-storey mixed-use building ("Smart Hub"), 3.5 m floor to floor — the plate,
-floor heights and every room rectangle are those of `integration/building_config.py`, which the
+floor heights and every room rectangle are those of `twin/building_config.py`, which the
 edge brain sends to the 3D view (`CONFIG` message), so the model cannot drift from the simulation.
 
 | Element | Design |
@@ -78,7 +78,7 @@ simulation models one AC (with its capacity) per room.
 ## 4. Room mapping (25 simulated + 1 live)
 
 Plan rectangles are metres from the building's south-west corner (x east, z north), exactly as in
-`integration/building_config.py`. Floors: 0 = ground … 4 = penthouse.
+`twin/building_config.py`. Floors: 0 = ground … 4 = penthouse.
 
 | Floor | Room ID | Name | Type | Plan rectangle (m) | Data | Interior | AC shown |
 |---|---|---|---|---|---|---|---|

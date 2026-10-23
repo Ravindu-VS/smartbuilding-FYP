@@ -396,8 +396,7 @@ class LiveTwin:
     # ---- warm-up cache -------------------------------------------------- #
     def _cache_path(self) -> str:
         h = hashlib.sha1()
-        files = sorted(glob.glob(os.path.join(TWIN_DIR, "*.py"))) + \
-            [os.path.join(PROJECT_ROOT, "integration", "building_config.py")]
+        files = sorted(glob.glob(os.path.join(TWIN_DIR, "*.py")))      # includes building_config.py
         for f in files:
             try:
                 with open(f, "rb") as fh:
