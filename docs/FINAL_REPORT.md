@@ -6,7 +6,25 @@ Digital Twin. Work of 23 Oct 2026 on top of commit `35a384b`. Every figure below
 
 ## 1. Overall completion
 
-<!-- OVERALL -->
+**Status: the software system is complete and verified; Room 101's physical hardware verification is pending
+(the parts have not been delivered).** Everything else in the master prompt was implemented, run and checked;
+the acceptance gate (`docs/ACCEPTANCE_GATE.md`) has <!-- GATE_COUNTS -->.
+
+| Area | Status | Key evidence |
+|---|---|---|
+| Digital twin and scenarios | complete | 25 simulated rooms (5R1C), 12 scenarios incl. faults, validation checks; experiment 9 (energy sums agree < 1e-9 kWh) |
+| Public datasets | complete; measured Colombo weather BLOCKED | UCI occupancy, BDG2 offices; manifest with checksums and licences |
+| Machine learning | complete | occupancy F1 0.973 / 0.981; thermal 30-min MAE 0.267 K (persistence 0.341); energy CV(RMSE) 15.4 % (seasonal naive 22.5 %) |
+| Reinforcement learning | complete (simulation) | PPO v1 rejected, v2 approved; -11.3 % energy and 5.2 % discomfort vs schedule 21.7 %; held on new seeds 4-6 |
+| Self-learning | complete | registry with acceptance tests, shadow mode, drift, promote / rollback, provenance |
+| Edge brain, store, MQTT, API | complete | SQLite with migrations, MQTT bridge with acks; tests; experiment 10 |
+| Dashboard and 3D twin | complete | <!-- BROWSER_SHORT -->; type-check and lint clean |
+| Room 101 (real room) | software complete, physical pending | virtual board with the firmware's payload replaying real data (experiment 11, vacancy-rule fix); firmware library API check (2 bugs fixed); bench-check script ready and rehearsed |
+| Tests and experiments | complete | 103 tests pass; experiments 1-11 PASS |
+
+**Left for the hardware (docs/HARDWARE.md, "Bring-up"):** install the listed libraries, flash the firmware from the
+Arduino IDE, power the board and the Pi, stop the virtual board, run `python3 scripts/check_hardware.py --actuators
+--ask` and `--empty-room`, do the unplug test, and record the result folder in the acceptance gate (section F).
 
 ## 2. Architecture
 
