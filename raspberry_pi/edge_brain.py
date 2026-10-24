@@ -824,7 +824,8 @@ class EdgeBrain:
             meas = reading_provenance(self.links[rid].sender) if self.links[rid].sender else None
             r["provenance"] = {"sensors": meas if st.get("connected") else "unavailable",
                                "ai": "prediction" if st.get("connected") else "unavailable",
-                               "energy": (meas + " (INA226)") if st.get("connected") and meas else "unavailable"}
+                               "energy": (meas + " (INA226)") if st.get("connected") and meas
+                               and (r.get("power_measurement") or {}).get("available") else "unavailable"}
             r["freshness"] = {"age_s": st.get("age_s"), "timeout_s": st.get("timeout_s"),
                               "stale": st.get("state") == "lost", "state": st.get("state")}
             r["prediction"] = None

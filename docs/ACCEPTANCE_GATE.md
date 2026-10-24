@@ -75,7 +75,7 @@ given); N/A = does not apply. Code existing is never enough for PASS.
 | Hardware and simulated values distinguishable | PASS | provenance per value group; test sender / harness never shown as the real board |
 | Physical verification status documented honestly | PASS | docs/HARDWARE.md status table (not compiled, not bench-tested here) |
 | Test harness for unavailable hardware | PASS | `raspberry_pi/esp32_test_sender.py`, `raspberry_pi/mqtt_device_sim.py`, `scripts/start.sh harness` |
-| Firmware compiled / physically verified | BLOCKED | no Arduino-ESP32 toolchain reachable (GitHub release downloads refused) and no board attached |
+| Firmware compiled / physically verified | BLOCKED | no Arduino-ESP32 toolchain reachable (toolchain hosts refused) and no board attached. Done instead: host-side syntax and library-API check against the real library headers (`firmware/tools/check_firmware.py`, 18/18 combinations; fixed SCD41 silently skipped with SCD4x 1.x and INA226 code that did not compile with any INA226 library); bring-up procedure and `scripts/check_hardware.py` ready for the bench |
 
 ## G. Digital twin
 

@@ -9,6 +9,8 @@ Source of truth: `firmware/esp32_smart_building/esp32_smart_building.ino` (ESP32
 |---|---|---|
 | Firmware source (sensors, actuators, HTTP client, fail-safe) | implemented | firmware file; reviewed |
 | Firmware compiled for the ESP32-S3 in this environment | **not done** - no Arduino/ESP32 toolchain reachable (GitHub release downloads refused by the network proxy) | - |
+| Firmware syntax and library-API check (host g++, stub core headers, real library headers) | passes for SCD4x 1.x / 0.x / absent x INA226 Tillaart / INA226Lib / absent x core 3.x / 2.x | `firmware/tools/check_firmware.py`, `tests/test_firmware_check.py` |
+| Bench-check script for the real room | implemented, tested against the HTTP test sender (labelled a software check) | `scripts/check_hardware.py`, `tests/test_check_hardware.py` |
 | Edge brain HTTP ingestion of the firmware's payload | implemented, tested | `raspberry_pi/test_edge_brain.py`, `tests/test_integration.py` |
 | MQTT transport (edge side) with schema, dedupe, acks, status | implemented, tested with a local broker and a simulated board | `tests/test_store_mqtt.py`, experiment 10 |
 | MQTT in the firmware | **not implemented** - the board posts HTTP; the edge accepts both | - |
@@ -17,6 +19,49 @@ Source of truth: `firmware/esp32_smart_building/esp32_smart_building.ino` (ESP32
 
 "Implemented" means the code exists and was reviewed; "tested" means an automated test exercised it;
 "physically verified" is reserved for a run with the real board, which is still to be done.
+
+## Library fixes found by the API check (24 Oct 2026)
+
+The firmware had never been compiled in this work, so its library calls were checked against the libraries'
+published headers (`firmware/tools/check_firmware.py`). Two problems were found and fixed; pins, timing and
+logic are unchanged:
+
+1. **SCD41 silently disabled with the current library.** Sensirion I2C SCD4x 1.x renamed the header and class
+   (`SensirionI2cScd4x`) and changed `begin()` / the data-ready call. The sketch only looked for the old header,
+   so with 1.x installed it compiled but never read CO2. It now supports 1.x and 0.4.x.
+2. **INA226 did not compile with any INA226 library.** The sketch mixed two APIs (constructor of Rob Tillaart's
+   library, methods of the Jarzebski/INA226Lib library). It now supports both libraries.
+
+This is a syntax and API check with stubbed core headers, not an ESP32 compile: compile and flash in the Arduino
+IDE as below.
+
+## Bring-up (when the hardware is connected)
+
+1. **Arduino IDE 2** - Boards Manager: *esp32 by Espressif Systems* (core 2.x or 3.x; both PWM APIs are handled).
+   Board: *ESP32S3 Dev Module* (if you use the board's native USB port, set *USB CDC On Boot: Enabled* to see the
+   serial log).
+2. **Libraries** (Library Manager): *ArduinoJson* (Benoit Blanchon), *Adafruit BME280 Library* (accept *Adafruit
+   Unified Sensor* and *Adafruit BusIO*), *BH1750* (Christopher Laws), *Sensirion I2C SCD4x*, *INA226* (Rob
+   Tillaart; *INA226Lib* also works), *ld2410* (Nick Reynolds), *ESP32Servo* (Kevin Harrington). A missing
+   optional library disables that sensor (the serial log says "library not available") and the bench check
+   reports it as MISSING.
+3. Copy `secrets.example.h` to `secrets.h` (git-ignored) and set Wi-Fi name, password and `EDGE_SERVER_URL` =
+   `http://<Pi or PC IP>:8001/api/hardware/sensor-data` (`run_local.bat` prints the PC's IP). Allow port 8001
+   through the PC's firewall.
+4. Optional before flashing: `python3 firmware/tools/check_firmware.py`.
+5. Compile and upload; Serial Monitor at 115200 baud. Each sensor prints `+ ... ACTIVE` or why not (`i ... not
+   found`); fix wiring/addresses until the sensors you fitted are active.
+6. Start the edge brain (`scripts/start.sh edge` on the Pi, `run_local.bat` or `scripts/start.sh dev` on the PC)
+   and open the dashboard: Room 101 should turn LIVE (ESP32) within a few seconds.
+7. Bench check: `python3 scripts/check_hardware.py --actuators --ask` (reads 60 s of data, drives fan, LED and
+   damper through a short manual override, asks you to confirm what you see, clears the override). Result:
+   `experiments/results/hardware_bench/<date_time>/summary.md`. It is a physical verification only when the
+   sender is the real board (`esp32_board`).
+8. Disconnect test: unplug the board - Room 101 must show NOT CONNECTED within 10 s and its values disappear.
+9. LED calibration: the button in Room 101's panel (or `POST /api/hardware/calibrate-led`) measures what the LED
+   adds at the BH1750, so the AI does not mistake its own light for daylight.
+10. Record the results: update the status table above and `docs/ACCEPTANCE_GATE.md` (section F) with the bench
+    check's folder as evidence.
 
 ## Room 101
 

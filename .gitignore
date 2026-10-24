@@ -72,3 +72,4 @@ data/synthetic/
 # Experiment scratch output (results that are kept are written to experiments/results/)
 experiments/results/*/scratch/
 experiments/results/run_cache/
+firmware/tools/.lib_cache/

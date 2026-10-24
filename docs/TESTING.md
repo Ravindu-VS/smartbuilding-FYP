@@ -3,11 +3,13 @@
 Run from the repository root.
 
 ```
-python3 -m pytest -q                       # everything (about 10-15 min on 2 vCPUs)
+python3 -m pytest                          # everything (about 1-2 min on 2 vCPUs)
 python3 -m pytest -q -m "not slow"         # without the multi-hour-simulated tests
 python3 tests/e2e/twin_flows.py            # browser flows A-G (needs the edge brain on :8001 and the dashboard on :3000)
 cd dashboard/fyp-research-twin && npx tsc --noEmit && npx eslint src && npx next build
 python3 -m rl.cartpole_check               # PPO implementation check on CartPole-v1
+python3 firmware/tools/check_firmware.py    # firmware syntax / library-API check (host g++, not an ESP32 compile)
+python3 scripts/check_hardware.py --actuators --ask   # bench check of the real room (board + edge brain running)
 ```
 
 | File | What it checks |
@@ -22,6 +24,8 @@ python3 -m rl.cartpole_check               # PPO implementation check on CartPol
 | `tests/test_integration.py` | live vs simulated separation and provenance (real board vs test sender); new API endpoints; admin token; restart without duplicates; end-to-end flow steps 1-12 |
 | `tests/test_edge_runtime.py` | the edge brain, store, models and PPO controller run with pandas, scikit-learn, scipy, joblib and gymnasium unavailable |
 | `raspberry_pi/test_edge_brain.py` | board link states, no invented values, MQ-2 never used as CO2, missing fields stay missing, board timeout, test sender labelled, LED calibration, AI switch, stream notification, API |
+| `tests/test_check_hardware.py` | the bench-check script against a real edge-brain process fed by the test sender: labelled a software check, sensors not sent are MISSING (never PASS), actuator round trip verified, override cleared, no energy label without INA226 data |
+| `tests/test_firmware_check.py` | firmware syntax and library-API check for SCD4x 1.x / 0.x / absent x INA226 Tillaart / INA226Lib / absent x core 3.x / 2.x (skipped without g++ or the library headers) |
 | `tests/e2e/twin_flows.py` | 3D twin in the real dashboard: building/floor/room views, selection, airflow, presentation mode (flows A-F) and provenance / room numbers / models panel (flow G) |
 
 Results of the final run are recorded in `docs/ACCEPTANCE_GATE.md` and `docs/FINAL_REPORT.md`.

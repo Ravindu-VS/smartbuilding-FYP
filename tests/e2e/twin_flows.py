@@ -66,6 +66,20 @@ async def main():
                 if v["mode"] == mode and all(v.get(k) == val for k, val in kw.items()) and not await T("() => !!twin.camTween"): return v
                 await pg.wait_for_timeout(300)
             return await tv()
+        WAITS = []
+        async def click(testid, dbl=False):
+            """Click a dashboard element; wait (up to 20 s) if it is not rendered yet - the navigation is hidden
+            while the dashboard has had no data for > 3 s (a stalled tab under software WebGL)."""
+            t0 = time.time()
+            while time.time() - t0 < 20:
+                if await S(f"() => !!document.querySelector('[data-testid={testid}]')"):
+                    break
+                await pg.wait_for_timeout(250)
+            waited = time.time() - t0
+            if waited > 0.3:
+                WAITS.append((testid, round(waited, 1)))
+            ev = "dispatchEvent(new MouseEvent('dblclick', {bubbles: true}))" if dbl else "click()"
+            await S(f"() => document.querySelector('[data-testid={testid}]').{ev}")
         async def shot(name):
             await pg.wait_for_timeout(2500)
             await pg.screenshot(path=f"flow_{name}.png", timeout=300000)
@@ -75,7 +89,7 @@ async def main():
         n_rooms = await T("() => twin.interiors.rooms.size"); n_live = await T("() => [...twin.interiors.rooms.values()].filter(r => r.live).length")
         check("A", "26 rooms in 3D (25 simulated + 1 live)", n_rooms == 26 and n_live == 1, f"{n_rooms} rooms, {n_live} live")
         await shot("A1_building")
-        await S("() => document.querySelector('[data-testid=pill-floor-2]').click()")
+        await click("pill-floor-2")
         v = await wait_view("floor", floor=2); check("A", "floor pill opens the floor view (L2)", v["mode"] == "floor" and v["floor"] == 2, v)
         cards = await T("() => [...twin.cards.values()].filter(c => c.obj.visible).length")
         check("A", "floor view shows a card for each room on the floor", cards == 6, f"{cards} cards")
@@ -96,19 +110,19 @@ async def main():
         v = await wait_view("building"); check("A", "Esc again returns to the building", v["mode"] == "building", v)
 
         # ---------------- Flow B — direct room navigation
-        await S("() => document.querySelector('[data-testid=nav-floor-4]').click()")
+        await click("nav-floor-4")
         await pg.wait_for_timeout(1200)
-        await S("() => document.querySelector('[data-testid=nav-room-f4_lounge]').dispatchEvent(new MouseEvent('dblclick', {bubbles: true}))")
+        await click("nav-room-f4_lounge", dbl=True)
         v = await wait_view("room", room="f4_lounge"); check("B", "double-click in the room list opens that room", v["mode"] == "room" and v["room"] == "f4_lounge" and v["floor"] == 4, v)
         crumb = await bc(); check("B", "breadcrumb shows floor and room", "Level 4" in crumb and "Penthouse Lounge" in crumb, crumb)
         rp = await S("() => document.body.innerText.includes('Penthouse Lounge')")
         truth = await T("() => twin.interiors.rooms.get('f4_lounge').data.ground_truth.true_occupancy")
         ctx = await S("() => document.querySelector('[data-testid=twin-context]')?.innerText || ''")
         check("B", "panels show the selected room", rp, "")
-        await S("() => document.querySelector('[data-testid=view-up]').click()")
+        await click("view-up")
         v = await wait_view("floor", floor=4); check("B", "'up' returns to the room's floor", v["mode"] == "floor" and v["floor"] == 4, v)
 
-        await S("() => document.querySelector('[data-testid=nav-floor-1]').click()")
+        await click("nav-floor-1")
         await wait_view("floor", floor=1)
         # what the viva demo does: select a room on another floor and ask for its room view
         await S("() => { const st = window.__buildingStore.getState(); st.selectRoom('f2_kitchen'); st.requestTwinView({ mode: 'room', room: 'f2_kitchen' }); }")
@@ -124,7 +138,7 @@ async def main():
         await wait_view("floor", floor=3)
         await T(f"() => twin.setView('room', null, '{occ_room}')")
         v = await wait_view("room", room=occ_room)
-        await S("() => document.querySelector('[data-testid=layer-airflow]').click()")
+        await click("layer-airflow")
         await pg.wait_for_timeout(1500)
         af = await T(f"() => twin.interiors.rooms.get('{occ_room}').hvac.flowGroup.visible")
         check("C", "airflow layer toggles on in the room", af)
@@ -133,15 +147,15 @@ async def main():
         check("C", "airflow intensity follows the AC cooling output", abs(vals["inten"] - max(0.12, vals["cool"] / 100)) < 1e-6, f"{vals['inten']:.2f} vs {vals['cool']}%")
         check("C", "set-point and AC action shown = controller state", vals["sp3d"] == vals["sp"] and vals["act"] in vals["label"], vals["label"])
         check("C", "thermostat hotspot shows the room temperature", any(f"{vals['tempData']:.1f}" in h for h in vals["hot"]), vals["hot"][:2])
-        await S("() => document.querySelector('[data-testid=layer-temperature]').click()")
+        await click("layer-temperature")
         await pg.wait_for_timeout(1500)
         tint = await T(f"() => twin.interiors.rooms.get('{occ_room}').tintFloor.visible")
         check("C", "temperature layer colours the room (room average)", tint)
         await shot("C_hvac")
-        await S("() => document.querySelector('[data-testid=layer-temperature]').click()")
+        await click("layer-temperature")
 
         # ---------------- Flow D — compare rooms
-        await S("() => document.querySelector('[data-testid=pill-floor-2]').click()")
+        await click("pill-floor-2")
         v = await wait_view("floor", floor=2)
         live_badge = await T("() => twin.cards.get('f2_office_a').el.innerHTML.includes('LIVE')")
         sim_badge = await T("() => !twin.cards.get('f2_kitchen').el.innerHTML.includes('LIVE')")
@@ -190,13 +204,13 @@ async def main():
         vis = await T("() => [...twin.interiors.rooms.values()].filter(r => r.group.visible).map(r => r.id)")
         floors_vis = await T("() => twin.building.floors.map(f => f.group.visible)")
         check("F", "rapid switching ends in the last requested view, only that room shown", v["mode"] == "room" and v["room"] == "f0_lobby" and vis == ["f0_lobby"] and floors_vis == [True, False, False, False, False], {"vis": vis, "floors": floors_vis})
-        await S("() => document.querySelector('[data-testid=camera-reset]').click()")
+        await click("camera-reset")
         await pg.wait_for_timeout(3000)
         cam = await T("() => { const t = twin.controls.target; const b = twin.interiors.rooms.get('f0_lobby').box; return t.x >= b.x0 - 1.01 && t.x <= b.x1 + 1.01 && t.z >= b.z0 - 1.01 && t.z <= b.z1 + 1.01; }")
         check("F", "camera reset keeps the target on the room", cam)
         sv = await S("() => document.querySelector('[data-testid=breadcrumb]').innerText.includes('Main Lobby')")
         check("F", "dashboard and 3D agree on the view after all of this", sv)
-        await S("() => document.querySelector('[data-testid=presentation]').click()")
+        await click("presentation")
         await pg.wait_for_timeout(2500)
         pres = await S("() => !!document.querySelector('[data-testid=presentation-hud]')")
         await shot("F_presentation")
@@ -205,20 +219,20 @@ async def main():
         back = await S("() => !document.querySelector('[data-testid=presentation-hud]')")
         check("F", "presentation mode opens and Esc returns to the dashboard", pres and back)
         # ---------------- Flow G — data provenance, room numbers, models panel (master prompt sections 12-13)
-        await S("() => document.querySelector('[data-testid=nav-room-f2_office_b2]').click()")
+        await click("nav-room-f2_office_b2")
         await pg.wait_for_timeout(2500)
         num = await S("() => document.querySelector('[data-testid=room-number]')?.innerText || ''")
         prov = await S("() => document.querySelector('[data-testid=room-provenance]')?.innerText || ''")
         check("G", "simulated room shows its room number", num.startswith("Room 1"), num)
         check("G", "simulated room labels readings as simulated and P(occupied) as an estimate",
               "simulated" in prov and "estimate" in prov, prov[:120])
-        await S("() => document.querySelector('[data-testid=nav-room-f2_office_a]').click()")
+        await click("nav-room-f2_office_a")
         await pg.wait_for_timeout(2500)
         num101 = await S("() => document.querySelector('[data-testid=room-number]')?.innerText || ''")
         board = await S("() => document.querySelector('[data-testid=board-status]')?.innerText || ''")
         check("G", "the real room is Room 101 and shows its board status (no invented values)",
               num101 == "Room 101" and board != "", f"{num101} / {board}")
-        await S("() => document.querySelector('[data-testid=tab-models]').click()")
+        await click("tab-models")
         for _ in range(40):
             ok = await S("() => !!document.querySelector('[data-testid=models-live]')")
             if ok: break
@@ -232,8 +246,11 @@ async def main():
         await pg.wait_for_timeout(2000)
         crit = [e for e in errs if "favicon" not in e]
         check("ALL", "no page errors / console errors / failed requests", len(crit) == 0, crit[:5])
+        print("waited for elements (dashboard briefly without data):", WAITS or "never")
         await b.close()
     passed = sum(1 for r in RESULTS if r[2])
     print(f"\n{passed}/{len(RESULTS)} checks passed")
     json.dump([{"flow": f, "check": n, "pass": ok, "detail": str(d)[:300]} for f, n, ok, d in RESULTS], open("twin_flows_results.json", "w"), indent=1)
+    if passed < len(RESULTS):
+        sys.exit(1)
 asyncio.run(main())

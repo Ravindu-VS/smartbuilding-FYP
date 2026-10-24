@@ -68,18 +68,31 @@
 // -------------------------------------------------------------------
 // Optional sensor libraries — comment out if library not installed
 // -------------------------------------------------------------------
-// SCD41 CO2 Sensor (Sensirion I2C)
-#if __has_include(<SensirionI2CScd4x.h>)
+// SCD41 CO2 Sensor (Sensirion I2C SCD4x). Library 1.x renamed the header and class
+// (SensirionI2cScd4x) and changed begin()/getDataReady; both versions are supported.
+#if __has_include(<SensirionI2cScd4x.h>)
+  #include <SensirionI2cScd4x.h>
+  #define HAS_SCD41_LIB true
+  #define SCD4X_LIB_V1 true
+#elif __has_include(<SensirionI2CScd4x.h>)
   #include <SensirionI2CScd4x.h>
   #define HAS_SCD41_LIB true
+  #define SCD4X_LIB_V1 false
 #else
   #define HAS_SCD41_LIB false
 #endif
 
-// INA226 Power Monitor
+// INA226 Power Monitor. Two libraries ship an INA226.h with different APIs:
+//   "INA226" by Rob Tillaart (Library Manager; defines INA226_LIB_VERSION)  -> recommended
+//   "INA226Lib" by Peter Buchegger / K. Jarzebski (Library Manager)          -> also supported
 #if __has_include(<INA226.h>)
   #include <INA226.h>
   #define HAS_INA226_LIB true
+  #if defined(INA226_LIB_VERSION)
+    #define INA226_TILLAART true
+  #else
+    #define INA226_TILLAART false
+  #endif
 #else
   #define HAS_INA226_LIB false
 #endif
@@ -215,11 +228,19 @@ int   ld2410_distance_cm = 0;
 
 // Conditional global objects
 #if HAS_SCD41_LIB
-  SensirionI2CScd4x scd41;
+  #if SCD4X_LIB_V1
+    SensirionI2cScd4x scd41;
+  #else
+    SensirionI2CScd4x scd41;
+  #endif
 #endif
 
 #if HAS_INA226_LIB
-  INA226 ina226(0x40);
+  #if INA226_TILLAART
+    INA226 ina226(0x40, &Wire);
+  #else
+    INA226 ina226(Wire);   // INA226Lib; the original GitHub Arduino-INA226 needs: INA226 ina226;
+  #endif
 #endif
 
 #if HAS_LD2410_LIB
@@ -466,10 +487,14 @@ void setup_wifi() {
 
 void init_scd41() {
   #if HAS_SCD41_LIB
-    scd41.begin(Wire);
+    #if SCD4X_LIB_V1
+      scd41.begin(Wire, 0x62);
+    #else
+      scd41.begin(Wire);
+    #endif
     
     // Stop any previous measurement before reconfiguring
-    uint16_t error = scd41.stopPeriodicMeasurement();
+    int16_t error = scd41.stopPeriodicMeasurement();
     delay(500);
     
     // Start periodic measurement (one measurement every ~5 seconds)
@@ -485,12 +510,18 @@ void init_scd41() {
 
 void init_ina226() {
   #if HAS_INA226_LIB
+    #if INA226_TILLAART
     if (ina226.begin()) {
+      ina226.setAverage(INA226_16_SAMPLES);
+      ina226.setMaxCurrentShunt(1.0, 0.1);  // max 1 A, 0.1 ohm shunt — adjust for your hardware
+    #else
+    if (ina226.begin(0x40)) {
       ina226.configure(INA226_AVERAGES_16,
                        INA226_BUS_CONV_TIME_1100US,
                        INA226_SHUNT_CONV_TIME_1100US,
                        INA226_MODE_SHUNT_BUS_CONT);
       ina226.calibrate(0.1, 1.0);  // 0.1 ohm shunt, max 1A — adjust for your hardware
+    #endif
       ina226_found = true;
       Serial.println("  + INA226 Power Monitor ACTIVE (I2C 0x40)");
     } else {
@@ -522,9 +553,13 @@ void read_scd41() {
     float temp_raw, hum_raw;
     bool isDataReady = false;
     
-    scd41.getDataReadyFlag(isDataReady);
+    #if SCD4X_LIB_V1
+      scd41.getDataReadyStatus(isDataReady);
+    #else
+      scd41.getDataReadyFlag(isDataReady);
+    #endif
     if (isDataReady) {
-      uint16_t error = scd41.readMeasurement(co2_raw, temp_raw, hum_raw);
+      int16_t error = scd41.readMeasurement(co2_raw, temp_raw, hum_raw);
       if (error == 0 && co2_raw > 0) {
         scd41_co2 = (float)co2_raw;
         scd41_temp = temp_raw;
@@ -537,9 +572,15 @@ void read_scd41() {
 
 void read_ina226() {
   #if HAS_INA226_LIB
-    ina226_voltage = ina226.readBusVoltage();
-    ina226_current_mA = ina226.readShuntCurrent() * 1000.0;  // A -> mA
-    ina226_power_mW = ina226.readBusPower() * 1000.0;        // W -> mW
+    #if INA226_TILLAART
+      ina226_voltage = ina226.getBusVoltage();           // V
+      ina226_current_mA = ina226.getCurrent_mA();        // mA
+      ina226_power_mW = ina226.getPower_mW();            // mW
+    #else
+      ina226_voltage = ina226.readBusVoltage();
+      ina226_current_mA = ina226.readShuntCurrent() * 1000.0;  // A -> mA
+      ina226_power_mW = ina226.readBusPower() * 1000.0;        // W -> mW
+    #endif
   #endif
 }
 

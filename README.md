@@ -177,7 +177,10 @@ occupied time with |PMV| > 0.5:
   blocked. Credentials live in the environment (MQTT) or a git-ignored `secrets.h` (Wi-Fi).
 * Hardware status ([docs/HARDWARE.md](docs/HARDWARE.md)): firmware implemented (HTTP); edge HTTP and MQTT paths
   implemented and tested with a test sender and a simulated MQTT board; **firmware not compiled and no physical
-  bench test in this work** (no toolchain or board available here).
+  bench test in this work** (no toolchain or board available here). A host-side syntax and library-API check
+  (`firmware/tools/check_firmware.py`) found and fixed two library problems (SCD41 silently skipped with the
+  current SCD4x library; INA226 code that compiled with no INA226 library). When the board is wired, follow the
+  bring-up steps in docs/HARDWARE.md and run `python3 scripts/check_hardware.py --actuators --ask`.
 
 ## 8. Reproduce
 
@@ -216,6 +219,7 @@ python3 -m pytest -q                                                          # 
   deviations are not always smaller than the optimiser's (section 6).
 * Re-running experiments 1 and 5-8 from scratch takes hours: the 108 distinct runs took 3.9 h of worker time
   on 2 vCPUs (about 2 h with 2 workers). The run cache `experiments/results/run_cache/` is not committed.
-* Firmware not compiled and not bench-tested in this work; the board uses HTTP (MQTT is implemented on the edge).
+* Firmware not compiled for the ESP32-S3 and not bench-tested in this work (only a host-side syntax / library-API
+  check); the board uses HTTP (MQTT is implemented on the edge).
 * Raspberry Pi GPIO outputs are recorded, not driven (`gpio_driving: false`).
 * This is a research prototype without safety certification ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).

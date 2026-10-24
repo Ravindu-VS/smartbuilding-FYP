@@ -134,7 +134,8 @@ building. Results: `experiments/results/SUMMARY.md`, `experiments/results/exp0*/
 | HTTP path from the firmware | implemented and tested with the firmware's payload |
 | Manual override, actuator verification | implemented, tested |
 | Edge runtime without the training stack | tested (`tests/test_edge_runtime.py`) |
-| ESP32-S3 firmware | implemented (HTTP); **not compiled, not bench-tested in this work** |
+| ESP32-S3 firmware | implemented (HTTP); host-side syntax / library-API check passes for all supported library versions (two library bugs fixed); **not compiled for the ESP32-S3, not bench-tested in this work** |
+| Bench check for the real room | `scripts/check_hardware.py` (sensors, report interval, actuators through a manual override, operator confirmation); tested against the test sender, where it is labelled a software check |
 | Raspberry Pi 4B | runtime requirements tested in a Linux container; **not run on a Pi here**; GPIO outputs recorded, not driven |
 
 ## 7. Testing evidence
@@ -185,6 +186,8 @@ python3 experiments/run.py --all   # experiments 1-10
    reachable) and not bench-tested; the Raspberry Pi runtime was tested in a Linux container, not on a Pi; GPIO
    outputs are recorded, not driven. The firmware still sends HTTP; MQTT is implemented and tested on the edge side
    with a local broker and a simulated board only. Room 101's live path is verified in software, not physically.
+   Only a host-side syntax / library-API check of the firmware was possible; the remaining hardware work is the
+   bring-up in docs/HARDWARE.md, ending with `scripts/check_hardware.py --actuators --ask` on the real board.
 2. **Control results are simulation results.** All energy and comfort comparisons come from the digital twin
    (synthetic). The twin's physics is checked against the thesis reference trace and physical sanity tests, but it
    is not calibrated against metered data from the real building, so the savings are not a prediction for it.
