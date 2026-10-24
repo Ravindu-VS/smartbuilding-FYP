@@ -28,6 +28,8 @@ Desktop.ini
 *.pkl
 *.db
 *.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 Dataset/Citylearn/
 Dataset/Unified/
 
