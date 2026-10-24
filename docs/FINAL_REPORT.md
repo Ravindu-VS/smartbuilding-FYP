@@ -56,7 +56,8 @@ RF was trained on them and on its own test rows. Measured Colombo weather: BLOCK
 | `thermal_h15` v1 | twin seeds 11-16 | unseen seeds 21-23 | MAE 0.158 K (persistence 0.226) | active |
 | `thermal_h30` v1 | same | same | MAE 0.267 K (persistence 0.341) | active (live forecasts in the dashboard) |
 | `energy_dayahead` v1 | BDG2 Jun 2016-May 2017, 18 offices | Jun-Dec 2017; 5 unseen buildings | CV(RMSE) 15.4 % (seasonal naive 22.5 %); unseen 13.5 % (persistence 14.0 %) | active (evaluation only; not used for control) |
-| `ppo_policy` | twin, reward v1 / v2 | twin seeds 1-3 | see section 5 | see section 5 |
+| `ppo_policy` v1 - PPO, reward v1 | twin, simulator seeds >= 1000 | twin seeds 1-3 | 16.0 % less energy, discomfort 25.5 % (schedule 21.7 %) | rejected (comfort) |
+| `ppo_policy` v2 - PPO, reward v2 | same | twin seeds 1-3; confirmed on 4-6 | 11.3 % less energy, discomfort 5.2 % (seeds 4-6: 11.1 %, 4.6 %) | approved (simulated rooms only) |
 
 Artifacts: `models/registry/<task>/<version>/` (numpy-only `model.json`, `model.joblib`, `metadata.json` with
 data SHA-256, features and units, split, seed, metrics, training distribution; `model_card.md`). Limitations per
@@ -65,7 +66,62 @@ site with observed weather as a perfect forecast.
 
 ## 5. Controller comparison
 
-<!-- CONTROL -->
+Protocol (`rl/evaluate.py`, experiments 1 and 5-8): 25 simulated rooms, identical weather, occupants, sensor noise
+and faults for every controller of a seed; 7 measured days from 2 Mar 2026 after warm-up (7 days for the
+multi-objective controller's learning week, 2 days otherwise); evaluation seeds 1-3; PPO trained on simulator seeds
+>= 1000 only. Savings = (E_schedule - E_controller) / E_schedule, negative when more energy is used.
+
+**PPO registration.** Reward v1 (comfort severity only, small switching cost) saved 16.0 % / 10.6 % / 14.6 % energy
+(normal / hot / high occupancy) but left people outside |PMV| <= 0.5 for more of the occupied time than the schedule
+(25.5 % vs 21.7 % in the normal scenario) and cycled the AC 2,066 times a week: the registry rejected it
+(`models/registry/ppo_policy/v1`). Reward v2 (adds discomfort duration and larger switching costs), trained from
+scratch with the same settings, passed and is the approved version (`ppo_policy` v2, selected by validation return
+before evaluation).
+
+Normal week:
+
+| Controller | Energy, 7 days (kWh) | vs schedule | Occupied time with \|PMV\| > 0.5 | PMV-hours > 0.5 | AC on/off cycles | Light switches | Decision time (ms) |
+|---|---|---|---|---|---|---|---|
+| Conventional schedule | 10,964 ± 76 | +0.0 % | 21.7 % | 197.9 | 324 | 334 | 0.01 |
+| Always on | 14,705 ± 99 | -34.1 % | 8.6 % | 2.9 | 0 | 0 | 0.00 |
+| RF threshold rule (original) | 11,836 ± 113 | -7.9 % | 36.9 % | 153.9 | 0 | 1567 | 0.01 |
+| Multi-objective (MPC-like) | 10,120 ± 109 | +7.7 % | 13.6 % | 28.6 | 640 | 2020 | 0.38 |
+| PPO (v2) | 9,721 ± 92 | +11.3 % | 5.2 % | 26.6 | 771 | 911 | 0.05 |
+
+All scenarios (energy change vs schedule / share of occupied time with |PMV| > 0.5):
+
+| Scenario | Schedule: energy (kWh) / discomfort | Multi-objective: vs schedule / discomfort | PPO: vs schedule / discomfort | PPO AC cycles (schedule) | Fail-safe F1 / F2 / F3 (PPO) |
+|---|---|---|---|---|---|
+| normal | 10,964 / 21.7 % | +7.7 % / 13.6 % | +11.3 % / 5.2 % | 771 (324) | 0 / 0 / 0 |
+| low_occupancy | 10,498 / 18.3 % | +9.7 % / 10.4 % | +14.9 % / 5.3 % | 724 (324) | 0 / 0 / 0 |
+| high_occupancy | 11,228 / 22.5 % | +7.2 % / 14.7 % | +10.4 % / 5.8 % | 771 (324) | 0 / 0 / 0 |
+| sudden_occupancy | 10,993 / 22.7 % | +6.8 % / 13.8 % | +10.8 % / 5.4 % | 810 (324) | 0 / 0 / 0 |
+| hot_weather | 12,242 / 27.0 % | +4.7 % / 21.7 % | +7.0 % / 9.5 % | 978 (324) | 0 / 0 / 0 |
+| cool_weather | 8,504 / 20.6 % | +11.9 % / 0.7 % | +21.0 % / 5.1 % | 316 (324) | 0 / 0 / 0 |
+| sensor_dropout | 10,964 / 21.7 % | +6.9 % / 14.6 % | +10.9 % / 7.6 % | 1201 (324) | 23374 / 0 / 0 |
+| network_outage | 10,964 / 21.7 % | +6.8 % / 14.2 % | +10.7 % / 7.2 % | 872 (324) | 14632 / 0 / 0 |
+| hvac_failure | 10,933 / 22.5 % | +7.4 % / 13.6 % | +11.2 % / 6.6 % | 788 (324) | 0 / 0 / 0 |
+| hvac_reduced | 10,808 / 32.0 % | +7.0 % / 21.9 % | +11.0 % / 12.2 % | 830 (324) | 0 / 0 / 0 |
+
+* PPO v2: 7.0-21.0 % less energy than the schedule in every scenario; lower discomfort share than the schedule and
+  the multi-objective controller in every scenario except cool weather (0.7 % multi-objective vs 5.1 % PPO).
+* Confirmation on seeds 4-6 (not used in the reward redesign): schedule 10,892 kWh / 22.2 %; multi-objective
+  -7.9 % energy / 11.2 %; PPO -11.1 % / 4.6 %. Training-seed variability: the second run's policy 9,770 kWh / 6.1 %
+  (selected run 9,721 kWh / 5.2 %).
+* Costs: AC on/off cycles 2.2-3.7 x the schedule's (cool weather: 316 vs 324); PMV-hours higher than the
+  multi-objective controller's in 6 of 10 scenarios (low occupancy, cool weather, all four fault scenarios).
+* The original RF rule used 7.9 % more energy than the schedule and was less comfortable (36.9 %).
+* Fault tolerance: sensor dropout / stuck sensors and network outages handled by the fail-safe (F1 counts above), no
+  exceptions or invalid actions from any controller (F2 = F3 = 0 in all 10 scenarios); a crashing controller falls
+  back to the schedule on every decision (F2 = 12,600); a corrupted model is refused with its error and no
+  substitute prediction.
+* Experiment 9: room, floor, end-use and building energy agree to < 1e-9 kWh in every run; the live meter equals the
+  rooms' energy.
+
+Conclusion: in the digital twin, PPO v2 is the most energy-efficient controller tested and reduces how often people
+are uncomfortable, at the cost of more AC cycling and, in some scenarios, larger comfort deviations than the
+multi-objective controller. These are simulation results (synthetic data); no savings are claimed for the real
+building. Results: `experiments/results/SUMMARY.md`, `experiments/results/exp0*/`.
 
 ## 6. Integration status
 
@@ -83,7 +139,26 @@ site with observed weather as a perfect forecast.
 
 ## 7. Testing evidence
 
-<!-- TESTS -->
+`python3 -m pytest` on 23 Oct 2026 (Linux container, Python 3.13, 2 vCPUs): **94 passed in 55 s**, no failures, no
+skips.
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/test_simulation.py` | 11 | 26 rooms / 5 floors / one real room / numbers, rooms not identical, AC physics (cooling, COP, capacity factor), time-step stability, lighting power, energy sums, seeds, safety layer, invalid commands rejected |
+| `tests/test_twin.py` | 15 | thesis physics reference trace, both copies see the same weather and people, determinism, AI switch and same-period meter, truth vs prediction vs baseline in the room state, scenarios, clock, real-room controller |
+| `tests/test_scenarios.py` | 9 | every scenario exists, records validate and are deterministic, validation catches impossible states, occupancy scaling, AC failure, dropout / outage, InputGuard and GuardedController |
+| `tests/test_datasets.py` | 5 | manifest documents every raw dataset, tracked UCI copy = manifest, processed table ordered and complete, reproducible preprocessing, raw data not committed |
+| `tests/test_ml.py` | 17 | online = batch features (occupancy, thermal), no feature across a gap, chronological splits, metrics, portable JSON = scikit-learn, input validation, reproducible training, registry acceptance / promote / rollback / tampering, drift, registered models self-test, model failure reported (not replaced) |
+| `tests/test_rl.py` | 11 | gradients vs finite differences, GAE, save/load, environment API (gymnasium check), allowed commands only, decision hold and AC dwell, inference without the training stack, PPO behind guard and safety layer, policy failure -> rules, missing policy is an error |
+| `tests/test_store_mqtt.py` | 7 | SQLite migrations and restart, history and commands, telemetry schema, MQTT end-to-end with a broker (dedupe, acks, credentials never logged), ack time-outs, reconnect after a broker restart, export keeps provenance classes apart |
+| `tests/test_integration.py` | 6 | live and simulated rooms stay separate, new endpoints, admin token on model changes, restart without duplicates, end-to-end ingestion -> store -> decision -> command, manual override and actuator verification |
+| `tests/test_edge_runtime.py` | 1 | the edge brain runs with pandas / scikit-learn / scipy / joblib / gymnasium blocked |
+| `raspberry_pi/test_edge_brain.py` | 12 | 26 rooms / one hardware room, no board = not connected and no values, readings shown exactly, MQ-2 never used as CO2, missing fields stay missing, board time-out, test sender never shown as the board, AI switch, SSE, API |
+
+Dashboard: `npx tsc --noEmit`, `npx eslint src` and `npx next build` clean. Browser flows: see below.
+Experiments 1-10: all PASS (`experiments/results/SUMMARY.md`).
+
+<!-- BROWSER -->
 
 ## 8. Repository clean-up
 

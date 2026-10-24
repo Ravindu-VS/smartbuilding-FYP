@@ -47,12 +47,12 @@ given); N/A = does not apply. Code existing is never enough for PASS.
 | Item | Status | Evidence |
 |---|---|---|
 | Environment with valid observations, actions, rewards | PASS | `tests/test_rl.py` (shapes, finite rewards, truncation, invalid actions), gymnasium `check_env` |
-| PPO trained | PASS | numpy PPO verified on CartPole (500/500, 3 seeds); runs in `models/ppo_runs/` |
+| PPO trained | PASS | numpy PPO verified on CartPole (500/500, 3 seeds); 2 x 2 runs of 160 episodes (`models/ppo_runs/`); v1 rejected, v2 approved by the registry |
 | Saved policy reloads for inference | PASS | `test_policy_save_load_roundtrip_and_shape_check`, `test_policy_runs_without_training_environment`, edge runtime test |
 | Policy respects control constraints | PASS | action set limited to 22-27 C set-points; AC dwell; safety layer in every step (`test_ppo_in_the_runner_passes_safety_and_guard`) |
-| Compared with relevant baselines | see below | experiments 5-8 |
-| Energy, comfort and failure outcomes reported | see below | |
-| No unsupported superiority or savings claims | see below | |
+| Compared with relevant baselines | PASS | experiments 5-8 (schedule, always-on, original RF rule, multi-objective MPC-like optimiser; 10 scenarios x 3 seeds, matched conditions); confirmation on seeds 4-6 and a second training seed (experiment 5 extras) |
+| Energy, comfort and failure outcomes reported | PASS | energy (HVAC / lighting / total, savings incl. negative), discomfort share and PMV-hours, overheating, IAQ, switching and AC cycles, fail-safe F1-F3, decision time (`experiments/results/SUMMARY.md`) |
+| No unsupported superiority or savings claims | PASS | results labelled synthetic; the cases where PPO is worse are stated (more AC cycling, higher PMV-hours than the optimiser in 6/10 scenarios, cool-weather discomfort); v1 rejection kept; no claim for the real building; not described as multi-agent |
 
 ## E. Self-learning
 
@@ -92,11 +92,11 @@ given); N/A = does not apply. Code existing is never enough for PASS.
 
 | Item | Status | Evidence |
 |---|---|---|
-| Automated tests executed | see final run | docs/TESTING.md |
+| Automated tests executed | PASS | `python3 -m pytest`: 94 passed in 55 s, 0 failed, 0 skipped (23 Oct 2026; docs/FINAL_REPORT.md section 7) |
 | Frontend and backend builds checked | PASS | `npx tsc --noEmit`, `npx eslint src`, `npx next build` succeeded; backend imports and tests |
-| Model-loading and integration tests pass | see final run | |
+| Model-loading and integration tests pass | PASS | `test_registered_models_load_and_self_test`, `test_model_failure_is_reported_not_replaced`, `tests/test_integration.py` (6), `tests/test_store_mqtt.py` (7); live `/api/models`: thermal_h30, occupancy_rf active, fusion in shadow, all loaded; PPO available as `ppo_policy v2` |
 | No known critical runtime errors | see final run | |
 | Unnecessary files safely removed | PASS (quarantined) | moved to `archive/legacy_v1/` with git mv, verified by the full test run; permanent deletion deliberately left to the owner (docs/CLEANUP.md) |
 | No required project assets lost | PASS | nothing deleted; datasets, models, firmware, results kept; `run_local.bat` restored after the reference check |
-| Repository starts from documented instructions | see final run | README section 4, docs/DEPLOYMENT.md |
+| Repository starts from documented instructions | PASS | `scripts/start.sh dev` (README section 4) started the edge brain and the dashboard on 24 Oct 2026 (health and dashboard answered); Windows `run_local.bat` not run here |
 | Research evidence and model artifacts reproducible | PASS | manifest checksums, registry metadata, experiment configs and status files |

@@ -1,0 +1,68 @@
+{
+ "ppo_seed_variability": {
+  "passed": true,
+  "runs": {
+   "v2_seed0": {
+    "energy_kwh": 9720.80548903,
+    "energy_kwh_sd": 91.7354930018836,
+    "discomfort_share": 0.05191466804689737,
+    "discomfort_share_sd": 0.003410730953416674,
+    "discomfort_pmv_h": 26.64779825931333,
+    "iaq_min": 0.0,
+    "light_switches": 911.3333333333334,
+    "hvac_changes": 911.6666666666666,
+    "failsafe_F2": 0.0
+   },
+   "v2_seed1": {
+    "energy_kwh": 9770.270334239878,
+    "energy_kwh_sd": 88.818091054867,
+    "discomfort_share": 0.0605421218656472,
+    "discomfort_share_sd": 0.004341791458426506,
+    "discomfort_pmv_h": 34.640888227503034,
+    "iaq_min": 0.0,
+    "light_switches": 697.6666666666666,
+    "hvac_changes": 875.0,
+    "failsafe_F2": 0.0
+   }
+  },
+  "result": "best policy of each training run on normal/seeds 1-3 - v2_seed0: 9721 kWh, discomfort 5.2 %; v2_seed1: 9770 kWh, discomfort 6.1 %"
+ },
+ "ppo_confirmation_new_seeds": {
+  "passed": true,
+  "errors": [],
+  "version": "v2",
+  "runs": {
+   "schedule": {
+    "energy_kwh": 10891.855053582953,
+    "energy_kwh_sd": 65.64628549778904,
+    "savings_vs_schedule_pct": 0.0,
+    "discomfort_share": 0.22166325396683761,
+    "discomfort_pmv_h": 197.10277099513766,
+    "iaq_min": 0.0,
+    "ac_cycles": 324.0,
+    "light_switches": 334.0
+   },
+   "mo": {
+    "energy_kwh": 10031.205539855058,
+    "energy_kwh_sd": 102.77886051243294,
+    "savings_vs_schedule_pct": 7.9033211714021165,
+    "discomfort_share": 0.11157017534386748,
+    "discomfort_pmv_h": 24.024913498357336,
+    "iaq_min": 0.0,
+    "ac_cycles": 621.0,
+    "light_switches": 1967.6666666666667
+   },
+   "ppo": {
+    "energy_kwh": 9682.702740098513,
+    "energy_kwh_sd": 110.08356936180701,
+    "savings_vs_schedule_pct": 11.103102152196383,
+    "discomfort_share": 0.04568858122909086,
+    "discomfort_pmv_h": 24.41000462658872,
+    "iaq_min": 0.0,
+    "ac_cycles": 771.6666666666666,
+    "light_switches": 948.3333333333334
+   }
+  },
+  "result": "ppo_policy v2 on normal / seeds 4-6 (not used in the reward redesign) - schedule: 10892 kWh (+0.0 % vs schedule), discomfort 22.2 %, AC cycles 324; mo: 10031 kWh (+7.9 % vs schedule), discomfort 11.2 %, AC cycles 621; ppo: 9683 kWh (+11.1 % vs schedule), discomfort 4.6 %, AC cycles 772"
+ }
+}

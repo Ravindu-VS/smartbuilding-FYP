@@ -45,3 +45,26 @@ evidence (command + result), and the next action. Resume from the last "Next" li
 - Next: finish PPO training (seeds 0, 1; then 2), retrain ML into a fresh registry (feature references),
   `ml.registry init`, register the selected PPO policy, run experiments 1-8, full test run, browser flows,
   README / final report / acceptance gate, commit, apply to G:.
+
+## 2026-10-23/24 — Phase 2: models, PPO, experiments, final checks
+
+- ML retrained into a fresh registry with feature references (`python3 -m ml.occupancy`, `ml.thermal`,
+  `ml.energy`, `ml.registry init`): all tasks active v1 except `occupancy_co2_temporal` (rejected: F1 0.465 <
+  deployed CO2 tree 0.530). First `init` rejected 6 models on latency (11-18 ms under 3-process load): forest
+  inference vectorised (0.2-0.4 ms), timing best-of-20; the rejections stay in the registry history.
+- PPO reward v1 (2 seeds x 160 episodes): saved 16.0 / 10.6 / 14.6 % vs the schedule but discomfort 25.5 % vs
+  21.7 % and 2,066 AC cycles/week -> registry rejected `ppo_policy` v1 (comfort). Reward v2 (duration term, larger
+  switching costs), trained from scratch: v2 seed 0 selected by validation return (-93.9 vs -94.1) -> `ppo_policy` v2
+  passed and was promoted.
+- Content-addressed run cache for control runs (`rl/evaluate.py`: hash of twin code, policy file, RF version).
+- Experiments: `python3 experiments/run.py exp01_baseline exp05_control exp06_occupancy_variation exp07_weather
+  exp08_fault_tolerance exp09_consistency` -> all PASS; experiments 2-4 and 10 PASS earlier the same day
+  (`experiments/results/SUMMARY.md`). Added check: approved PPO on seeds 4-6 (not used in the reward redesign):
+  PPO -11.1 % energy, discomfort 4.6 % (schedule 22.2 %; multi-objective -7.9 %, 11.2 %).
+- Tests: `python3 -m pytest` -> **94 passed in 55 s** (idle machine). Dashboard `npx tsc --noEmit`, `npx eslint src`
+  clean (24 Oct).
+- Docs: README results section, `docs/RL.md` (reward v2 and why v1 was rejected), `docs/FINAL_REPORT.md`,
+  `docs/ACCEPTANCE_GATE.md`, completion matrix final column.
+- Not done / blocked: firmware compile and bench test (no toolchain, no board), Pi hardware run, measured Colombo
+  weather; the linked PC's shell is a sandbox without the G: drive, so the update is delivered as a git bundle +
+  `apply_update.bat`.

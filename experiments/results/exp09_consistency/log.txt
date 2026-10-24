@@ -2,4 +2,9 @@
 PASS sum of rooms = building 0.0
 PASS sum of floors = building 0.0
 PASS sum of end uses = building 4.656612873077393e-10
+PASS exp07_weather: room sum - total (max over runs, kWh) 2.1464074961841106e-10
+PASS exp05_control: room sum - total (max over runs, kWh) 3.3287506084889174e-10
+PASS exp06_occupancy_variation: room sum - total (max over runs, kWh) 2.4920154828578234e-10
+PASS exp08_fault_tolerance: room sum - total (max over runs, kWh) 2.4010660126805305e-10
+PASS exp01_baseline: room sum - total (max over runs, kWh) 2.346496330574155e-10
 PASS live twin: meter segments = energy of the 25 rooms over 3 simulated hours (kWh) 2.842170943040401e-14

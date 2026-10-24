@@ -86,7 +86,11 @@ def run_control(cfg, out_dir):
     consistency = max(abs(r["metrics"]["consistency_room_sum_minus_total_kwh"]) for r in res["runs"] if r["status"] == "ok")
     status = "PASS" if not errors and all(v.get("passed", True) for v in extra.values()) else "FAIL"
     print(markdown(res["summary"], cfg["controllers"]))
-    return status, {"policy": policy, "runs": len(res["runs"]), "errors": [e.get("error") for e in errors],
+    ok = [r for r in res["runs"] if r["status"] == "ok"]
+    return status, {"policy": os.path.relpath(policy, ROOT).replace(os.sep, "/") if policy else None,
+                    "runs": len(res["runs"]), "errors": [e.get("error") for e in errors],
+                    "runs_from_cache": sum(1 for r in ok if r.get("cached")),
+                    "simulation_s": round(sum(r["metrics"]["wall_s"] for r in ok), 1),
                     "max_room_sum_minus_total_kwh": consistency, "wall_s": res["wall_s"]}
 
 

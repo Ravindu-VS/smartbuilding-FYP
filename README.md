@@ -118,7 +118,52 @@ sensor noise, so every minute has both results.
 
 ### Control (digital twin, synthetic; 7 days x 3 seeds, matched conditions; [docs/RL.md](docs/RL.md))
 
-<!-- CONTROL_RESULTS -->
+Normal week (experiments 1 and 5; mean ± sd over seeds; 25 simulated rooms, 7 measured days):
+
+| Controller | Energy, 7 days (kWh) | vs schedule | Occupied time with \|PMV\| > 0.5 | PMV-hours > 0.5 | AC on/off cycles | Light switches | Decision time (ms) |
+|---|---|---|---|---|---|---|---|
+| Conventional schedule | 10,964 ± 76 | +0.0 % | 21.7 % | 197.9 | 324 | 334 | 0.01 |
+| Always on | 14,705 ± 99 | -34.1 % | 8.6 % | 2.9 | 0 | 0 | 0.00 |
+| RF threshold rule (original) | 11,836 ± 113 | -7.9 % | 36.9 % | 153.9 | 0 | 1567 | 0.01 |
+| Multi-objective (MPC-like) | 10,120 ± 109 | +7.7 % | 13.6 % | 28.6 | 640 | 2020 | 0.38 |
+| PPO (v2) | 9,721 ± 92 | +11.3 % | 5.2 % | 26.6 | 771 | 911 | 0.05 |
+
+All scenarios (experiments 5-8): energy change vs the conventional schedule (negative = more energy) and share of
+occupied time with |PMV| > 0.5:
+
+| Scenario | Schedule: energy (kWh) / discomfort | Multi-objective: vs schedule / discomfort | PPO: vs schedule / discomfort | PPO AC cycles (schedule) | Fail-safe F1 / F2 / F3 (PPO) |
+|---|---|---|---|---|---|
+| normal | 10,964 / 21.7 % | +7.7 % / 13.6 % | +11.3 % / 5.2 % | 771 (324) | 0 / 0 / 0 |
+| low_occupancy | 10,498 / 18.3 % | +9.7 % / 10.4 % | +14.9 % / 5.3 % | 724 (324) | 0 / 0 / 0 |
+| high_occupancy | 11,228 / 22.5 % | +7.2 % / 14.7 % | +10.4 % / 5.8 % | 771 (324) | 0 / 0 / 0 |
+| sudden_occupancy | 10,993 / 22.7 % | +6.8 % / 13.8 % | +10.8 % / 5.4 % | 810 (324) | 0 / 0 / 0 |
+| hot_weather | 12,242 / 27.0 % | +4.7 % / 21.7 % | +7.0 % / 9.5 % | 978 (324) | 0 / 0 / 0 |
+| cool_weather | 8,504 / 20.6 % | +11.9 % / 0.7 % | +21.0 % / 5.1 % | 316 (324) | 0 / 0 / 0 |
+| sensor_dropout | 10,964 / 21.7 % | +6.9 % / 14.6 % | +10.9 % / 7.6 % | 1201 (324) | 23374 / 0 / 0 |
+| network_outage | 10,964 / 21.7 % | +6.8 % / 14.2 % | +10.7 % / 7.2 % | 872 (324) | 14632 / 0 / 0 |
+| hvac_failure | 10,933 / 22.5 % | +7.4 % / 13.6 % | +11.2 % / 6.6 % | 788 (324) | 0 / 0 / 0 |
+| hvac_reduced | 10,808 / 32.0 % | +7.0 % / 21.9 % | +11.0 % / 12.2 % | 830 (324) | 0 / 0 / 0 |
+
+* **PPO v2** (approved by the registry) used 7.0-21.0 % less energy than the schedule in every scenario and had a
+  lower discomfort share than the schedule and the multi-objective controller in every scenario except cool
+  weather. The result held on evaluation seeds 4-6, which were not used when the reward was redesigned: 11.1 % less
+  energy, discomfort 4.6 % (schedule 22.2 %; multi-objective 7.9 % less energy, 11.2 %). The policy of the second
+  training seed gave 9,770 kWh and 6.1 % on seeds 1-3.
+* **Costs and weak spots.** PPO switches the AC on/off 2.2-3.7 x as often as the schedule (except in cool weather:
+  316 vs 324); the 10-min dwell is enforced, compressor wear is not modelled. In cool weather the multi-objective
+  controller kept discomfort at 0.7 % against PPO's 5.1 % (PPO saved more energy). PMV-hours (how far outside the
+  comfort band) are higher for PPO than for the multi-objective controller in 6 of the 10 scenarios (low occupancy,
+  cool weather and all four fault scenarios; AC failure 48.3 vs 28.6): PPO's advantage is in how often people are
+  uncomfortable, not consistently in how much.
+* **Original RF rule** used 7.9 % *more* energy than the schedule and was less comfortable (36.9 % of occupied
+  time; 45,509 overheated room-minutes vs 12,153).
+* **Faults.** With sensor dropouts / stuck sensors and network outages the fail-safe replaced the affected decisions
+  with the schedule's (F1 counts above); no controller raised an exception or issued an invalid command (F2 = F3 = 0).
+  A controller that crashes on every decision falls back to the schedule on every decision (F2 = 12,600) and the
+  building keeps running; a corrupted model is reported as not loaded and no prediction is produced.
+* These are **simulation results** on a twin that is not calibrated against metered data from the building; they
+  compare controllers under identical conditions and are not a savings forecast for the real building.
+  Full tables: [experiments/results/SUMMARY.md](experiments/results/SUMMARY.md).
 
 ## 7. Self-learning, safety and the hardware path
 
@@ -166,7 +211,11 @@ python3 -m pytest -q                                                          # 
   building model or CFD; the 3D furnishing and airflow are illustrative.
 * Models trained on the simulator learn the simulator; the UCI data is one office in a Belgian winter; the
   real room has no labelled occupancy data yet, so its controller stays rule-based plus the optimiser.
-* PPO is a single policy shared by the rooms (not a multi-agent system) and controls simulated rooms only.
+* PPO is a single policy shared by the rooms (not a multi-agent system) and controls simulated rooms only. Its
+  energy and comfort results are simulation results; it cycles the AC more than the schedule and its comfort
+  deviations are not always smaller than the optimiser's (section 6).
+* Re-running experiments 1 and 5-8 from scratch takes hours: the 108 distinct runs took 3.9 h of worker time
+  on 2 vCPUs (about 2 h with 2 workers). The run cache `experiments/results/run_cache/` is not committed.
 * Firmware not compiled and not bench-tested in this work; the board uses HTTP (MQTT is implemented on the edge).
 * Raspberry Pi GPIO outputs are recorded, not driven (`gpio_driving: false`).
 * This is a research prototype without safety certification ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).

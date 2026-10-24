@@ -1,0 +1,40 @@
+{
+  "id": "exp07_weather",
+  "title": "Experiment 7 - Weather variation",
+  "status": "PASS",
+  "started": "2026-10-23T16:45:39",
+  "finished": "2026-10-23T16:45:39",
+  "wall_s": 0.0,
+  "question": "Hotter (+3 K) and cooler, overcast (-2.5 K, 40 % daylight) weather than the synthetic Colombo normal.",
+  "info": {
+    "policy": "models/registry/ppo_policy/v2/policy.json",
+    "runs": 18,
+    "errors": [],
+    "runs_from_cache": 18,
+    "simulation_s": 1982.0,
+    "max_room_sum_minus_total_kwh": 2.1464074961841106e-10,
+    "wall_s": 0.029758643000604934
+  },
+  "git_commit": "29039fe",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "active_models": {
+    "energy_dayahead": "v1",
+    "occupancy_best": "v1",
+    "occupancy_co2_temporal": null,
+    "occupancy_rf": "v1",
+    "occupancy_twin_fusion": "v1",
+    "ppo_policy": "v2",
+    "thermal_h15": "v1",
+    "thermal_h30": "v1"
+  },
+  "processed_data_sha256": {
+    "uci_occupancy.csv": "eafa3a795bd85c8253ac8536de1fcb002f848f5e67b752f4d5d256ee498e1923",
+    "bdg2_panther_office.csv": "75db0f3dccc68fbd4a78e1499d7e551f4c223a3843b457d822e6789530a39ab6"
+  }
+}

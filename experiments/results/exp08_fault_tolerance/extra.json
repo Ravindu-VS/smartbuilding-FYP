@@ -1,0 +1,73 @@
+{
+ "controller_failure": {
+  "passed": true,
+  "metrics": {
+   "energy_kwh": 404.07916325564946,
+   "hvac_kwh": 246.34556325564844,
+   "lighting_kwh": 83.12800000000013,
+   "plug_kwh": 74.60560000000089,
+   "controllable_kwh": 329.47356325564857,
+   "occupied_min": 3241.0,
+   "discomfort_min": 587.0,
+   "discomfort_share": 0.18111693921629127,
+   "discomfort_pmv_h": 4.690759765489687,
+   "overheat_min": 529.0,
+   "temp_rmse_occupied_c": 1.7771593256826197,
+   "iaq_min": 0.0,
+   "iaq_share": 0.0,
+   "light_switches": 15.0,
+   "hvac_changes": 15.0,
+   "ac_cycles": 15.0,
+   "safety_overrides": 0.0,
+   "vent_boost_min": 0.0,
+   "failsafe_F1": 0,
+   "failsafe_F2": 12600,
+   "failsafe_F3": 0,
+   "decision_ms_mean": 0.002975600438124578,
+   "decision_ms_p95": 0.005581399636866984,
+   "peak_kw": 76.21342044340078,
+   "wall_s": 0.9040546449996327,
+   "consistency_room_sum_minus_total_kwh": -5.684341886080802e-14
+  },
+  "result": "every decision fell back to the rule-based schedule (F2 = 12600), the building kept running (404 kWh in 6 h, discomfort 18.1 % of occupied time); error recorded: RuntimeError: simulated controller crash"
+ },
+ "model_load_failure": {
+  "passed": true,
+  "models": [
+   {
+    "task": "occupancy_twin_fusion",
+    "role": "shadow",
+    "version": null,
+    "loaded": false,
+    "error": "FileNotFoundError: no version of occupancy_twin_fusion in the registry",
+    "approved_version": "v1",
+    "features": null,
+    "trained_utc": null,
+    "provenance_of_training_data": null
+   },
+   {
+    "task": "thermal_h30",
+    "role": "active",
+    "version": null,
+    "loaded": false,
+    "error": "FileNotFoundError: no active version of thermal_h30 (run python -m ml.registry init)",
+    "approved_version": "v1",
+    "features": null,
+    "trained_utc": null,
+    "provenance_of_training_data": null
+   },
+   {
+    "task": "occupancy_rf",
+    "role": "active",
+    "version": null,
+    "loaded": false,
+    "error": "FileNotFoundError: no active version of occupancy_rf (run python -m ml.registry init)",
+    "approved_version": "v1",
+    "features": null,
+    "trained_utc": null,
+    "provenance_of_training_data": null
+   }
+  ],
+  "result": "a corrupted / missing model is reported as not loaded with its error, and no prediction is produced (no random or default substitute): occupancy_twin_fusion: FileNotFoundError: no version of occupancy_twin_fusion in the registry; thermal_h30: FileNotFoundError: no active version of thermal_h30 (run python -m ml.registry init); occupancy_rf: FileNotFoundError: no active version of occupancy_rf (run python -m ml.registry init)"
+ }
+}

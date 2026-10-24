@@ -1,0 +1,8 @@
+== exp01_baseline: Experiment 1 - Baseline building operation
+### normal
+
+| controller | energy kWh | savings vs schedule % | HVAC kWh | lighting kWh | discomfort % of occupied time | PMV-hours over 0.5 | overheat room-min | IAQ room-min >1000 ppm | switches (light/AC) | AC on-off | fail-safe F1/F2/F3 | ms per decision |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| schedule | 10964 ± 76 | 0.0 ± 0.0 | 6743 | 2131 | 21.7 ± 0.2 | 197.9 | 12153 | 0 | 334/324 | 324 | 0/0/0 | 0.006 |
+| always_on | 14705 ± 99 | -34.1 ± 0.1 | 8864 | 3751 | 8.6 ± 1.4 | 2.9 | 0 | 0 | 0/0 | 0 | 0/0/0 | 0.004 |
+

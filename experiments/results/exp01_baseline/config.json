@@ -1,0 +1,19 @@
+{
+  "title": "Experiment 1 - Baseline building operation",
+  "type": "control_comparison",
+  "controllers": [
+    "schedule",
+    "always_on"
+  ],
+  "scenarios": [
+    "normal"
+  ],
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "days": 7,
+  "question": "Energy and comfort of the 25 simulated rooms under the conventional schedule (and an always-on reference).",
+  "id": "exp01_baseline"
+}
