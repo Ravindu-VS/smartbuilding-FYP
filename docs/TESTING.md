@@ -25,6 +25,7 @@ python3 scripts/check_hardware.py --actuators --ask   # bench check of the real 
 | `tests/test_edge_runtime.py` | the edge brain, store, models and PPO controller run with pandas, scikit-learn, scipy, joblib and gymnasium unavailable |
 | `raspberry_pi/test_edge_brain.py` | board link states, no invented values, MQ-2 never used as CO2, missing fields stay missing, board timeout, test sender labelled, LED calibration, AI switch, stream notification, API |
 | `tests/test_check_hardware.py` | the bench-check script against a real edge-brain process fed by the test sender: labelled a software check, sensors not sent are MISSING (never PASS), actuator round trip verified, override cleared, no energy label without INA226 data |
+| `tests/test_virtual_board.py` | the virtual board sends exactly the firmware's fields (parsed from the `.ino`), replays the recorded UCI values, applies replies and the fail-safe like the firmware, omits dropped sensors, the room model responds to the AC; the edge brain labels it VIRTUAL BOARD and stores synthetic; Room 101's vacancy rule |
 | `tests/test_firmware_check.py` | firmware syntax and library-API check for SCD4x 1.x / 0.x / absent x INA226 Tillaart / INA226Lib / absent x core 3.x / 2.x (skipped without g++ or the library headers) |
 | `tests/e2e/twin_flows.py` | 3D twin in the real dashboard: building/floor/room views, selection, airflow, presentation mode (flows A-F) and provenance / room numbers / models panel (flow G) |
 

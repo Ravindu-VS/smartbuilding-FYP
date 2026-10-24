@@ -25,10 +25,12 @@ cd dashboard/fyp-research-twin && npm ci            # dashboard
 | `scripts/start.sh edge` | edge brain only - what runs on the Pi; boards post over HTTP |
 | `scripts/start.sh live` | edge brain with the MQTT bridge (`MQTT_HOST`, `MQTT_PORT`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `MQTT_TLS`) |
 | `scripts/start.sh harness` | local MQTT broker + simulated board + edge brain + dashboard (no hardware) |
+| `scripts/start.sh virtual` | edge brain + dashboard + virtual board replaying the UCI office data over HTTP, like the firmware (`run_local.bat virtual` on Windows) |
+| `scripts/start.sh virtual-twin` | the same with Office A simulated by the digital twin, reacting to the AI's commands (`run_local.bat virtual-twin`) |
 | `run_local.bat` | Windows (double-click): checks the venv and packages, frees ports 8001/3000, starts the edge brain and the dashboard, opens the browser; `run_local.bat test` adds the HTTP test sender |
 | `scripts/train_all.sh` | offline: datasets, synthetic corpus, all models, PPO (never started by the run scripts) |
 | `scripts/run_tests.sh` | full test suite |
-| `python experiments/run.py --all` | experiments 1-10 |
+| `python experiments/run.py --all` | experiments 1-11 |
 
 Start-up waits for each service's health check and stops with a clear message if one does not answer.
 The first start of the edge brain runs the AI's 7-day learning week (cached in `output/twin_cache/`).

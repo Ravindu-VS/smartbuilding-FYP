@@ -1,0 +1,291 @@
+{
+ "full board: PIR + mmWave + CO2 (quiet sensors)": {
+  "metrics": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.8883305988515177,
+   "balanced_accuracy": 0.9293132545761391,
+   "precision": 0.652963671128107,
+   "recall": 1.0,
+   "f1": 0.790052053209948,
+   "roc_auc": 0.9913144131316816,
+   "average_precision": 0.9441384333631891,
+   "confusion": {
+    "tn": 6614,
+    "fp": 1089,
+    "fn": 0,
+    "tp": 2049
+   },
+   "threshold": 0.5
+  },
+  "metrics_estimator_only": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.7495898277276456,
+   "balanced_accuracy": 0.8414903284434636,
+   "precision": 0.4562458249832999,
+   "recall": 1.0,
+   "f1": 0.6266055045871559,
+   "roc_auc": 0.9913144131316816,
+   "average_precision": 0.9441384333631891,
+   "confusion": {
+    "tn": 5261,
+    "fp": 2442,
+    "fn": 0,
+    "tp": 2049
+   },
+   "threshold": 0.5
+  },
+  "minutes": 9752,
+  "ac_on_share_when_empty": 0.0,
+  "light_on_share_when_empty": 0.2205634168505777,
+  "light_on_share_when_occupied": 0.004392386530014641,
+  "steps": 195039,
+  "vent_share": 0.23137423797291823,
+  "decisions": 195039
+ },
+ "full board, noisy sensors (10x false triggers)": {
+  "metrics": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.2315422477440525,
+   "balanced_accuracy": 0.513566143061145,
+   "precision": 0.21471235460546997,
+   "recall": 1.0,
+   "f1": 0.35351966873706003,
+   "roc_auc": 0.8081271790629765,
+   "average_precision": 0.46303920533420834,
+   "confusion": {
+    "tn": 209,
+    "fp": 7494,
+    "fn": 0,
+    "tp": 2049
+   },
+   "threshold": 0.5
+  },
+  "metrics_estimator_only": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.22251845775225595,
+   "balanced_accuracy": 0.5078540828248734,
+   "precision": 0.21275049319904474,
+   "recall": 1.0,
+   "f1": 0.35085616438356165,
+   "roc_auc": 0.8081271790629765,
+   "average_precision": 0.46303920533420834,
+   "confusion": {
+    "tn": 121,
+    "fp": 7582,
+    "fn": 0,
+    "tp": 2049
+   },
+   "threshold": 0.5
+  },
+  "minutes": 9752,
+  "ac_on_share_when_empty": 0.0,
+  "light_on_share_when_empty": 0.9622225107101129,
+  "light_on_share_when_occupied": 0.010248901903367497,
+  "steps": 195039,
+  "vent_share": 0.23168186875445423,
+  "decisions": 195039
+ },
+ "PIR + CO2, no LD2410C (quiet)": {
+  "metrics": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.9450369155045119,
+   "balanced_accuracy": 0.9652083603790731,
+   "precision": 0.7926499032882012,
+   "recall": 1.0,
+   "f1": 0.8843331894691411,
+   "roc_auc": 0.9949940909612456,
+   "average_precision": 0.9654549010156105,
+   "confusion": {
+    "tn": 7167,
+    "fp": 536,
+    "fn": 0,
+    "tp": 2049
+   },
+   "threshold": 0.5
+  },
+  "metrics_estimator_only": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.8001435602953241,
+   "balanced_accuracy": 0.873490847721667,
+   "precision": 0.5125062531265633,
+   "recall": 1.0,
+   "f1": 0.6776914172316851,
+   "roc_auc": 0.9949940909612456,
+   "average_precision": 0.9654549010156105,
+   "confusion": {
+    "tn": 5754,
+    "fp": 1949,
+    "fn": 0,
+    "tp": 2049
+   },
+   "threshold": 0.5
+  },
+  "minutes": 9752,
+  "ac_on_share_when_empty": 0.0,
+  "light_on_share_when_empty": 0.09827339997403609,
+  "light_on_share_when_occupied": 0.0029282576866764276,
+  "steps": 195039,
+  "vent_share": 0.2324406913489097,
+  "decisions": 195039
+ },
+ "PIR + CO2, no LD2410C (noisy)": {
+  "metrics": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.605414273995078,
+   "balanced_accuracy": 0.7502271842139426,
+   "precision": 0.3474648126165847,
+   "recall": 1.0,
+   "f1": 0.5157311855021395,
+   "roc_auc": 0.948006002744521,
+   "average_precision": 0.7484911521622585,
+   "confusion": {
+    "tn": 3855,
+    "fp": 3848,
+    "fn": 0,
+    "tp": 2049
+   },
+   "threshold": 0.5
+  },
+  "metrics_estimator_only": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.5279942575881871,
+   "balanced_accuracy": 0.7012203037777489,
+   "precision": 0.30802766085387856,
+   "recall": 1.0,
+   "f1": 0.4709803470865418,
+   "roc_auc": 0.948006002744521,
+   "average_precision": 0.7484911521622585,
+   "confusion": {
+    "tn": 3100,
+    "fp": 4603,
+    "fn": 0,
+    "tp": 2049
+   },
+   "threshold": 0.5
+  },
+  "minutes": 9752,
+  "ac_on_share_when_empty": 0.0,
+  "light_on_share_when_empty": 0.5722445800337531,
+  "light_on_share_when_occupied": 0.008784773060029283,
+  "steps": 195039,
+  "vent_share": 0.2324406913489097,
+  "decisions": 195039
+ },
+ "CO2 only (recorded inputs only)": {
+  "metrics": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.755332239540607,
+   "balanced_accuracy": 0.7181350816459802,
+   "precision": 0.4441498176997017,
+   "recall": 0.6539775500244022,
+   "f1": 0.5290169759178839,
+   "roc_auc": 0.7343457357572145,
+   "average_precision": 0.3789207255120889,
+   "confusion": {
+    "tn": 6026,
+    "fp": 1677,
+    "fn": 709,
+    "tp": 1340
+   },
+   "threshold": 0.5
+  },
+  "metrics_estimator_only": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.755332239540607,
+   "balanced_accuracy": 0.7181350816459802,
+   "precision": 0.4441498176997017,
+   "recall": 0.6539775500244022,
+   "f1": 0.5290169759178839,
+   "roc_auc": 0.7343457357572145,
+   "average_precision": 0.3789207255120889,
+   "confusion": {
+    "tn": 6026,
+    "fp": 1677,
+    "fn": 709,
+    "tp": 1340
+   },
+   "threshold": 0.5
+  },
+  "minutes": 9752,
+  "ac_on_share_when_empty": 0.0,
+  "light_on_share_when_empty": 0.9139296378034532,
+  "light_on_share_when_occupied": 0.009272816007808687,
+  "steps": 195039,
+  "vent_share": 0.23169212311383877,
+  "decisions": 195039
+ },
+ "occupancy_rf (registry, same minutes)": {
+  "metrics": {
+   "n": 9752,
+   "positive_share": 0.21011074651353567,
+   "accuracy": 0.9885151763740772,
+   "balanced_accuracy": 0.9911180998675384,
+   "precision": 0.9519365375641624,
+   "recall": 0.9956076134699854,
+   "f1": 0.9732824427480916,
+   "roc_auc": 0.9967753875310001,
+   "average_precision": 0.9862176103664585,
+   "confusion": {
+    "tn": 7600,
+    "fp": 103,
+    "fn": 9,
+    "tp": 2040
+   },
+   "threshold": 0.5
+  },
+  "minutes": 9752
+ },
+ "room_model_closed_loop": {
+  "readings_with_ac_on": 186,
+  "mean_temp_ac_on": 26.40048387096774,
+  "mean_temp_ac_off": 31.352857142857143
+ },
+ "http_checks": [
+  {
+   "check": "uci_replay: 200 readings accepted, a decision returned for each",
+   "passed": true
+  },
+  {
+   "check": "uci_replay: actuator levels reported by the board match the commands",
+   "passed": true
+  },
+  {
+   "check": "uci_replay: shown as VIRTUAL BOARD (virtual_board/uci_replay), not the real board",
+   "passed": true
+  },
+  {
+   "check": "uci_replay: every field the firmware sends is present",
+   "passed": true
+  },
+  {
+   "check": "room_model: 200 readings accepted, a decision returned for each",
+   "passed": true
+  },
+  {
+   "check": "room_model: actuator levels reported by the board match the commands",
+   "passed": true
+  },
+  {
+   "check": "room_model: shown as VIRTUAL BOARD (virtual_board/room_model), not the real board",
+   "passed": true
+  },
+  {
+   "check": "room_model: every field the firmware sends is present",
+   "passed": true
+  },
+  {
+   "check": "all virtual-board readings stored as synthetic, none as room101_measured",
+   "passed": true
+  }
+ ]
+}

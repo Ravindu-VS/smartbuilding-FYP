@@ -4,6 +4,8 @@
 #   scripts/start.sh edge       edge brain only (what runs on the Raspberry Pi; boards post over HTTP)
 #   scripts/start.sh live       edge brain with the MQTT bridge (needs a broker: MQTT_HOST/MQTT_PORT)
 #   scripts/start.sh harness    local MQTT broker + simulated board + edge brain + dashboard (no hardware)
+#   scripts/start.sh virtual    edge brain + dashboard + virtual board replaying the UCI office data (HTTP, like the firmware)
+#   scripts/start.sh virtual-twin   the same with Office A simulated by the digital twin (closed loop)
 # Offline training is never started here (see scripts/train_all.sh).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -59,7 +61,13 @@ asyncio.run(main())" >"$LOG/broker.log" 2>&1 & pids+=($!)
     echo "starting simulated board (log: $LOG/device.log) - its data is labelled synthetic"
     "$PY" raspberry_pi/mqtt_device_sim.py --interval 3 >"$LOG/device.log" 2>&1 & pids+=($!)
     start_dashboard ;;
-  *) echo "unknown mode '$MODE' (dev | edge | live | harness)"; exit 2 ;;
+  virtual|virtual-twin)
+    start_edge
+    SRC=uci; [ "$MODE" = virtual-twin ] && SRC=twin
+    echo "starting the virtual board ($SRC; log: $LOG/virtual_board.log) - labelled virtual_board, stored as synthetic"
+    "$PY" raspberry_pi/virtual_board.py --source "$SRC" >"$LOG/virtual_board.log" 2>&1 & pids+=($!)
+    start_dashboard ;;
+  *) echo "unknown mode '$MODE' (dev | edge | live | harness | virtual | virtual-twin)"; exit 2 ;;
 esac
 echo
 echo "running ($MODE). Dashboard: http://localhost:3000  API: http://localhost:${API_PORT:-8001}/api/rooms/current-state"

@@ -12,6 +12,9 @@ real time on the board's readings (one decision per reading, about every 3 s):
         fan  (stands in for the room's AC):   ECO 0, LOW 100, NORMAL 26/25/24 C -> 150/200/255
         LED  (stands in for the lighting):     OFF 0, DIM 102 (40 %), ON 255
         servo (fresh-air damper):              90 deg while the CO2 rule asks for fresh air, else 0
+    vacancy rule: with presence sensors fitted, no PIR/mmWave detection for 15 min -> lights OFF and AC ECO
+        (CO2 stays high for hours after people leave; replaying real office data showed CO2 evidence alone
+        kept the lights on in most empty minutes - experiment 11)
 
 The controller plans for the full-size Office A of the building model (its area,
 lighting and AC sizes).  The board's fan does not cool the room, so the
@@ -55,8 +58,12 @@ def _fmt(hvac: str, sp: Optional[float]) -> str:
 
 
 class HardwareRoomController:
-    def __init__(self, spec: RoomSpec, led_lux_full: Optional[float] = None, outdoor_c: float = 30.0):
+    VACANCY_S = 900.0     # lights off / AC to ECO after 15 min without any PIR or mmWave detection (ASHRAE 90.1-2016: timeout <= 20 min)
+
+    def __init__(self, spec: RoomSpec, led_lux_full: Optional[float] = None, outdoor_c: float = 30.0,
+                 vacancy_s: Optional[float] = None):
         self.spec = spec
+        self.vacancy_s = float(self.VACANCY_S if vacancy_s is None else vacancy_s)
         self.room_id = spec.room_id
         self.outdoor_c = float(outdoor_c)
         self.led_lux_full = led_lux_full if led_lux_full and led_lux_full > 0 else None
@@ -117,6 +124,15 @@ class HardwareRoomController:
             p, light, hvac, sp, mode, reason, costs = (d.occupancy_probability, d.light_action, d.hvac_action,
                                                        d.setpoint_c, d.control_mode, d.reason, d.costs or {})
             p_ac, p_fut = costs.get("p_ac"), costs.get("p_future")
+        # Vacancy rule (presence sensors fitted): CO2 decays for hours after people leave, so CO2 evidence alone
+        # must not keep the lights or the AC on. Found by replaying real office data (experiment 11).
+        vacant = presence is not None and (since is None or since > self.vacancy_s)
+        if ai_enabled and vacant and (light != "OFF" or hvac != "ECO"):
+            light, hvac, sp = "OFF", "ECO", None
+            mode = "EMPTY"
+            reason = (f"vacancy rule: no PIR/mmWave detection for {int(self.vacancy_s // 60)} min"
+                      + (f" (last {since / 60:.0f} min ago)" if since is not None else " (none yet)")
+                      + "; lights off, AC to ECO - CO2 alone does not keep them on")
         if not ai_enabled:
             if not missing:
                 would = {"light_action": light, "hvac_action": hvac, "setpoint_c": sp, "reason": reason,
@@ -139,7 +155,8 @@ class HardwareRoomController:
                                 None if ai_enabled else reason)
         self.cmd = new
         self.decisions += 1
-        ai = {"occupancy_probability": round(p, 4), "predicted_occupancy": int(p >= 0.5),
+        ai = {"occupancy_probability": round(p, 4), "predicted_occupancy": int(p >= 0.5 and not vacant),
+              "vacant": vacant,
               "confidence": round(max(p, 1 - p), 4), "method": "fusion_pir_co2",
               "p_ac": round(p_ac, 4) if p_ac is not None else None,
               "p_future": round(p_fut, 4) if p_fut is not None else None,

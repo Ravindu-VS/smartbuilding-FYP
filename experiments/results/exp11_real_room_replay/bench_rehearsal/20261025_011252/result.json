@@ -1,0 +1,395 @@
+{
+ "started": "2026-10-25T01:12:52",
+ "finished": "2026-10-25T01:14:11",
+ "api": "http://127.0.0.1:8011",
+ "room_id": "f2_office_a",
+ "kind": "software check (not the real board)",
+ "physical": false,
+ "verdict": "PASS",
+ "counts": {
+  "PASS": 22,
+  "FAIL": 0,
+  "MISSING": 0,
+  "INFO": 4
+ },
+ "board": {
+  "age_s": 0.03,
+  "connected": true,
+  "last_seen": "2026-10-25T01:13:56.137",
+  "led_calibration": "none",
+  "led_calibration_lux": null,
+  "mean_interval_s": 3.0,
+  "readings_received": 22,
+  "real_board": false,
+  "room_id": "f2_office_a",
+  "room_name": "Office A",
+  "sender": "virtual_board",
+  "sender_detail": "uci_replay",
+  "state": "connected",
+  "timeout_s": 10.0
+ },
+ "checks": [
+  {
+   "group": "link",
+   "check": "board connected",
+   "status": "PASS",
+   "detail": "sender virtual_board"
+  },
+  {
+   "group": "link",
+   "check": "readings come from the real board",
+   "status": "INFO",
+   "detail": "sender is 'virtual_board' - this run is a software check, not a physical verification"
+  },
+  {
+   "group": "link",
+   "check": "readings received",
+   "status": "PASS",
+   "detail": "21 distinct readings; mean interval 3.0 s"
+  },
+  {
+   "group": "link",
+   "check": "report interval about 3 s",
+   "status": "PASS",
+   "detail": "3.0 s"
+  },
+  {
+   "group": "BME280",
+   "check": "temperature (C)",
+   "status": "PASS",
+   "detail": "21.73-21.88, mean 21.78, 11 distinct of 21"
+  },
+  {
+   "group": "BME280",
+   "check": "humidity (%)",
+   "status": "PASS",
+   "detail": "31.09-31.74, mean 31.32, 18 distinct of 21"
+  },
+  {
+   "group": "BME280",
+   "check": "pressure (hPa)",
+   "status": "PASS",
+   "detail": "1007.5-1007.7, mean 1007.65, 3 distinct of 21"
+  },
+  {
+   "group": "BH1750",
+   "check": "illuminance (lux)",
+   "status": "PASS",
+   "detail": "434.5-451.1, mean 441.43, 20 distinct of 21"
+  },
+  {
+   "group": "SCD41",
+   "check": "CO2 (ppm, NDIR)",
+   "status": "PASS",
+   "detail": "1050-1077, mean 1058.57, 8 distinct of 21"
+  },
+  {
+   "group": "SCD41",
+   "check": "temperature (C)",
+   "status": "PASS",
+   "detail": "22.39-22.85, mean 22.58, 9 distinct of 21"
+  },
+  {
+   "group": "PIR",
+   "check": "motion (bool)",
+   "status": "PASS",
+   "detail": "values seen: ['False', 'True']"
+  },
+  {
+   "group": "LD2410C",
+   "check": "presence (bool)",
+   "status": "PASS",
+   "detail": "values seen: ['True']"
+  },
+  {
+   "group": "LD2410C",
+   "check": "distance (cm)",
+   "status": "PASS",
+   "detail": "89-399, mean 258.10, 21 distinct of 21"
+  },
+  {
+   "group": "INA226",
+   "check": "bus voltage (V)",
+   "status": "PASS",
+   "detail": "4.999-5.015, mean 5.01, 11 distinct of 21"
+  },
+  {
+   "group": "INA226",
+   "check": "current (mA)",
+   "status": "PASS",
+   "detail": "101.8-114.9, mean 109.43, 18 distinct of 21"
+  },
+  {
+   "group": "MQ-2",
+   "check": "raw ADC (gas, never used as CO2)",
+   "status": "PASS",
+   "detail": "837-881, mean 858.29, 17 distinct of 21"
+  },
+  {
+   "group": "firmware",
+   "check": "sensor_health reported by the board",
+   "status": "INFO",
+   "detail": "all detected"
+  },
+  {
+   "group": "edge",
+   "check": "occupancy estimate produced",
+   "status": "PASS",
+   "detail": {
+    "occupancy_probability": 0.9964
+   }
+  },
+  {
+   "group": "edge",
+   "check": "provenance of the room's values",
+   "status": "INFO",
+   "detail": {
+    "ai": "prediction",
+    "energy": "synthetic (INA226)",
+    "sensors": "synthetic"
+   }
+  },
+  {
+   "group": "actuators",
+   "check": "fan PWM reported by the board",
+   "status": "PASS",
+   "detail": "255 (commanded 255)"
+  },
+  {
+   "group": "actuators",
+   "check": "LED PWM reported by the board",
+   "status": "PASS",
+   "detail": "255 (commanded 255)"
+  },
+  {
+   "group": "actuators",
+   "check": "damper angle reported by the board",
+   "status": "PASS",
+   "detail": "90 (commanded 90)"
+  },
+  {
+   "group": "actuators",
+   "check": "edge verified the previous command",
+   "status": "PASS",
+   "detail": true
+  },
+  {
+   "group": "actuators",
+   "check": "LED seen by the BH1750",
+   "status": "PASS",
+   "detail": "+167 lux (off 441, on 608)"
+  },
+  {
+   "group": "actuators",
+   "check": "INA226 current with fan+LED on vs off",
+   "status": "INFO",
+   "detail": "113 -> 384 mA"
+  },
+  {
+   "group": "actuators",
+   "check": "fan and LED off again",
+   "status": "PASS",
+   "detail": "fan 0, LED 0"
+  }
+ ],
+ "readings": 21,
+ "last_reading": {
+  "ai": {
+   "co2_used": true,
+   "confidence": 0.9964,
+   "method": "fusion_pir_co2",
+   "occupancy_probability": 0.9964,
+   "p_ac": 0.9964,
+   "p_future": 0.9964,
+   "predicted_occupancy": 1,
+   "random_forest_probability": 0.9866,
+   "seconds_since_presence": 0.0,
+   "vacant": false
+  },
+  "area_m2": 168.0,
+  "comfort": null,
+  "control": {
+   "ai_would": null,
+   "control_mode": "OCCUPIED",
+   "controller": "mo",
+   "fan_speed": 0,
+   "hvac_action": "ECO",
+   "light_action": "OFF",
+   "light_level": 0,
+   "mode": "ai",
+   "previous_command_verified": true,
+   "reason": "P(occ) now 1.00, AC basis 1.00, next 30 min 1.00; lights OFF, AC ECO (pred. 24.3 C)",
+   "reasoning": {
+    "J_light_options": {
+     "DIM": 0.058,
+     "OFF": 0.0,
+     "ON": 0.144
+    },
+    "ac_options": {
+     "ECO": {
+      "J": 0.254,
+      "discomfort_h": 0.085,
+      "kwh": 0.0,
+      "recovery_kwh": 0.0,
+      "t_end": 24.281
+     },
+     "LOW 27": {
+      "J": 0.354,
+      "discomfort_h": 0.085,
+      "kwh": 0.0,
+      "recovery_kwh": 0.0,
+      "t_end": 24.281
+     },
+     "NORMAL 24": {
+      "J": 0.368,
+      "discomfort_h": 0.085,
+      "kwh": 0.068,
+      "recovery_kwh": 0.0,
+      "t_end": 24.0
+     },
+     "NORMAL 25": {
+      "J": 0.354,
+      "discomfort_h": 0.085,
+      "kwh": 0.0,
+      "recovery_kwh": 0.0,
+      "t_end": 24.281
+     },
+     "NORMAL 26": {
+      "J": 0.354,
+      "discomfort_h": 0.085,
+      "kwh": 0.0,
+      "recovery_kwh": 0.0,
+      "t_end": 24.281
+     }
+    },
+    "p_ac": 0.996,
+    "p_future": 0.996,
+    "p_now": 0.996,
+    "p_prior": 0.02,
+    "t_hold": 26.0,
+    "t_pred": 24.281
+   },
+   "safety_notes": [],
+   "servo_angle": 90,
+   "setpoint_c": null,
+   "t_pred": 24.28,
+   "vent_boost": true
+  },
+  "design_setpoint_c": 24.0,
+  "device_state": {
+   "hvac_mode": "off",
+   "hvac_speed": 0,
+   "light_level": 0,
+   "light_on": false,
+   "servo_angle": 90
+  },
+  "display_name": "Office A",
+  "energy": {
+   "basis": "measured (INA226 on the board)",
+   "cumulative_energy_wh": 0.0091,
+   "measured_power_watts": 0.554
+  },
+  "floor_id": 2,
+  "freshness": {
+   "age_s": 1.02,
+   "stale": false,
+   "state": "connected",
+   "timeout_s": 10.0
+  },
+  "ground_truth": null,
+  "hardware": {
+   "age_s": 1.02,
+   "connected": true,
+   "last_seen": "2026-10-25T01:13:53.131",
+   "led_calibration": "none",
+   "led_calibration_lux": null,
+   "mean_interval_s": 3.0,
+   "readings_received": 21,
+   "real_board": false,
+   "room_id": "f2_office_a",
+   "room_name": "Office A",
+   "sender": "virtual_board",
+   "sender_detail": "uci_replay",
+   "state": "connected",
+   "timeout_s": 10.0
+  },
+  "meter": {
+   "basis": "INA226 on the board (measured); only while the board posts readings",
+   "by_mode": {
+    "ai": {
+     "avg_w": 0.547,
+     "seconds": 60.1,
+     "wh": 0.0091
+    },
+    "conventional": {
+     "avg_w": null,
+     "seconds": 0,
+     "wh": 0
+    }
+   },
+   "power_w": 0.5545,
+   "room_id": "f2_office_a",
+   "room_name": "Office A",
+   "segments": [
+    {
+     "avg_w": 0.547,
+     "end": null,
+     "measured": true,
+     "mode": "ai",
+     "seconds": 60.09,
+     "start": "2026-10-25T01:12:51",
+     "wh": 0.009135
+    }
+   ],
+   "total_wh": 0.0091
+  },
+  "modes": null,
+  "power_measurement": {
+   "available": true,
+   "current_mA": 110.6,
+   "power_mW": 554.5,
+   "voltage_v": 5.015
+  },
+  "prediction": null,
+  "presence": {
+   "fused_presence": true,
+   "mmwave_distance_cm": 93,
+   "mmwave_moving": false,
+   "mmwave_presence": true,
+   "mmwave_stationary": true,
+   "pir_motion": true,
+   "source": "pir+mmwave"
+  },
+  "provenance": {
+   "ai": "prediction",
+   "energy": "synthetic (INA226)",
+   "sensors": "synthetic"
+  },
+  "room_id": "f2_office_a",
+  "room_number": 101,
+  "room_type": "office",
+  "scenarios": [],
+  "sensor_health": {
+   "bh1750": true,
+   "bme280": true,
+   "ina226": true,
+   "ld2410c": true,
+   "scd41": true,
+   "servo": true
+  },
+  "sensors": {
+   "CO2": 1052.0,
+   "CO2_source": "scd41_ndir",
+   "Humidity": 31.21,
+   "HumidityRatio": 0.005011,
+   "Light": 442.7,
+   "MQ2_raw": 861,
+   "Pressure_hPa": 1007.7,
+   "SCD41_Humidity": 30.14,
+   "SCD41_Temperature": 22.41,
+   "Temperature": 21.73
+  },
+  "source": "hardware",
+  "timestamp": "2026-10-25T01:13:53.131"
+ }
+}

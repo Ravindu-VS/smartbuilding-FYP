@@ -70,11 +70,11 @@ given); N/A = does not apply. Code existing is never enough for PASS.
 | Item | Status | Evidence |
 |---|---|---|
 | Room 101 uses the correct live-room mapping | PASS | Room 101 = `f2_office_a` = the only `data_source: hardware` room; firmware sends `room_id: f2_office_a` |
-| Hardware data reaches backend and twin | PASS (software path) | HTTP and MQTT harness, experiment 10; `raspberry_pi/test_edge_brain.py`. With the physical board: BLOCKED (no board here) |
+| Hardware data reaches backend and twin | PASS (software path) | HTTP and MQTT harness, experiment 10; virtual board with the firmware's exact payload replaying real UCI data and a simulated Office A, experiment 11 (every reading answered, actuator feedback verified); `raspberry_pi/test_edge_brain.py`. With the physical board: pending (hardware not yet delivered) |
 | MQTT and connection status handled | PASS (edge side) | `test_bridge_end_to_end_with_broker`, ack timeout test, status endpoint; firmware still HTTP |
 | Hardware and simulated values distinguishable | PASS | provenance per value group; test sender / harness never shown as the real board |
 | Physical verification status documented honestly | PASS | docs/HARDWARE.md status table (not compiled, not bench-tested here) |
-| Test harness for unavailable hardware | PASS | `raspberry_pi/esp32_test_sender.py`, `raspberry_pi/mqtt_device_sim.py`, `scripts/start.sh harness` |
+| Test harness for unavailable hardware | PASS | `raspberry_pi/virtual_board.py` (firmware-identical HTTP payload; UCI replay or simulated Office A; `run_local.bat virtual`), `raspberry_pi/esp32_test_sender.py`, `raspberry_pi/mqtt_device_sim.py`, `scripts/start.sh harness`; bench check rehearsed against the virtual board (22 pass, 0 fail) |
 | Firmware compiled / physically verified | BLOCKED | no Arduino-ESP32 toolchain reachable (toolchain hosts refused) and no board attached. Done instead: host-side syntax and library-API check against the real library headers (`firmware/tools/check_firmware.py`, 18/18 combinations; fixed SCD41 silently skipped with SCD4x 1.x and INA226 code that did not compile with any INA226 library); bring-up procedure and `scripts/check_hardware.py` ready for the bench |
 
 ## G. Digital twin
@@ -92,7 +92,7 @@ given); N/A = does not apply. Code existing is never enough for PASS.
 
 | Item | Status | Evidence |
 |---|---|---|
-| Automated tests executed | PASS | `python3 -m pytest`: 94 passed in 55 s, 0 failed, 0 skipped (23 Oct 2026; docs/FINAL_REPORT.md section 7) |
+| Automated tests executed | PASS | `python3 -m pytest`: 103 passed in 75 s, 0 failed, 0 skipped (25 Oct 2026; docs/FINAL_REPORT.md section 7) |
 | Frontend and backend builds checked | PASS | `npx tsc --noEmit`, `npx eslint src`, `npx next build` succeeded; backend imports and tests |
 | Model-loading and integration tests pass | PASS | `test_registered_models_load_and_self_test`, `test_model_failure_is_reported_not_replaced`, `tests/test_integration.py` (6), `tests/test_store_mqtt.py` (7); live `/api/models`: thermal_h30, occupancy_rf active, fusion in shadow, all loaded; PPO available as `ppo_policy v2` |
 | No known critical runtime errors | see final run | |

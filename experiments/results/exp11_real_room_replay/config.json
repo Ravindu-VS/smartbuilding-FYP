@@ -1,0 +1,11 @@
+{
+  "title": "Experiment 11 - Room 101 pipeline on replayed real data (virtual board)",
+  "type": "real_room_replay",
+  "start": "2015-02-11T14:48:00",
+  "end": "2015-02-18T09:19:00",
+  "seed": 1,
+  "workers": 2,
+  "http_readings": 200,
+  "question": "Before the hardware arrives: does Room 101's own pipeline (PIR(+mmWave)+CO2 fusion, multi-objective controller, safety layer) work on real office measurements delivered exactly as the board would send them, and does the edge brain handle the virtual board end to end?",
+  "id": "exp11_real_room_replay"
+}

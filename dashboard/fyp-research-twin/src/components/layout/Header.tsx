@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Cpu, Server, Play, Pause, FastForward, RotateCcw, Presentation, Sun, Moon, Cloud, Brain, Power } from 'lucide-react';
-import { backendIsCurrent, useBuildingStore } from '../../store/useBuildingStore';
+import { backendIsCurrent, senderLabel, useBuildingStore } from '../../store/useBuildingStore';
 import { api } from '../../lib/api';
 import { fx } from '../../lib/format';
 
@@ -58,7 +58,7 @@ export default function Header() {
   const clock = live ? raw!.clock : null;
   const learning = clock?.phase === 'learning';
   const ff = clock && clock.fast_forward_minutes > 0;
-  const boardValue = !live ? 'unknown' : !hw || !hw.connected ? 'NOT CONNECTED' : hw.real_board ? 'CONNECTED' : 'TEST SENDER';
+  const boardValue = !live ? 'unknown' : !hw || !hw.connected ? 'NOT CONNECTED' : hw.real_board ? 'CONNECTED' : senderLabel(hw);
 
   const run = async (name: string, fn: () => Promise<unknown>) => {
     setBusy(name); setErr(null);

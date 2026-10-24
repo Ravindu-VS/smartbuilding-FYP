@@ -5,7 +5,9 @@ rem  Smart Building digital twin - starts everything on this PC:
 rem    1. Edge brain   (python raspberry_pi\edge_brain.py, port 8001)
 rem    2. 3D dashboard (Next.js, port 3000) and opens it in the browser
 rem  Optional: "run_local.bat test" also starts the ESP32 TEST SENDER
-rem  (fake readings, shown on the dashboard as TEST SENDER, never as the board).
+rem  (fake readings, shown on the dashboard as TEST SENDER, never as the board);
+rem  "run_local.bat virtual" / "virtual-twin" starts the VIRTUAL BOARD (UCI replay /
+rem  room model, shown as VIRTUAL BOARD, stored as synthetic) until the hardware arrives.
 rem ===================================================================
 cd /d "%~dp0"
 
@@ -56,6 +58,16 @@ start "3D Digital Twin - port 3000" /d "%~dp0dashboard\fyp-research-twin" cmd /k
 if /i "%~1"=="test" (
   echo       Starting the ESP32 TEST SENDER ^(not the real board^)...
   start "ESP32 TEST SENDER - not the real board" cmd /k "timeout /t 5 /nobreak >nul & .venv\Scripts\python.exe raspberry_pi\esp32_test_sender.py"
+)
+rem  run_local.bat virtual       virtual board replaying the UCI office data (until the hardware arrives)
+rem  run_local.bat virtual-twin  virtual board with Office A simulated by the digital twin (closed loop)
+if /i "%~1"=="virtual" (
+  echo       Starting the VIRTUAL BOARD ^(UCI replay, not the real board^)...
+  start "VIRTUAL BOARD - UCI replay, not the real board" cmd /k "timeout /t 5 /nobreak >nul & .venv\Scripts\python.exe raspberry_pi\virtual_board.py --source uci"
+)
+if /i "%~1"=="virtual-twin" (
+  echo       Starting the VIRTUAL BOARD ^(room model, not the real board^)...
+  start "VIRTUAL BOARD - room model, not the real board" cmd /k "timeout /t 5 /nobreak >nul & .venv\Scripts\python.exe raspberry_pi\virtual_board.py --source twin"
 )
 
 echo [3/3] Waiting for both to be ready...

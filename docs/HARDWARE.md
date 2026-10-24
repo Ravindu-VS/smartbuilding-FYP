@@ -10,7 +10,8 @@ Source of truth: `firmware/esp32_smart_building/esp32_smart_building.ino` (ESP32
 | Firmware source (sensors, actuators, HTTP client, fail-safe) | implemented | firmware file; reviewed |
 | Firmware compiled for the ESP32-S3 in this environment | **not done** - no Arduino/ESP32 toolchain reachable (GitHub release downloads refused by the network proxy) | - |
 | Firmware syntax and library-API check (host g++, stub core headers, real library headers) | passes for SCD4x 1.x / 0.x / absent x INA226 Tillaart / INA226Lib / absent x core 3.x / 2.x | `firmware/tools/check_firmware.py`, `tests/test_firmware_check.py` |
-| Bench-check script for the real room | implemented, tested against the HTTP test sender (labelled a software check) | `scripts/check_hardware.py`, `tests/test_check_hardware.py` |
+| Bench-check script for the real room | implemented, tested against the HTTP test sender and rehearsed against the virtual board (labelled a software check) | `scripts/check_hardware.py`, `tests/test_check_hardware.py`, `experiments/results/exp11_real_room_replay/bench_rehearsal/` |
+| Virtual board (firmware-identical payload; UCI replay or simulated Office A) | implemented, tested | `raspberry_pi/virtual_board.py`, `tests/test_virtual_board.py`, experiment 11 |
 | Edge brain HTTP ingestion of the firmware's payload | implemented, tested | `raspberry_pi/test_edge_brain.py`, `tests/test_integration.py` |
 | MQTT transport (edge side) with schema, dedupe, acks, status | implemented, tested with a local broker and a simulated board | `tests/test_store_mqtt.py`, experiment 10 |
 | MQTT in the firmware | **not implemented** - the board posts HTTP; the edge accepts both | - |
@@ -35,6 +36,39 @@ logic are unchanged:
 This is a syntax and API check with stubbed core headers, not an ESP32 compile: compile and flash in the Arduino
 IDE as below.
 
+## Until the hardware arrives: the virtual board
+
+`raspberry_pi/virtual_board.py` stands in for the ESP32-S3 on the wire: the same HTTP POST every 3 s with
+exactly the firmware's JSON fields (checked by `tests/test_virtual_board.py` against the `.ino`), the same handling
+of the edge brain's reply (fan / LED / damper, reported back in the next reading) and the same fail-safe (fan
+and LED off when the edge brain cannot be reached). Two data sources:
+
+| Source | Temperature, humidity, light, CO2 | Occupancy | Reacts to the actuators |
+|---|---|---|---|
+| `--source uci` (default) | **recorded** values of the UCI office dataset (tracked copies in `Dataset/UCI/`) | recorded label drives the PIR / mmWave models | LED light at the BH1750 and the INA226 current (modelled); temperature does not |
+| `--source twin` | Office A simulated by the twin's 5R1C physics, synthetic Colombo weather | twin occupants and PIR model | yes: the fan command runs the simulated AC, the LED the lights, the damper the boost fan |
+
+PIR (HW-416-B), LD2410C, MQ-2 and INA226 values come from sensor models; `--noisy-sensors` raises the PIR /
+mmWave false-trigger rates, `--drop scd41,...` removes sensors, `--stop-after N` goes silent. Its readings carry
+`"source": "virtual_board"`: the dashboard shows **VIRTUAL BOARD · UCI REPLAY** (or ROOM MODEL), never LIVE ESP32,
+and the store keeps them as `synthetic`. Start it with `run_local.bat virtual` / `virtual-twin` or
+`scripts/start.sh virtual` / `virtual-twin`; stop it when the real board is connected - nothing else changes.
+
+Experiment 11 replays the held-out UCI week through Room 101's own pipeline and drives the edge brain end to
+end with both sources (`experiments/results/exp11_real_room_replay/`). The bench check was rehearsed against the
+virtual board: 22 pass, 0 fail, 0 missing, labelled a software check
+(`experiments/results/exp11_real_room_replay/bench_rehearsal/`).
+
+**Finding and fix - vacancy rule.** Replaying real office data showed that CO2 stays high for hours after people
+leave: before the fix the pipeline kept the lights on in 92 % of the empty minutes (quiet sensors, with or
+without the LD2410C; 91 % with CO2 alone), because the CO2 evidence alone was enough to switch them on in the dark. Room 101's
+controller now applies a vacancy rule when presence sensors are fitted: no PIR / mmWave detection for 15 min ->
+lights OFF and AC ECO (ASHRAE 90.1-2016 allows occupancy-sensor timeouts of at most 20 min). With quiet sensors this cut
+lights-on-when-empty to 10 % (PIR + CO2) and 22 % (PIR + mmWave + CO2); with 10x false triggers it stays at
+57-96 %, because every false trigger restarts the 15 min. The real false-trigger rates are therefore worth
+measuring: `python3 scripts/check_hardware.py --empty-room --seconds 1800` with nobody in the room. The simulated
+rooms are unchanged (their controller is not affected).
+
 ## Bring-up (when the hardware is connected)
 
 1. **Arduino IDE 2** - Boards Manager: *esp32 by Espressif Systems* (core 2.x or 3.x; both PWM APIs are handled).
@@ -53,14 +87,17 @@ IDE as below.
    found`); fix wiring/addresses until the sensors you fitted are active.
 6. Start the edge brain (`scripts/start.sh edge` on the Pi, `run_local.bat` or `scripts/start.sh dev` on the PC)
    and open the dashboard: Room 101 should turn LIVE (ESP32) within a few seconds.
-7. Bench check: `python3 scripts/check_hardware.py --actuators --ask` (reads 60 s of data, drives fan, LED and
+7. Stop the virtual board if it is running. Bench check: `python3 scripts/check_hardware.py --actuators --ask`
+   (reads 60 s of data, drives fan, LED and
    damper through a short manual override, asks you to confirm what you see, clears the override). Result:
    `experiments/results/hardware_bench/<date_time>/summary.md`. It is a physical verification only when the
    sender is the real board (`esp32_board`).
 8. Disconnect test: unplug the board - Room 101 must show NOT CONNECTED within 10 s and its values disappear.
-9. LED calibration: the button in Room 101's panel (or `POST /api/hardware/calibrate-led`) measures what the LED
+9. Empty-room false triggers: `python3 scripts/check_hardware.py --empty-room --seconds 1800` with nobody in
+   the room (PIR / mmWave detections per hour; each one keeps the lights on for up to 15 min).
+10. LED calibration: the button in Room 101's panel (or `POST /api/hardware/calibrate-led`) measures what the LED
    adds at the BH1750, so the AI does not mistake its own light for daylight.
-10. Record the results: update the status table above and `docs/ACCEPTANCE_GATE.md` (section F) with the bench
+11. Record the results: update the status table above and `docs/ACCEPTANCE_GATE.md` (section F) with the bench
     check's folder as evidence.
 
 ## Room 101

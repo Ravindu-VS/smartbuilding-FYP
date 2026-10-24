@@ -67,13 +67,16 @@ downloaded from the development environment (docs/DATASETS.md).
 
 Windows (development PC): double-click **`run_local.bat`** (checks the venv and packages, frees ports
 8001/3000, starts the edge brain and the dashboard, opens http://localhost:3000; `run_local.bat test` adds the
-HTTP test sender). Linux / Raspberry Pi:
+HTTP test sender). **Until the hardware arrives:** `run_local.bat virtual` adds the virtual board, which sends
+Room 101 readings exactly like the firmware, replaying the real UCI office measurements (`virtual-twin`: Office A
+simulated by the digital twin, reacting to the AI's commands). The dashboard labels it VIRTUAL BOARD and the
+store keeps it as synthetic. Linux / Raspberry Pi:
 
 ```
 python3 -m pip install -r requirements/edge.txt     # Pi: flask, numpy, paho-mqtt only
 python3 -m pip install -r requirements/train.txt    # development PC (adds pandas, scikit-learn, gymnasium)
 python3 -m pip install -r requirements/dev.txt      # + tests
-scripts/start.sh dev | edge | live | harness        # see docs/DEPLOYMENT.md
+scripts/start.sh dev | edge | live | harness | virtual | virtual-twin   # see docs/DEPLOYMENT.md
 ```
 
 | URL | What |
@@ -165,6 +168,30 @@ occupied time with |PMV| > 0.5:
   compare controllers under identical conditions and are not a savings forecast for the real building.
   Full tables: [experiments/results/SUMMARY.md](experiments/results/SUMMARY.md).
 
+### Room 101's pipeline on replayed real data (experiment 11; virtual board, before the hardware arrives)
+
+The held-out UCI week (11-18 Feb 2015, 9,752 min) was sent through Room 101's own pipeline exactly as the board
+would send it (every 3 s): recorded temperature, humidity, light and CO2; PIR / mmWave from sensor models driven
+by the recorded occupancy.
+
+| Room 101 pipeline | occupancy F1 | lights on in empty minutes |
+|---|---|---|
+| PIR + CO2, quiet sensors | 0.884 | 9.8 % |
+| PIR + mmWave + CO2, quiet sensors | 0.790 | 22.1 % |
+| PIR + CO2, noisy sensors (10x false triggers) | 0.516 | 57.2 % |
+| CO2 only (recorded inputs only) | 0.529 | 91.4 % |
+| reference: `occupancy_rf` (T, RH, light, CO2) | 0.973 | - |
+
+* **Finding and fix:** before the fix, CO2 lingering after people left kept the lights on in 92 % of the empty
+  minutes. Room 101's controller now has a vacancy rule: no PIR / mmWave detection for 15 min -> lights off, AC
+  to ECO.
+* Presence-sensor false triggers dominate the remaining waste (each restarts the 15 min), so the empty-room
+  false-trigger rate is part of the bench check (`scripts/check_hardware.py --empty-room`).
+* The PIR / mmWave results depend on the assumed sensor models; only the CO2-only row uses recorded inputs alone.
+* The edge brain handled both virtual-board sources end to end (every reading answered, actuator feedback
+  verified, labelled VIRTUAL BOARD, stored as synthetic), and the bench check was rehearsed against it
+  (22 pass, 0 fail).
+
 ## 7. Self-learning, safety and the hardware path
 
 * Models are trained offline, evaluated on held-out data, versioned in `models/registry/`, run in shadow mode,
@@ -180,7 +207,8 @@ occupied time with |PMV| > 0.5:
   bench test in this work** (no toolchain or board available here). A host-side syntax and library-API check
   (`firmware/tools/check_firmware.py`) found and fixed two library problems (SCD41 silently skipped with the
   current SCD4x library; INA226 code that compiled with no INA226 library). When the board is wired, follow the
-  bring-up steps in docs/HARDWARE.md and run `python3 scripts/check_hardware.py --actuators --ask`.
+  bring-up steps in docs/HARDWARE.md and run `python3 scripts/check_hardware.py --actuators --ask`. Until then the
+  virtual board (`raspberry_pi/virtual_board.py`) feeds Room 101 with firmware-identical readings.
 
 ## 8. Reproduce
 
@@ -189,7 +217,7 @@ python3 scripts/fetch_datasets.py && python3 scripts/preprocess_datasets.py   # 
 scripts/make_synthetic_corpus.sh                                              # simulator corpus
 python3 -m ml.occupancy ; python3 -m ml.thermal ; python3 -m ml.energy ; python3 -m ml.registry init
 python3 -m rl.cartpole_check ; python3 -m rl.train --seed 0                   # PPO (about 1 h per run on 2 vCPUs)
-python3 experiments/run.py --all                                              # experiments 1-10
+python3 experiments/run.py --all                                              # experiments 1-11
 python3 -m pytest -q                                                          # tests (docs/TESTING.md)
 ```
 
@@ -197,12 +225,12 @@ python3 -m pytest -q                                                          # 
 
 | Path | What |
 |---|---|
-| `raspberry_pi/` | edge brain, store, MQTT bridge, device harness, HTTP test sender, Pi run script |
+| `raspberry_pi/` | edge brain, store, MQTT bridge, device harness, HTTP test sender, virtual board, Pi run script |
 | `twin/` | digital twin (`building_config.py` = the 26 rooms), controllers, safety, scenarios, runner, validation |
 | `ml/`, `rl/` | training, evaluation and inference code |
 | `models/registry/` | approved and candidate model versions (JSON + metadata + model card); `models/ppo_runs/` training runs |
 | `data/manifest.json` | dataset provenance and checksums (raw and processed data are regenerated, git-ignored) |
-| `experiments/configs/`, `experiments/results/` | experiments 1-10 and their recorded results |
+| `experiments/configs/`, `experiments/results/` | experiments 1-11 and their recorded results |
 | `docs/` | technical documents; `COMPLETION_MATRIX.md`, `COMPLETION_LOG.md`, `ACCEPTANCE_GATE.md`, `FINAL_REPORT.md` |
 | `tests/` | automated tests; `tests/e2e/twin_flows.py` browser flows |
 | `archive/legacy_v1/` | the first architecture, superseded (see `archive/README.md`, `docs/CLEANUP.md`) |

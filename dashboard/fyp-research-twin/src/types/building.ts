@@ -80,6 +80,7 @@ export interface HardwareStatus {
   connected: boolean;
   state: 'connected' | 'lost' | 'never_connected';
   sender: string | null;
+  sender_detail?: string | null;   // virtual board: "uci_replay" | "room_model"
   real_board: boolean;
   last_seen: string | null;
   age_s: number | null;

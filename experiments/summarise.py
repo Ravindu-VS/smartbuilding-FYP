@@ -80,7 +80,7 @@ def main() -> int:
             with open(p, encoding="utf-8") as f:
                 extra = json.load(f)
             lines += ["", f"## {title}", ""] + [f"- **{k}**: {v.get('result')}" for k, v in extra.items()]
-    for exp in ("exp09_consistency", "exp10_live_room"):
+    for exp in ("exp09_consistency", "exp10_live_room", "exp11_real_room_replay"):
         p = os.path.join(RES, exp, "summary.md")
         if os.path.exists(p):
             with open(p, encoding="utf-8") as f:

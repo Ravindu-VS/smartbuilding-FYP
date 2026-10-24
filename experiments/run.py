@@ -307,7 +307,181 @@ def run_live_room(cfg, out_dir):
                                                                      "physical_verification": "not performed (no board)"}
 
 
-RUNNERS = {"control_comparison": run_control, "ml_script": run_ml, "consistency": run_consistency, "live_room": run_live_room}
+def _replay_variant(name: str, drop, ai_enabled: bool, start: str, end: str, seed: int, noisy: bool = False):
+    """Room 101's own pipeline (HardwareRoomController: PIR(+mmWave)+CO2 fusion -> multi-objective controller ->
+    safety layer) fed with the virtual board's readings, every 3 s of dataset time, from the UCI replay."""
+    from datetime import datetime as dt, timedelta
+    from raspberry_pi.virtual_board import UciSource, VirtualBoard
+    from twin.hardware_room import HardwareRoomController
+    from twin.spec import build_spec
+    from raspberry_pi.edge_brain import humidity_ratio
+    spec = next(r for r in build_spec() if r.room_id == "f2_office_a")
+    ctrl = HardwareRoomController(spec)
+    src = UciSource(start, minutes_per_post=3.0 / 60.0, loop=False)
+    board = VirtualBoard(src, seed=seed, interval_s=3.0, drop=list(drop),
+                         sensor_model=VirtualBoard.NOISY if noisy else VirtualBoard.QUIET)
+    t_end = dt.fromisoformat(end)
+    minutes, k, last_row = {}, 0, None
+    vent_steps = steps = 0
+    while True:
+        try:
+            p = board.reading()
+        except StopIteration:
+            break
+        env = board.last_env
+        if env["time"] > t_end:
+            break
+        k = k + 1 if env["time"] == last_row else 0
+        last_row = env["time"]
+        now = env["time"] + timedelta(seconds=3 * k)
+        co2 = p.get("co2") if p.get("co2_source") == "scd41_ndir" else None
+        presence = p.get("presence") if not {"pir", "ld2410c"} <= set(drop) else None
+        hr = humidity_ratio(p.get("temperature"), p.get("humidity"))
+        res = ctrl.step(now, p.get("temperature"), p.get("humidity"), p.get("lux"), co2, hr, presence,
+                        ai_enabled=ai_enabled)
+        board.apply_reply(res["control"])
+        steps += 1
+        vent_steps += int(res["control"]["vent_boost"])
+        pr = res["ai"]["occupancy_probability"]
+        minutes[env["time"]] = (int(env["occupied"]), 0.0 if res["ai"].get("vacant") else pr, res["control"]["hvac_action"],
+                                res["control"]["light_action"], env["co2"], pr)
+    return name, minutes, {"steps": steps, "vent_share": vent_steps / max(1, steps), "decisions": ctrl.decisions}
+
+
+def run_real_room_replay(cfg, out_dir):
+    """Experiment 11: Room 101's pipeline on replayed real data (UCI), before the hardware arrives."""
+    import numpy as np
+    from concurrent.futures import ProcessPoolExecutor
+    from ml.common import classification_metrics
+    from ml.portable import Portable
+    from ml.registry import Registry
+    from raspberry_pi.virtual_board import load_uci
+    start, end, seed = cfg["start"], cfg["end"], int(cfg.get("seed", 1))
+    variants = [("full board: PIR + mmWave + CO2 (quiet sensors)", [], True, False),
+                ("full board, noisy sensors (10x false triggers)", [], True, True),
+                ("PIR + CO2, no LD2410C (quiet)", ["ld2410c"], True, False),
+                ("PIR + CO2, no LD2410C (noisy)", ["ld2410c"], True, True),
+                ("CO2 only (recorded inputs only)", ["ld2410c", "pir"], True, False)]
+    with ProcessPoolExecutor(max_workers=int(cfg.get("workers", 2))) as ex:
+        outs = list(ex.map(_replay_variant, *zip(*[(n, d, ai, start, end, seed, nz) for n, d, ai, nz in variants])))
+    # the registry's occupancy_rf on exactly the same minutes (its inputs are all in the dataset)
+    rows = {r["time"]: r for r in load_uci()}
+    act = Registry().active("occupancy_rf")
+    rf = Portable.load(os.path.join(act["path"], "model.json"))
+    from raspberry_pi.edge_brain import humidity_ratio
+    results, table = {}, []
+    for name, minutes, info in outs:
+        ts = sorted(minutes)
+        y = np.array([minutes[t][0] for t in ts])
+        p = np.array([minutes[t][1] for t in ts])
+        m = classification_metrics(y, p)                       # the pipeline's estimate (vacancy rule applied)
+        m_raw = classification_metrics(y, np.array([minutes[t][5] for t in ts]))   # fusion estimator alone
+        hv = [minutes[t][2] for t in ts]
+        empty = y == 0
+        ac_empty = float(np.mean([h != "ECO" for h, e in zip(hv, empty) if e])) if empty.any() else float("nan")
+        lit_empty = float(np.mean([minutes[t][3] != "OFF" for t, e in zip(ts, empty) if e])) if empty.any() else float("nan")
+        lit_occ = float(np.mean([minutes[t][3] != "OFF" for t, e in zip(ts, empty) if not e])) if (~empty).any() else float("nan")
+        results[name] = {"metrics": m, "metrics_estimator_only": m_raw, "minutes": len(ts), "ac_on_share_when_empty": ac_empty,
+                         "light_on_share_when_empty": lit_empty, "light_on_share_when_occupied": lit_occ, **info}
+        table.append((name, m, len(ts), ac_empty, lit_empty, info["vent_share"], m_raw["f1"], lit_occ))
+    ts = sorted(outs[0][1])
+    X = np.array([[rows[t]["temperature"], rows[t]["humidity"], rows[t]["lux"], rows[t]["co2"],
+                   humidity_ratio(rows[t]["temperature"], rows[t]["humidity"])] for t in ts])
+    y = np.array([int(rows[t]["occupied"]) for t in ts])
+    rf_m = classification_metrics(y, rf.predict(X))
+    results["occupancy_rf (registry, same minutes)"] = {"metrics": rf_m, "minutes": len(ts)}
+
+    # end-to-end through the edge brain's HTTP API (Flask test client) with the virtual board, both sources
+    import tempfile
+    import raspberry_pi.edge_brain as eb
+    from raspberry_pi.edge_brain import EdgeBrain, HARDWARE_ROOM_ID
+    from raspberry_pi.virtual_board import TwinSource, UciSource, VirtualBoard
+    tmp = tempfile.mkdtemp()
+    brain = EdgeBrain(speed_factor=360, warmup=False, store_path=os.path.join(tmp, "edge.sqlite3"))
+    eb.brain = brain
+    c = eb.app.test_client()
+    checks = []
+    n = int(cfg.get("http_readings", 200))
+    for label, src in (("uci_replay", UciSource(start, 1.0)), ("room_model", TwinSource(seed, "2026-03-02T07:00", 0.5))):
+        board = VirtualBoard(src, seed=seed)
+        ok = ver = ver_n = 0
+        temps_on, temps_off = [], []
+        for _ in range(n):
+            pl = board.reading()
+            r = c.post("/api/hardware/sensor-data", json=pl)
+            if r.status_code == 200:
+                ok += 1
+                board.apply_reply(r.get_json())
+            room = next(x for x in brain.get_current_state()["rooms"] if x["room_id"] == HARDWARE_ROOM_ID)
+            v = (room.get("control") or {}).get("previous_command_verified")
+            if v is not None:
+                ver_n += 1
+                ver += int(v)
+            (temps_on if board.act["fan"] > 0 else temps_off).append(board.last_env["temperature"])
+        st = c.get("/api/hardware/status").get_json()["rooms"][0]
+        checks.append((f"{label}: {n} readings accepted, a decision returned for each", ok == n))
+        checks.append((f"{label}: actuator levels reported by the board match the commands", ver_n > 0 and ver == ver_n))
+        checks.append((f"{label}: shown as VIRTUAL BOARD ({st['sender']}/{st['sender_detail']}), not the real board",
+                       st["sender"] == "virtual_board" and st["sender_detail"] == label and st["real_board"] is False))
+        checks.append((f"{label}: every field the firmware sends is present", all(k in pl for k in (
+            "temperature", "humidity", "pressure_hpa", "lux", "co2", "co2_source", "scd41_temp", "motion_detected",
+            "mmwave_presence", "mmwave_distance_cm", "presence", "mq2_raw", "measured_power_mW",
+            "actuator_fan_speed", "actuator_light_level", "actuator_servo_angle", "sensor_health"))))
+        if label == "room_model":
+            results["room_model_closed_loop"] = {"readings_with_ac_on": len(temps_on),
+                                                 "mean_temp_ac_on": float(np.mean(temps_on)) if temps_on else None,
+                                                 "mean_temp_ac_off": float(np.mean(temps_off)) if temps_off else None}
+    summ = brain.store.summary()["provenance"]["readings"]
+    checks.append(("all virtual-board readings stored as synthetic, none as room101_measured",
+                   summ.get("synthetic", 0) == 2 * n and summ.get("room101_measured", 0) == 0))
+    results["http_checks"] = [{"check": k, "passed": bool(v)} for k, v in checks]
+
+    with open(os.path.join(out_dir, "summary.md"), "w", encoding="utf-8") as f:
+        f.write(f"# {cfg['title']}\n\nRoom 101's pipeline (PIR(+mmWave)+CO2 fusion -> multi-objective controller -> "
+                f"safety layer, `twin/hardware_room.py`) fed by the virtual board (`raspberry_pi/virtual_board.py`) "
+                f"replaying the UCI office measurements of {start[:10]} - {end[:10]} (held out from every UCI-trained "
+                "model) every 3 s of dataset time. Temperature, humidity, light and CO2 are the recorded values; PIR, "
+                "mmWave, MQ-2 and INA226 come from sensor models driven by the recorded occupancy, so the presence "
+                "variants measure the pipeline under those models, and only the CO2-only variant uses recorded "
+                "inputs alone. Sensor models per 3-s sample: quiet = PIR high 45 % of occupied samples, false "
+                "trigger 0.03 %; LD2410C presence 97 %, false 0.05 %; noisy = false triggers 0.3 % (PIR) and 1 % "
+                "(LD2410C). **Not a measurement of Room 101 and not a physical verification.**\n\n"
+                "| pipeline | minutes | F1 | precision | recall | accuracy | F1 without vacancy rule | lights on when empty | lights on when occupied | AC on when empty | damper open |\n"
+                "|---|---|---|---|---|---|---|---|---|---|---|\n")
+        for name, m, nmin, ac, lit, vent, f1raw, litocc in table:
+            f.write(f"| {name} | {nmin} | {m['f1']:.3f} | {m['precision']:.3f} | {m['recall']:.3f} | {m['accuracy']:.3f} | "
+                    f"{f1raw:.3f} | {100 * lit:.1f} % | {100 * litocc:.1f} % | {100 * ac:.1f} % | {100 * vent:.1f} % |\n")
+        f.write(f"| occupancy_rf v1 (registry; T, RH, light, CO2 from the same minutes) | {len(ts)} | {rf_m['f1']:.3f} | "
+                f"{rf_m['precision']:.3f} | {rf_m['recall']:.3f} | {rf_m['accuracy']:.3f} | - | - | - | - | - |\n\n"
+                "F1 etc.: the pipeline's occupancy decision (estimator >= 0.5 and not vacant); 'without vacancy rule' = the "
+                "PIR+CO2 fusion estimator alone. AC / lights on when empty = share of unoccupied minutes with the AC (fan) "
+                "not in ECO / the lights not OFF; lights on when occupied = share of occupied minutes with lights not OFF "
+                "(they may correctly stay off in daylight). "
+                "The UCI office was 19-24 C (Belgian winter), so the AC rarely runs; lighting decisions see the "
+                "office's own recorded lighting in the light reading.\n\n## End to end through the edge brain API\n\n"
+                "| check | result |\n|---|---|\n")
+        for r in results["http_checks"]:
+            f.write(f"| {r['check']} | {'PASS' if r['passed'] else 'FAIL'} |\n")
+        cl = results.get("room_model_closed_loop", {})
+        if cl.get("mean_temp_ac_on") is not None:
+            f.write(f"\nRoom-model source (closed loop): mean temperature {cl['mean_temp_ac_on']:.2f} C in readings with the "
+                    f"AC (fan) commanded on vs {cl['mean_temp_ac_off']:.2f} C with it off.\n")
+    with open(os.path.join(out_dir, "results.json"), "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=1, default=str)
+    for name, m, nmin, ac, lit, vent, f1raw, litocc in table:
+        print(f"{name:48s} F1 {m['f1']:.3f} (estimator only {f1raw:.3f}) P {m['precision']:.3f} R {m['recall']:.3f} "
+              f"acc {m['accuracy']:.3f} lit-empty {100 * lit:.1f} % lit-occ {100 * litocc:.1f} % AC-empty {100 * ac:.1f} %")
+    print(f"{'occupancy_rf v1':34s} F1 {rf_m['f1']:.3f}")
+    for r in results["http_checks"]:
+        print(("PASS " if r["passed"] else "FAIL ") + r["check"])
+    passed = all(r["passed"] for r in results["http_checks"]) and all(np.isfinite(x[1]["f1"]) for x in table)
+    return ("PASS" if passed else "FAIL"), {"variants": {k: v.get("metrics", {}).get("f1") for k, v in results.items()
+                                                        if isinstance(v, dict) and "metrics" in v},
+                                           "physical_verification": "not performed (hardware not yet delivered)"}
+
+
+RUNNERS = {"control_comparison": run_control, "ml_script": run_ml, "consistency": run_consistency, "live_room": run_live_room,
+           "real_room_replay": run_real_room_replay}
 
 
 def run(cfg: dict) -> dict:

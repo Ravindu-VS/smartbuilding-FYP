@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Cpu, Zap, History, ListChecks, Gauge, Loader2 } from 'lucide-react';
-import { useBuildingStore } from '../../store/useBuildingStore';
+import { senderLabel, useBuildingStore } from '../../store/useBuildingStore';
 import { EDGE_URL, useNow } from '../../hooks/useSSE';
 import { api } from '../../lib/api';
 import { acLabel, fx, isNum } from '../../lib/format';
@@ -57,7 +57,7 @@ export default function HardwareRoomPanel({ room, events, history }: { room: Roo
   const control = live ? room.control : null;
   const power = live ? room.energy?.measured_power_watts ?? null : null;
   const lastDecision = [...events].reverse().find((e) => e.kind === 'decision') ?? null;
-  const pill = { never: 'NOT CONNECTED', lost: 'NOT CONNECTED', test: 'TEST SENDER', live: 'CONNECTED' }[status];
+  const pill = { never: 'NOT CONNECTED', lost: 'NOT CONNECTED', test: senderLabel(hw), live: 'CONNECTED' }[status];
 
   return (
     <div>
@@ -75,7 +75,9 @@ export default function HardwareRoomPanel({ room, events, history }: { room: Roo
       )}
       {status === 'test' && (
         <div className="mx-3 mt-2 px-2 py-1.5 rounded bg-amber-950/40 border border-amber-800/60 text-[10.5px] text-amber-300" data-testid="test-sender-warning">
-          Readings come from a test sender ({hw?.sender}), not from the real board.
+          {hw?.sender === 'virtual_board'
+            ? <>Readings come from the virtual board ({hw?.sender_detail === 'uci_replay' ? 'replay of the public UCI office dataset, with modelled PIR, mmWave, MQ-2 and INA226' : hw?.sender_detail === 'room_model' ? 'Office A simulated by the digital twin, driven by these decisions' : hw?.sender_detail ?? 'emulated'}), not from the real board. Stored as synthetic.</>
+            : <>Readings come from a test sender ({hw?.sender}), not from the real board.</>}
         </div>
       )}
 

@@ -1,0 +1,42 @@
+{
+  "id": "exp11_real_room_replay",
+  "title": "Experiment 11 - Room 101 pipeline on replayed real data (virtual board)",
+  "status": "PASS",
+  "started": "2026-10-25T01:09:54",
+  "finished": "2026-10-25T01:11:16",
+  "wall_s": 82.7,
+  "question": "Before the hardware arrives: does Room 101's own pipeline (PIR(+mmWave)+CO2 fusion, multi-objective controller, safety layer) work on real office measurements delivered exactly as the board would send them, and does the edge brain handle the virtual board end to end?",
+  "info": {
+    "variants": {
+      "full board: PIR + mmWave + CO2 (quiet sensors)": 0.790052053209948,
+      "full board, noisy sensors (10x false triggers)": 0.35351966873706003,
+      "PIR + CO2, no LD2410C (quiet)": 0.8843331894691411,
+      "PIR + CO2, no LD2410C (noisy)": 0.5157311855021395,
+      "CO2 only (recorded inputs only)": 0.5290169759178839,
+      "occupancy_rf (registry, same minutes)": 0.9732824427480916
+    },
+    "physical_verification": "not performed (hardware not yet delivered)"
+  },
+  "git_commit": "92054d3",
+  "dependencies": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "sklearn": "1.8.0",
+    "scipy": "1.18.1"
+  },
+  "active_models": {
+    "energy_dayahead": "v1",
+    "occupancy_best": "v1",
+    "occupancy_co2_temporal": null,
+    "occupancy_rf": "v1",
+    "occupancy_twin_fusion": "v1",
+    "ppo_policy": "v2",
+    "thermal_h15": "v1",
+    "thermal_h30": "v1"
+  },
+  "processed_data_sha256": {
+    "uci_occupancy.csv": "eafa3a795bd85c8253ac8536de1fcb002f848f5e67b752f4d5d256ee498e1923",
+    "bdg2_panther_office.csv": "75db0f3dccc68fbd4a78e1499d7e551f4c223a3843b457d822e6789530a39ab6"
+  }
+}

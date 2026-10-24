@@ -15,7 +15,7 @@ Digital Twin. Work of 23 Oct 2026 on top of commit `35a384b`. Every figure below
  public data ──►│ scripts/fetch + preprocess ─► ml/ (occupancy,        │
  (UCI, BDG2)    │   thermal, energy) ─► models/registry (JSON, cards) │
  twin ─────────►│ rl/ (env, numpy PPO) ─► models/ppo_runs ─► registry  │
-                │ experiments/run.py (1-10) ─► experiments/results      │
+                │ experiments/run.py (1-11) ─► experiments/results      │
                 └───────────────────────────┬─────────────────────────┘
                                             │ approved versions (git)
 ESP32-S3 (Room 101) ──HTTP 3 s / MQTT──► Raspberry Pi 4B edge brain (raspberry_pi/edge_brain.py)
@@ -38,7 +38,7 @@ CONNECTED with no values.
 
 | Dataset | Source | Licence | Used variables | Preprocessing | Use |
 |---|---|---|---|---|---|
-| UCI Occupancy Detection (Candanedo & Feldheim 2016) | archive.ics.uci.edu dataset 357 (DOI 10.24432/C5X01N), downloaded from the author's GitHub repository (UCI host refused here); identical to `Dataset/UCI/` | CC BY 4.0 | Temperature, Humidity, Light, CO2, HumidityRatio, Occupancy; 1 min; 20,560 rows | concatenated, time-ordered, no value changed; features per contiguous recording | occupancy models; real-data thermal check |
+| UCI Occupancy Detection (Candanedo & Feldheim 2016) | archive.ics.uci.edu dataset 357 (DOI 10.24432/C5X01N), downloaded from the author's GitHub repository (UCI host refused here); identical to `Dataset/UCI/` | CC BY 4.0 | Temperature, Humidity, Light, CO2, HumidityRatio, Occupancy; 1 min; 20,560 rows | concatenated, time-ordered, no value changed; features per contiguous recording | occupancy models; real-data thermal check; virtual-board replay into Room 101's pipeline (experiment 11) |
 | BDG2 (Miller et al. 2020) | github.com/buds-lab/building-data-genome-project-2 (LFS) | CC BY-SA 4.0 (repository LICENSE) | hourly electricity (kWh), NOAA ISD-Lite weather, metadata; Panther site, 23 offices, Jun 2016-Dec 2017 | completeness rule >= 90 %, weather gaps <= 3 h interpolated (none needed), electricity never filled | energy model |
 | Synthetic corpus (twin) | `scripts/make_synthetic_corpus.sh` | project | all simulator outputs, sensors as delivered | validation checks on every file | thermal model, learned fusion, domain check |
 
@@ -118,6 +118,29 @@ All scenarios (energy change vs schedule / share of occupied time with |PMV| > 0
 * Experiment 9: room, floor, end-use and building energy agree to < 1e-9 kWh in every run; the live meter equals the
   rooms' energy.
 
+**Room 101's pipeline on replayed real data (experiment 11).** Before the hardware arrives, the virtual board
+(`raspberry_pi/virtual_board.py`) sends the held-out UCI week (11-18 Feb 2015, 9,752 min) through Room 101's own
+pipeline exactly as the firmware would (every 3 s; recorded temperature, humidity, light and CO2; PIR / mmWave from
+sensor models driven by the recorded occupancy):
+
+| Room 101 pipeline | occupancy F1 | precision | recall | lights on in empty minutes |
+|---|---|---|---|---|
+| PIR + CO2, quiet sensors | 0.884 | 0.793 | 1.000 | 9.8 % |
+| PIR + mmWave + CO2, quiet sensors | 0.790 | 0.653 | 1.000 | 22.1 % |
+| PIR + CO2, noisy sensors (10x false triggers) | 0.516 | 0.347 | 1.000 | 57.2 % |
+| PIR + mmWave + CO2, noisy sensors | 0.354 | 0.215 | 1.000 | 96.2 % |
+| CO2 only (recorded inputs only) | 0.529 | 0.444 | 0.654 | 91.4 % |
+| reference: `occupancy_rf` v1 on the same minutes | 0.973 | 0.952 | 0.996 | - |
+
+The replay exposed a design fault: CO2 stays high for hours after people leave, and the CO2 evidence alone kept the
+lights on in 92 % of the empty minutes. Room 101's controller now applies a vacancy rule (no PIR / mmWave detection
+for 15 min -> lights off, AC to ECO), which brought this down to 10-22 % with quiet sensors. The remainder comes from
+false triggers, each restarting the 15 min, so the false-trigger rate of the real sensors decides the result; the bench
+check measures it (`--empty-room`). The presence rows depend on the assumed sensor models; only the CO2-only row uses
+recorded inputs alone. End to end, the edge brain answered every virtual-board reading from both sources, the actuator
+feedback matched every command, the board was labelled VIRTUAL BOARD and its readings stored as synthetic. The
+simulated rooms' controller is unchanged, so experiments 1 and 5-8 are unaffected.
+
 Conclusion: in the digital twin, PPO v2 is the most energy-efficient controller tested and reduces how often people
 are uncomfortable, at the cost of more AC cycling and, in some scenarios, larger comfort deviations than the
 multi-objective controller. These are simulation results (synthetic data); no savings are claimed for the real
@@ -135,13 +158,14 @@ building. Results: `experiments/results/SUMMARY.md`, `experiments/results/exp0*/
 | Manual override, actuator verification | implemented, tested |
 | Edge runtime without the training stack | tested (`tests/test_edge_runtime.py`) |
 | ESP32-S3 firmware | implemented (HTTP); host-side syntax / library-API check passes for all supported library versions (two library bugs fixed); **not compiled for the ESP32-S3, not bench-tested in this work** |
-| Bench check for the real room | `scripts/check_hardware.py` (sensors, report interval, actuators through a manual override, operator confirmation); tested against the test sender, where it is labelled a software check |
+| Virtual board (until the hardware arrives) | `raspberry_pi/virtual_board.py`: firmware-identical payload, reply handling and fail-safe; UCI replay or Office A simulated by the twin; labelled VIRTUAL BOARD, stored as synthetic; `run_local.bat virtual`; tested (`tests/test_virtual_board.py`, experiment 11) |
+| Bench check for the real room | `scripts/check_hardware.py` (sensors, report interval, actuators through a manual override, operator confirmation); tested against the test sender and rehearsed against the virtual board (22 pass, 0 fail; labelled a software check) |
 | Raspberry Pi 4B | runtime requirements tested in a Linux container; **not run on a Pi here**; GPIO outputs recorded, not driven |
 
 ## 7. Testing evidence
 
-`python3 -m pytest` on 23 Oct 2026 (Linux container, Python 3.13, 2 vCPUs): **94 passed in 55 s**, no failures, no
-skips.
+`python3 -m pytest` on 25 Oct 2026 (Linux container, Python 3.13, 2 vCPUs): **103 passed in 75 s**, no failures,
+no skips.
 
 | File | Tests | Covers |
 |---|---|---|
@@ -153,11 +177,14 @@ skips.
 | `tests/test_rl.py` | 11 | gradients vs finite differences, GAE, save/load, environment API (gymnasium check), allowed commands only, decision hold and AC dwell, inference without the training stack, PPO behind guard and safety layer, policy failure -> rules, missing policy is an error |
 | `tests/test_store_mqtt.py` | 7 | SQLite migrations and restart, history and commands, telemetry schema, MQTT end-to-end with a broker (dedupe, acks, credentials never logged), ack time-outs, reconnect after a broker restart, export keeps provenance classes apart |
 | `tests/test_integration.py` | 6 | live and simulated rooms stay separate, new endpoints, admin token on model changes, restart without duplicates, end-to-end ingestion -> store -> decision -> command, manual override and actuator verification |
+| `tests/test_virtual_board.py` | 7 | virtual board = firmware fields, recorded UCI values, reply handling and fail-safe, dropped sensors, room model responds to the AC, labelled VIRTUAL BOARD and stored synthetic; vacancy rule |
+| `tests/test_check_hardware.py` | 1 | bench-check script against a real edge-brain process fed by the test sender |
+| `tests/test_firmware_check.py` | 1 | firmware syntax / library-API check, 18 library and core combinations |
 | `tests/test_edge_runtime.py` | 1 | the edge brain runs with pandas / scikit-learn / scipy / joblib / gymnasium blocked |
 | `raspberry_pi/test_edge_brain.py` | 12 | 26 rooms / one hardware room, no board = not connected and no values, readings shown exactly, MQ-2 never used as CO2, missing fields stay missing, board time-out, test sender never shown as the board, AI switch, SSE, API |
 
 Dashboard: `npx tsc --noEmit`, `npx eslint src` and `npx next build` clean. Browser flows: see below.
-Experiments 1-10: all PASS (`experiments/results/SUMMARY.md`).
+Experiments 1-11: all PASS (`experiments/results/SUMMARY.md`).
 
 <!-- BROWSER -->
 
@@ -177,7 +204,7 @@ python3 -m pip install -r requirements/dev.txt ; (cd dashboard/fyp-research-twin
 run_local.bat                      # Windows; or scripts/start.sh dev | edge | live | harness
 python3 -m pytest -q               # tests
 python3 -m ml.registry status      # models; promote / rollback with python -m ml.registry promote|rollback
-python3 experiments/run.py --all   # experiments 1-10
+python3 experiments/run.py --all   # experiments 1-11
 ```
 
 ## 10. Remaining limitations
@@ -211,7 +238,10 @@ python3 experiments/run.py --all   # experiments 1-10
    promotion are run by command or API after acceptance tests. Nothing learns online on the real room, by design.
 10. **Browser checks** ran in headless Chromium with software WebGL on the development container, not on the Pi or
     the target display.
-11. **Earlier reported results.** The previously deployed RF's 0.997 accuracy is not valid (trained on its own test
+11. **Experiment 11 uses sensor models.** PIR and mmWave behaviour in the UCI replay are modelled from the recorded
+    occupancy; the presence results depend on the assumed detection and false-trigger rates, which the bench check
+    will measure. The vacancy rule was added after seeing that replay; its 15-min timeout is a standard value, not tuned.
+12. **Earlier reported results.** The previously deployed RF's 0.997 accuracy is not valid (trained on its own test
     rows; the "Kaggle" files are UCI copies). It is kept only as a documented reference.
 
 ## 11. Viva demonstration sequence
@@ -228,7 +258,9 @@ python3 experiments/run.py --all   # experiments 1-10
 6. Energy and comfort evaluation: experiments 1 and 5 tables (`experiments/results/exp05_control/summary.md`).
 7. RL vs baseline: the PPO results and the registry's acceptance decision (`python -m ml.registry status`).
 8. Live sensor integration: board connected -> LIVE ESP32 values; unplug or stop it -> NOT CONNECTED within 10 s,
-   values disappear. Without the board: `scripts/start.sh harness` (labelled synthetic).
+   values disappear. Without the board: `run_local.bat virtual` (virtual board replaying the UCI office data,
+   labelled VIRTUAL BOARD) or `virtual-twin` (Office A simulated, reacting to the AI); `scripts/start.sh harness`
+   for the MQTT path.
 9. Fail-safe: `python experiments/run.py exp08_fault_tolerance` results - sensor dropout/stuck sensors and network
    outage handled by the fail-safe (F1 counts), a crashing controller falls back to the schedule, a corrupted model
    is refused; manual override from the API.

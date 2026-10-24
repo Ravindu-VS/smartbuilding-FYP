@@ -258,6 +258,7 @@ class HardwareLink:
         self.intervals: deque = deque(maxlen=20)
         self.reading: Optional[Dict[str, Any]] = None
         self.sender: Optional[str] = None
+        self.sender_detail: Optional[str] = None             # e.g. the virtual board's data source
         self.last_power_w: Optional[float] = None
         self.energy_wh = 0.0
         self.history: deque = deque(maxlen=600)
@@ -284,7 +285,8 @@ class HardwareLink:
         return {
             "room_id": self.room_id, "room_name": self.room["display_name"],
             "connected": state == "connected", "state": state,
-            "sender": sender, "real_board": sender == "esp32_board", "last_seen": self.last_rx_iso,
+            "sender": sender, "sender_detail": self.sender_detail, "real_board": sender == "esp32_board",
+            "last_seen": self.last_rx_iso,
             "age_s": round(age, 2) if age is not None else None, "timeout_s": HW_TIMEOUT_S,
             "readings_received": self.rx_count,
             "mean_interval_s": round(mean_interval, 2) if mean_interval is not None else None,
@@ -645,6 +647,8 @@ class EdgeBrain:
             link.last_rx_iso = now_iso
             link.rx_count += 1
             link.sender = payload.get("source") if isinstance(payload.get("source"), str) else "unknown"
+            ds = payload.get("data_source")
+            link.sender_detail = ds[:40] if isinstance(ds, str) and link.sender != "sensor_node" else None
             link.reading = reading
             link.history.append({
                 "t": now.isoformat(timespec="seconds"), "mode": control.get("mode"),

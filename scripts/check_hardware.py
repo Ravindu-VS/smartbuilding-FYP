@@ -213,6 +213,9 @@ def main(argv=None) -> int:
     ap.add_argument("--interval", type=float, default=3.0, help="the board's report interval (firmware: 3 s)")
     ap.add_argument("--actuators", action="store_true", help="drive fan, LED and damper through a manual override")
     ap.add_argument("--ask", action="store_true", help="ask the operator to confirm what the actuators do")
+    ap.add_argument("--empty-room", action="store_true",
+                    help="nobody is in the room during the recording: report PIR / mmWave false triggers per hour "
+                         "(they keep the lights on for 15 min each - experiment 11)")
     ap.add_argument("--out", default=os.path.join(ROOT, "experiments", "results", "hardware_bench"))
     a = ap.parse_args(argv)
 
@@ -249,6 +252,15 @@ def main(argv=None) -> int:
             rep.add("link", f"report interval about {a.interval:g} s", "PASS" if ok else "FAIL", f"{mi} s")
         if samples:
             sensors(rep, samples)
+            if a.empty_room:
+                hours = max(1e-9, len(samples) * (mi or a.interval) / 3600.0)
+                for key, label in (("pir_motion", "PIR"), ("mmwave_presence", "LD2410C")):
+                    vals = [s_["presence"].get(key) for s_ in samples if s_.get("presence")]
+                    vals = [v for v in vals if v is not None]
+                    if vals:
+                        k = sum(1 for v in vals if v)
+                        rep.add("empty room", f"{label} detections with nobody present", "INFO",
+                                f"{k} of {len(vals)} readings ({100 * k / len(vals):.2f} %), about {k / hours:.1f} per hour")
             ai = samples[-1].get("ai") or {}
             rep.add("edge", "occupancy estimate produced", "PASS" if ai else "FAIL",
                     {k: ai.get(k) for k in ("occupancy_probability", "estimator") if k in ai} or ai)

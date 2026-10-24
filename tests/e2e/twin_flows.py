@@ -111,7 +111,13 @@ async def main():
 
         # ---------------- Flow B — direct room navigation
         await click("nav-floor-4")
+        await wait_view("floor", floor=4)
         await pg.wait_for_timeout(1200)
+        if not await S("() => !!document.querySelector('[data-testid=nav-room-f4_lounge]')"):
+            # a late view message from the twin (the previous floor) can re-select that floor under heavy load
+            WAITS.append(("nav-floor-4 clicked again", 0))
+            await click("nav-floor-4")
+            await pg.wait_for_timeout(1200)
         await click("nav-room-f4_lounge", dbl=True)
         v = await wait_view("room", room="f4_lounge"); check("B", "double-click in the room list opens that room", v["mode"] == "room" and v["room"] == "f4_lounge" and v["floor"] == 4, v)
         crumb = await bc(); check("B", "breadcrumb shows floor and room", "Level 4" in crumb and "Penthouse Lounge" in crumb, crumb)

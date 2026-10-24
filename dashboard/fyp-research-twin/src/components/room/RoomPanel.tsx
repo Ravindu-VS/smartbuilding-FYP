@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Users, Thermometer, Droplets, Sun, Wind, Radio, Cpu, Zap, Scale, Sliders, History, ListChecks, Building2 } from 'lucide-react';
-import { backendIsCurrent, useBuildingStore } from '../../store/useBuildingStore';
+import { backendIsCurrent, senderLabel, useBuildingStore } from '../../store/useBuildingStore';
 import { api } from '../../lib/api';
 import { acLabel, fx, isNum, TYPE_LABEL } from '../../lib/format';
 import type { HistoryPoint, RoomState, TimelineEvent } from '../../types/building';
@@ -215,7 +215,7 @@ export default function RoomPanel() {
                 {r.room_number != null && <span className="text-[11px] font-mono px-1 rounded bg-slate-800 text-slate-300" data-testid="room-number">Room {r.room_number}</span>}
                 <h2 className="text-[15px] font-bold text-white truncate" data-testid="room-name">{r.display_name}</h2>
                 {r.source === 'hardware'
-                  ? <span className={`text-[9.5px] px-1.5 py-0.5 rounded border ${r.hardware?.connected ? (r.hardware.real_board ? 'border-emerald-600 text-emerald-300' : 'border-amber-600 text-amber-300') : 'border-red-700 text-red-300'}`}><Cpu size={10} className="inline mr-0.5" />{r.hardware?.connected ? (r.hardware.real_board ? 'LIVE ESP32' : 'TEST SENDER') : 'BOARD NOT CONNECTED'}</span>
+                  ? <span className={`text-[9.5px] px-1.5 py-0.5 rounded border ${r.hardware?.connected ? (r.hardware.real_board ? 'border-emerald-600 text-emerald-300' : 'border-amber-600 text-amber-300') : 'border-red-700 text-red-300'}`}><Cpu size={10} className="inline mr-0.5" />{r.hardware?.connected ? (r.hardware.real_board ? 'LIVE ESP32' : senderLabel(r.hardware)) : 'BOARD NOT CONNECTED'}</span>
                   : <span className="text-[9.5px] px-1.5 py-0.5 rounded border border-slate-600 text-slate-300">SIMULATED</span>}
               </div>
               <div className="text-[10.5px] text-slate-500">

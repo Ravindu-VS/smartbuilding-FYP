@@ -68,3 +68,25 @@ evidence (command + result), and the next action. Resume from the last "Next" li
 - Not done / blocked: firmware compile and bench test (no toolchain, no board), Pi hardware run, measured Colombo
   weather; the linked PC's shell is a sandbox without the G: drive, so the update is delivered as a git bundle +
   `apply_update.bat`.
+
+## 2026-10-24/25 — Phase 3: hardware readiness without the hardware
+
+- Owner's constraint: the hardware has not arrived and the thesis is due this week, so the real-room path is
+  completed and exercised with emulated inputs; physical verification stays pending.
+- Firmware: no toolchain reachable, so `firmware/tools/check_firmware.py` checks syntax and library APIs with g++
+  against the real library headers. Found and fixed: SCD41 silently skipped with Sensirion I2C SCD4x 1.x; INA226
+  code that did not compile with any INA226 library. 18/18 library/core combinations pass (not an ESP32 compile).
+- `scripts/check_hardware.py` (bench check: sensors, interval, actuators via override, operator confirmation,
+  `--empty-room` false triggers); tested with the test sender; rehearsed against the virtual board (22 pass, 0 fail).
+- `raspberry_pi/virtual_board.py`: firmware-identical payload and behaviour; UCI replay (recorded values) or
+  Office A simulated by the twin (closed loop); labelled VIRTUAL BOARD, stored synthetic; `run_local.bat virtual`,
+  `scripts/start.sh virtual|virtual-twin`.
+- Experiment 11 (PASS): held-out UCI week through Room 101's pipeline. Finding: CO2 evidence alone kept the lights on
+  in 92 % of empty minutes -> vacancy rule (15 min without PIR/mmWave detection -> lights off, AC ECO); now 10 %
+  (PIR + CO2) / 22 % (PIR + mmWave + CO2) with quiet sensors, 57-96 % with 10x false triggers. Occupancy F1 0.884 /
+  0.790 (quiet), 0.529 CO2 only; occupancy_rf 0.973 on the same minutes.
+- Edge brain: no energy provenance label without INA226 data; sender detail (virtual board source) in the status.
+- Dashboard: VIRTUAL BOARD labels; `npx tsc --noEmit`, `npx eslint src` clean.
+- Browser flows: wait for elements while the dashboard is briefly without data; a late floor message re-selects the
+  previous floor under heavy load (test clicks again; noted, not changed in the UI).
+- Tests: `python3 -m pytest` -> **103 passed in 75 s**.

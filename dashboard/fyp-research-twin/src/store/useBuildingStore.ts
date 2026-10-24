@@ -138,6 +138,14 @@ export function backendIsCurrent(raw: BuildingStatePayload | null | undefined): 
   return !!raw && raw.api_version === API_VERSION && !!raw.clock && !!raw.meter && !!raw.system?.hardware;
 }
 
+/** Label for a connected non-real sender: the virtual board (UCI replay / room model) or the HTTP test sender. */
+export function senderLabel(hw: { sender: string | null; sender_detail?: string | null } | null | undefined): string {
+  if (hw?.sender === 'virtual_board') {
+    return hw.sender_detail === 'uci_replay' ? 'VIRTUAL BOARD · UCI REPLAY' : hw.sender_detail === 'room_model' ? 'VIRTUAL BOARD · ROOM MODEL' : 'VIRTUAL BOARD';
+  }
+  return 'TEST SENDER';
+}
+
 export function hardwareRoom(state: { rooms: Record<string, RoomState>; system: SystemState | null }) {
   const id = state.system?.hardware_room_id;
   return id ? state.rooms[id] : undefined;

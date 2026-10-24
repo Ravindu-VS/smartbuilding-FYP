@@ -1,0 +1,16 @@
+== exp11_real_room_replay: Experiment 11 - Room 101 pipeline on replayed real data (virtual board)
+full board: PIR + mmWave + CO2 (quiet sensors)   F1 0.790 (estimator only 0.627) P 0.653 R 1.000 acc 0.888 lit-empty 22.1 % lit-occ 0.4 % AC-empty 0.0 %
+full board, noisy sensors (10x false triggers)   F1 0.354 (estimator only 0.351) P 0.215 R 1.000 acc 0.232 lit-empty 96.2 % lit-occ 1.0 % AC-empty 0.0 %
+PIR + CO2, no LD2410C (quiet)                    F1 0.884 (estimator only 0.678) P 0.793 R 1.000 acc 0.945 lit-empty 9.8 % lit-occ 0.3 % AC-empty 0.0 %
+PIR + CO2, no LD2410C (noisy)                    F1 0.516 (estimator only 0.471) P 0.347 R 1.000 acc 0.605 lit-empty 57.2 % lit-occ 0.9 % AC-empty 0.0 %
+CO2 only (recorded inputs only)                  F1 0.529 (estimator only 0.529) P 0.444 R 0.654 acc 0.755 lit-empty 91.4 % lit-occ 0.9 % AC-empty 0.0 %
+occupancy_rf v1                    F1 0.973
+PASS uci_replay: 200 readings accepted, a decision returned for each
+PASS uci_replay: actuator levels reported by the board match the commands
+PASS uci_replay: shown as VIRTUAL BOARD (virtual_board/uci_replay), not the real board
+PASS uci_replay: every field the firmware sends is present
+PASS room_model: 200 readings accepted, a decision returned for each
+PASS room_model: actuator levels reported by the board match the commands
+PASS room_model: shown as VIRTUAL BOARD (virtual_board/room_model), not the real board
+PASS room_model: every field the firmware sends is present
+PASS all virtual-board readings stored as synthetic, none as room101_measured
