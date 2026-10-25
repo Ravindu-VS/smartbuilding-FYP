@@ -90,3 +90,13 @@ evidence (command + result), and the next action. Resume from the last "Next" li
 - Browser flows: wait for elements while the dashboard is briefly without data; a late floor message re-selects the
   previous floor under heavy load (test clicks again; noted, not changed in the UI).
 - Tests: `python3 -m pytest` -> **103 passed in 75 s**.
+- Browser flows (A-G, 40 checks) re-run on the final system found three real defects, all fixed:
+  1. **Models & data panel did not load** - `/api/models` contained NaN (drift PSI undefined for 0/1 features),
+     which browsers reject. Drift now reports null with a note; every edge-brain response and the stream send
+     NaN / infinity as null (`test_api_responses_are_strict_json`).
+  2. **Stale stream backlog** - the stream sends ~106 kB snapshots 4x/s (415 kB/s measured); a busy page read them
+     more slowly than they arrived and showed states more than a minute old (the live room still "connected" long
+     after the board stopped). The page now detects a lag > 5 s from the messages' send time and reconnects.
+  3. **3D view backlog / false "not live"** - the 3D view applies only the newest snapshot; the stream watchdog
+     skips ticks that fired late because the tab was frozen (not the backend).
+  The edge brain itself streamed every 0.25 s (max gap 0.5 s) throughout, measured during the runs.
