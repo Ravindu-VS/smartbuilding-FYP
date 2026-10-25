@@ -1,14 +1,16 @@
 # Final report
 
 Smart Building FYP - Edge Intelligence Based Energy Management and Optimization System, Hybrid Cyber-Physical
-Digital Twin. Work of 23 Oct 2026 on top of commit `35a384b`. Every figure below comes from a recorded run
+Digital Twin. Work of 23-25 Oct 2026 on top of commit `35a384b`. Every figure below comes from a recorded run
 (`experiments/results/`, `docs/results/`) or a test; nothing was filled in.
 
 ## 1. Overall completion
 
 **Status: the software system is complete and verified; Room 101's physical hardware verification is pending
 (the parts have not been delivered).** Everything else in the master prompt was implemented, run and checked;
-the acceptance gate (`docs/ACCEPTANCE_GATE.md`) has **55 PASS** (three qualified: MQTT on the edge side, the hardware data path in software, clean-up by quarantine), **2 BLOCKED** (measured Colombo weather; firmware compile and physical verification) and **0 FAIL**.
+the acceptance gate (`docs/ACCEPTANCE_GATE.md`) has **55 PASS** (three qualified: MQTT on the edge side, the
+hardware data path in software, clean-up by quarantine), **2 BLOCKED** (measured Colombo weather; firmware
+compile and physical verification) and **0 FAIL**.
 
 | Area | Status | Key evidence |
 |---|---|---|
@@ -18,7 +20,7 @@ the acceptance gate (`docs/ACCEPTANCE_GATE.md`) has **55 PASS** (three qualified
 | Reinforcement learning | complete (simulation) | PPO v1 rejected, v2 approved; -11.3 % energy and 5.2 % discomfort vs schedule 21.7 %; held on new seeds 4-6 |
 | Self-learning | complete | registry with acceptance tests, shadow mode, drift, promote / rollback, provenance |
 | Edge brain, store, MQTT, API | complete | SQLite with migrations, MQTT bridge with acks; tests; experiment 10 |
-| Dashboard and 3D twin | complete | browser flows A-G 40/40 (three defects found and fixed); type-check, lint and production build clean; type-check and lint clean |
+| Dashboard and 3D twin | complete | browser flows A-G 40/40 (three defects found and fixed); type-check, lint and production build clean |
 | Room 101 (real room) | software complete, physical pending | virtual board with the firmware's payload replaying real data (experiment 11, vacancy-rule fix); firmware library API check (2 bugs fixed); bench-check script ready and rehearsed |
 | Tests and experiments | complete | 104 tests pass; browser flows 40/40; experiments 1-11 PASS |
 
