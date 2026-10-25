@@ -12,7 +12,7 @@ Next.js dashboard with a 3D digital twin.
 Every number in this README comes from a run recorded in `experiments/results/` or `docs/results/`.
 What is real, simulated, predicted or estimated is stated everywhere (see [provenance](#provenance)).
 
-**Status (25 Oct 2026):** software complete and verified (103 tests, experiments 1-11 PASS). The Room 101
+**Status (25 Oct 2026):** software complete and verified (104 tests, browser flows 40/40, experiments 1-11 PASS). The Room 101
 hardware has not been delivered yet: until it arrives the virtual board (`run_local.bat virtual`) sends Room 101
 readings exactly like the firmware, and the bring-up steps plus a bench-check script are ready in
 [docs/HARDWARE.md](docs/HARDWARE.md). Final report: [docs/FINAL_REPORT.md](docs/FINAL_REPORT.md).

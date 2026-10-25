@@ -1,0 +1,242 @@
+[
+ {
+  "flow": "A",
+  "check": "opens on the building view",
+  "pass": true,
+  "detail": "{'mode': 'building', 'floor': None, 'room': None, 'preset': 'hero', 'eye': False}"
+ },
+ {
+  "flow": "A",
+  "check": "26 rooms in 3D (25 simulated + 1 live)",
+  "pass": true,
+  "detail": "26 rooms, 1 live"
+ },
+ {
+  "flow": "A",
+  "check": "floor pill opens the floor view (L2)",
+  "pass": true,
+  "detail": "{'mode': 'floor', 'floor': 2, 'room': None, 'preset': 'iso', 'eye': False, 'isolated': None}"
+ },
+ {
+  "flow": "A",
+  "check": "floor view shows a card for each room on the floor",
+  "pass": true,
+  "detail": "6 cards"
+ },
+ {
+  "flow": "A",
+  "check": "clicking a room card selects it in the dashboard",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "flow": "A",
+  "check": "second click enters the room",
+  "pass": true,
+  "detail": "{'mode': 'room', 'floor': 2, 'room': 'f2_meeting_b', 'preset': 'overview', 'eye': False, 'isolated': None}"
+ },
+ {
+  "flow": "A",
+  "check": "room has furniture, HVAC units and its own walls/windows",
+  "pass": true,
+  "detail": "{'furniture': 10, 'units': 2, 'people3d': 0, 'truth': 0, 'walls': 4}"
+ },
+ {
+  "flow": "A",
+  "check": "people drawn = simulated true occupancy",
+  "pass": true,
+  "detail": "{'furniture': 10, 'units': 2, 'people3d': 0, 'truth': 0, 'walls': 4}"
+ },
+ {
+  "flow": "A",
+  "check": "Esc returns to the floor",
+  "pass": true,
+  "detail": "{'mode': 'floor', 'floor': 2, 'room': None, 'preset': 'iso', 'eye': False, 'isolated': None}"
+ },
+ {
+  "flow": "A",
+  "check": "Esc again returns to the building",
+  "pass": true,
+  "detail": "{'mode': 'building', 'floor': None, 'room': None, 'preset': 'hero', 'eye': False, 'isolated': None}"
+ },
+ {
+  "flow": "B",
+  "check": "double-click in the room list opens that room",
+  "pass": true,
+  "detail": "{'mode': 'room', 'floor': 4, 'room': 'f4_lounge', 'preset': 'overview', 'eye': False, 'isolated': None}"
+ },
+ {
+  "flow": "B",
+  "check": "breadcrumb shows floor and room",
+  "pass": true,
+  "detail": "Smart Hub Level 4 \u00b7 Penthouse Penthouse Lounge"
+ },
+ {
+  "flow": "B",
+  "check": "panels show the selected room",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "flow": "B",
+  "check": "'up' returns to the room's floor",
+  "pass": true,
+  "detail": "{'mode': 'floor', 'floor': 4, 'room': None, 'preset': 'iso', 'eye': False, 'isolated': None}"
+ },
+ {
+  "flow": "B",
+  "check": "selecting + opening a room on another floor from a floor view lands in that room",
+  "pass": true,
+  "detail": "{'mode': 'room', 'floor': 2, 'room': 'f2_kitchen', 'preset': 'overview', 'eye': False, 'isolated': None}"
+ },
+ {
+  "flow": "C",
+  "check": "an occupied, cooled room exists",
+  "pass": true,
+  "detail": "f0_lobby"
+ },
+ {
+  "flow": "C",
+  "check": "airflow layer toggles on in the room",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "flow": "C",
+  "check": "3D temperature = room's simulated temperature",
+  "pass": true,
+  "detail": "23.72"
+ },
+ {
+  "flow": "C",
+  "check": "airflow intensity follows the AC cooling output",
+  "pass": true,
+  "detail": "0.23 vs 23%"
+ },
+ {
+  "flow": "C",
+  "check": "set-point and AC action shown = controller state",
+  "pass": true,
+  "detail": "NORMAL 24\u00b0"
+ },
+ {
+  "flow": "C",
+  "check": "thermostat hotspot shows the room temperature",
+  "pass": true,
+  "detail": "['Thermostat 23.7 \u00b0C\\nset-point 24 \u00b0C \u00b7 room average from the simulation', 'AC NORMAL 24\u00b0\\ncooling 23 % of capacity']"
+ },
+ {
+  "flow": "C",
+  "check": "temperature layer colours the room (room average)",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "flow": "D",
+  "check": "live room card carries LIVE, simulated rooms do not",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "flow": "D",
+  "check": "each selection updates the 3D highlight and the panels",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "flow": "D",
+  "check": "rooms per floor = configuration (5, 4, 6, 7, 4)",
+  "pass": true,
+  "detail": "[5, 4, 6, 7, 4]"
+ },
+ {
+  "flow": "E",
+  "check": "live room connected via the existing pipeline (test sender)",
+  "pass": true,
+  "detail": "{'connected': True, 'co2': 519.6, 'node': 'ESP32 sensor node\\nCO\u2082 519.6 ppm \u00b7 206.5 lx \u00b7 RH 68.44 %', 'people': 0, 'presence': False, 'source': 'test_sender'}"
+ },
+ {
+  "flow": "E",
+  "check": "sensor node hotspot shows the measured CO2",
+  "pass": true,
+  "detail": "ESP32 sensor node\nCO\u2082 519.6 ppm \u00b7 206.5 lx \u00b7 RH 68.44 %"
+ },
+ {
+  "flow": "E",
+  "check": "occupants follow the presence sensor (0/1, never a count)",
+  "pass": true,
+  "detail": "{'connected': True, 'co2': 519.6, 'node': 'ESP32 sensor node\\nCO\u2082 519.6 ppm \u00b7 206.5 lx \u00b7 RH 68.44 %', 'people': 0, 'presence': False, 'source': 'test_sender'}"
+ },
+ {
+  "flow": "E",
+  "check": "after the board stops: disconnected, no values, no people",
+  "pass": true,
+  "detail": "{'connected': False, 'temp': None, 'node': 'ESP32 sensor node\\nnot connected \u2014 values hidden', 'people': 0}"
+ },
+ {
+  "flow": "F",
+  "check": "canvas and camera follow the resized viewport",
+  "pass": true,
+  "detail": "[706, 357, 706, 357, True]"
+ },
+ {
+  "flow": "F",
+  "check": "rapid switching ends in the last requested view, only that room shown",
+  "pass": true,
+  "detail": "{'vis': ['f0_lobby'], 'floors': [True, False, False, False, False]}"
+ },
+ {
+  "flow": "F",
+  "check": "camera reset keeps the target on the room",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "flow": "F",
+  "check": "dashboard and 3D agree on the view after all of this",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "flow": "F",
+  "check": "presentation mode opens and Esc returns to the dashboard",
+  "pass": true,
+  "detail": ""
+ },
+ {
+  "flow": "G",
+  "check": "simulated room shows its room number",
+  "pass": true,
+  "detail": "Room 114"
+ },
+ {
+  "flow": "G",
+  "check": "simulated room labels readings as simulated and P(occupied) as an estimate",
+  "pass": true,
+  "detail": "readings: simulated\nP(occupied): estimate\nforecast 25.0 \u00b0C at 09:50 (prediction)"
+ },
+ {
+  "flow": "G",
+  "check": "the real room is Room 101 and shows its board status (no invented values)",
+  "pass": true,
+  "detail": "Room 101 / NOT CONNECTED"
+ },
+ {
+  "flow": "G",
+  "check": "models panel lists the models running in the system",
+  "pass": true,
+  "detail": "MODELS IN THE RUNNING SYSTEM\noccupancy_twin_fusion\nv1 \u00b7 shadow\nthermal_h30\nv1 \u00b7 active\noccupancy_rf\nv1 \u00b7 active\nRandom Forest in use: RandomForest(registry v1)\n"
+ },
+ {
+  "flow": "G",
+  "check": "models panel states where the numbers come from",
+  "pass": true,
+  "detail": "WHERE THE NUMBERS COME FROM\n25 rooms simulated (synthetic) \u00b7 Room 101 measured only while its board is connected\nsynthetic Colombo climate from published monthl"
+ },
+ {
+  "flow": "ALL",
+  "check": "no page errors / console errors / failed requests",
+  "pass": true,
+  "detail": "[]"
+ }
+]

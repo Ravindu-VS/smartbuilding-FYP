@@ -100,3 +100,8 @@ evidence (command + result), and the next action. Resume from the last "Next" li
   3. **3D view backlog / false "not live"** - the 3D view applies only the newest snapshot; the stream watchdog
      skips ticks that fired late because the tab was frozen (not the backend).
   The edge brain itself streamed every 0.25 s (max gap 0.5 s) throughout, measured during the runs.
+- Final state (25 Oct 2026): `python3 -m pytest` **104 passed in 95 s**; browser flows **40/40**
+  (`docs/results/browser_flows_2026-10-25.json`); `npx tsc --noEmit`, `npx eslint src`, `npx next build` clean;
+  experiments 1-11 PASS; acceptance gate 55 PASS (3 qualified), 2 BLOCKED, 0 FAIL.
+- Next (owner, when the hardware arrives): docs/HARDWARE.md "Bring-up", then record the bench-check folder in the
+  acceptance gate (section F).

@@ -8,7 +8,7 @@ Digital Twin. Work of 23 Oct 2026 on top of commit `35a384b`. Every figure below
 
 **Status: the software system is complete and verified; Room 101's physical hardware verification is pending
 (the parts have not been delivered).** Everything else in the master prompt was implemented, run and checked;
-the acceptance gate (`docs/ACCEPTANCE_GATE.md`) has <!-- GATE_COUNTS -->.
+the acceptance gate (`docs/ACCEPTANCE_GATE.md`) has **55 PASS** (three qualified: MQTT on the edge side, the hardware data path in software, clean-up by quarantine), **2 BLOCKED** (measured Colombo weather; firmware compile and physical verification) and **0 FAIL**.
 
 | Area | Status | Key evidence |
 |---|---|---|
@@ -18,9 +18,9 @@ the acceptance gate (`docs/ACCEPTANCE_GATE.md`) has <!-- GATE_COUNTS -->.
 | Reinforcement learning | complete (simulation) | PPO v1 rejected, v2 approved; -11.3 % energy and 5.2 % discomfort vs schedule 21.7 %; held on new seeds 4-6 |
 | Self-learning | complete | registry with acceptance tests, shadow mode, drift, promote / rollback, provenance |
 | Edge brain, store, MQTT, API | complete | SQLite with migrations, MQTT bridge with acks; tests; experiment 10 |
-| Dashboard and 3D twin | complete | <!-- BROWSER_SHORT -->; type-check and lint clean |
+| Dashboard and 3D twin | complete | browser flows A-G 40/40 (three defects found and fixed); type-check, lint and production build clean; type-check and lint clean |
 | Room 101 (real room) | software complete, physical pending | virtual board with the firmware's payload replaying real data (experiment 11, vacancy-rule fix); firmware library API check (2 bugs fixed); bench-check script ready and rehearsed |
-| Tests and experiments | complete | 103 tests pass; experiments 1-11 PASS |
+| Tests and experiments | complete | 104 tests pass; browser flows 40/40; experiments 1-11 PASS |
 
 **Left for the hardware (docs/HARDWARE.md, "Bring-up"):** install the listed libraries, flash the firmware from the
 Arduino IDE, power the board and the Pi, stop the virtual board, run `python3 scripts/check_hardware.py --actuators
@@ -182,7 +182,7 @@ building. Results: `experiments/results/SUMMARY.md`, `experiments/results/exp0*/
 
 ## 7. Testing evidence
 
-`python3 -m pytest` on 25 Oct 2026 (Linux container, Python 3.13, 2 vCPUs): **103 passed in 75 s**, no failures,
+`python3 -m pytest` on 25 Oct 2026 (Linux container, Python 3.13, 2 vCPUs): **104 passed in 95 s**, no failures,
 no skips.
 
 | File | Tests | Covers |
@@ -199,12 +199,25 @@ no skips.
 | `tests/test_check_hardware.py` | 1 | bench-check script against a real edge-brain process fed by the test sender |
 | `tests/test_firmware_check.py` | 1 | firmware syntax / library-API check, 18 library and core combinations |
 | `tests/test_edge_runtime.py` | 1 | the edge brain runs with pandas / scikit-learn / scipy / joblib / gymnasium blocked |
-| `raspberry_pi/test_edge_brain.py` | 12 | 26 rooms / one hardware room, no board = not connected and no values, readings shown exactly, MQ-2 never used as CO2, missing fields stay missing, board time-out, test sender never shown as the board, AI switch, SSE, API |
+| `raspberry_pi/test_edge_brain.py` | 13 | 26 rooms / one hardware room, no board = not connected and no values, readings shown exactly, MQ-2 never used as CO2, missing fields stay missing, board time-out, test sender never shown as the board, AI switch, SSE, API, every response strict JSON |
 
-Dashboard: `npx tsc --noEmit`, `npx eslint src` and `npx next build` clean. Browser flows: see below.
+Dashboard: `npx tsc --noEmit`, `npx eslint src` and `npx next build` clean (25 Oct 2026).
 Experiments 1-11: all PASS (`experiments/results/SUMMARY.md`).
 
-<!-- BROWSER -->
+**Browser flows** (`tests/e2e/twin_flows.py`, headless Chromium with software WebGL, real edge brain and dashboard;
+25 Oct 2026): **40/40 checks passed** - building / floor / room views and the 26 rooms in 3D (A), direct navigation
+and breadcrumbs (B), HVAC state, airflow and temperature layers equal to the controller and simulator state (C),
+room comparison and selection sync (D), the live room connected via the test sender and lost within the board
+timeout with no values or people (E), resize, rapid view switching, camera reset and presentation mode (F), room
+numbers, provenance labels, Room 101 board status and the models panel (G), and no page errors, console errors or
+failed requests. Results: `docs/results/browser_flows_2026-10-25.json`.
+
+Earlier runs of the same flows on the final system found three defects, fixed before this run: the Models & data
+panel failed to load (NaN in `/api/models`; every response is now strict JSON), a busy page showed stream states
+more than a minute old (it now detects a > 5 s lag and reconnects), and the 3D view processed every snapshot in
+turn (it now applies only the newest). In this environment the tab was often briefly without data (the flows
+waited up to 17 s for an element), because software rendering used most of the 2 vCPUs; the edge brain streamed
+every 0.25 s throughout.
 
 ## 8. Repository clean-up
 

@@ -1,8 +1,12 @@
 # Final acceptance gate
 
-Evaluated on 23 Oct 2026 against the master prompt's checklist (section 21). PASS = verified by a test, a
+Evaluated on 23-25 Oct 2026 against the master prompt's checklist (section 21). PASS = verified by a test, a
 run or a recorded result; FAIL = checked and not met; BLOCKED = cannot be done in this environment (reason
 given); N/A = does not apply. Code existing is never enough for PASS.
+
+**Result: 55 PASS (3 qualified), 2 BLOCKED, 0 FAIL.** BLOCKED: measured Colombo weather (hosts refused) and the
+firmware compile / physical verification (no toolchain here; hardware not yet delivered - bring-up steps and the
+bench-check script are ready in docs/HARDWARE.md).
 
 ## A. Simulation
 
@@ -81,21 +85,21 @@ given); N/A = does not apply. Code existing is never enough for PASS.
 
 | Item | Status | Evidence |
 |---|---|---|
-| Exterior, floor and room views work | see final browser run | `tests/e2e/twin_flows.py` flows A-F |
-| Room selection maps to the correct data | see final browser run | flows A, B, G |
-| HVAC and occupancy visualisations reflect actual states | see final browser run | flow C (airflow intensity = AC cooling output) |
-| Live room clearly distinguished | see final browser run | flow G (Room 101, board status) |
+| Exterior, floor and room views work | PASS | browser flows A, B, F (40/40 checks, 25 Oct 2026; `docs/results/browser_flows_2026-10-25.json`) |
+| Room selection maps to the correct data | PASS | flows A, B, D, G: selection in the list, the 3D cards and the panels agree; breadcrumbs; room numbers |
+| HVAC and occupancy visualisations reflect actual states | PASS | flow C (3D temperature, set-point and AC action = controller state; airflow intensity = AC cooling output); flow A (3D people = simulated occupancy) |
+| Live room clearly distinguished | PASS | flow D (LIVE card only on Room 101), flow E (test sender shown as such; lost within the board timeout, values and people removed), flow G (Room 101, NOT CONNECTED) |
 | No fabricated values used as live measurements | PASS | `test_no_board_means_not_connected_and_no_values`, `test_missing_fields_stay_missing`, provenance tests |
-| Interface responsive and stable | see final browser run | flows run without console errors |
+| Interface responsive and stable | PASS | flow F (resize, rapid view switching, camera reset, presentation mode); no page errors, console errors or failed requests. Three defects found by the flows and fixed (NaN in `/api/models`, stale stream backlog, 3D snapshot backlog) |
 
 ## H. Quality and clean-up
 
 | Item | Status | Evidence |
 |---|---|---|
-| Automated tests executed | PASS | `python3 -m pytest`: 103 passed in 75 s, 0 failed, 0 skipped (25 Oct 2026; docs/FINAL_REPORT.md section 7) |
+| Automated tests executed | PASS | `python3 -m pytest`: 104 passed in 95 s, 0 failed, 0 skipped; browser flows 40/40 (25 Oct 2026; docs/FINAL_REPORT.md section 7) |
 | Frontend and backend builds checked | PASS | `npx tsc --noEmit`, `npx eslint src`, `npx next build` succeeded; backend imports and tests |
 | Model-loading and integration tests pass | PASS | `test_registered_models_load_and_self_test`, `test_model_failure_is_reported_not_replaced`, `tests/test_integration.py` (6), `tests/test_store_mqtt.py` (7); live `/api/models`: thermal_h30, occupancy_rf active, fusion in shadow, all loaded; PPO available as `ppo_policy v2` |
-| No known critical runtime errors | see final run | |
+| No known critical runtime errors | PASS | final runs: no tracebacks in the edge-brain log, no browser errors; the defects found on the way are fixed and tested |
 | Unnecessary files safely removed | PASS (quarantined) | moved to `archive/legacy_v1/` with git mv, verified by the full test run; permanent deletion deliberately left to the owner (docs/CLEANUP.md) |
 | No required project assets lost | PASS | nothing deleted; datasets, models, firmware, results kept; `run_local.bat` restored after the reference check |
 | Repository starts from documented instructions | PASS | `scripts/start.sh dev` (README section 4) started the edge brain and the dashboard on 24 Oct 2026 (health and dashboard answered); Windows `run_local.bat` not run here |
