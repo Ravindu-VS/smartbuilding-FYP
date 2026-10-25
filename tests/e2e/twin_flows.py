@@ -244,6 +244,8 @@ async def main():
         back = await S("() => !document.querySelector('[data-testid=presentation-hud]')")
         check("F", "presentation mode opens and Esc returns to the dashboard", pres and back)
         # ---------------- Flow G — data provenance, room numbers, models panel (master prompt sections 12-13)
+        await click("nav-floor-2")                            # open floor 2 in the building list (flow F ended on floor 0)
+        await wait_view("floor", floor=2)
         await click("nav-room-f2_office_b2")
         await pg.wait_for_timeout(2500)
         num = await S("() => document.querySelector('[data-testid=room-number]')?.innerText || ''")
