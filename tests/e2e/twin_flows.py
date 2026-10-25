@@ -104,7 +104,12 @@ async def main():
         check("A", "clicking a room card selects it in the dashboard", sel)
         await T("() => twin.cards.get('f2_meeting_b').el.click()")
         v = await wait_view("room", room="f2_meeting_b"); check("A", "second click enters the room", v["mode"] == "room" and v["room"] == "f2_meeting_b", v)
-        info = await T("""() => { const r = twin.interiors.rooms.get('f2_meeting_b'); return { furniture: r.furniture.children.length, units: r.hvac.units.length, people3d: twin.occupants.get(r.id).persons.filter(p => p.state !== 'leave').length, truth: r.data.ground_truth.true_occupancy, walls: twin.interiors.focus ? twin.interiors.focus.walls.length : 0 }; }""")
+        # people walk in after the state arrives: poll until the 3D head count equals the simulated one
+        for _ in range(int(float(os.environ.get("FLOWS_WAIT_S", "20")) / 0.5)):
+            info = await T("""() => { const r = twin.interiors.rooms.get('f2_meeting_b'); return { furniture: r.furniture.children.length, units: r.hvac.units.length, people3d: twin.occupants.get(r.id).persons.filter(p => p.state !== 'leave').length, truth: r.data.ground_truth.true_occupancy, walls: twin.interiors.focus ? twin.interiors.focus.walls.length : 0 }; }""")
+            if info["people3d"] == min(info["truth"], 99):
+                break
+            await pg.wait_for_timeout(500)
         check("A", "room has furniture, HVAC units and its own walls/windows", info["furniture"] > 3 and info["units"] >= 1 and info["walls"] >= 3, info)
         check("A", "people drawn = simulated true occupancy", info["people3d"] == min(info["truth"], 99), info)
         await shot("A3_room")
