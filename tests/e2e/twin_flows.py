@@ -9,7 +9,7 @@ Playwright for Python:  pip install playwright && playwright install chromium
 
     python tests/e2e/twin_flows.py
 
-Flow E starts raspberry_pi/esp32_test_sender.py for ~30 s (shown as TEST SENDER, never as
+Flow E runs raspberry_pi/esp32_test_sender.py until its checks are done (shown as TEST SENDER, never as
 the board). Results are printed and written to twin_flows_results.json; screenshots to
 flow_*.png in the current folder.
 """
@@ -183,20 +183,35 @@ async def main():
         check("D", "rooms per floor = configuration (5, 4, 6, 7, 4)", floors_ok == [5, 4, 6, 7, 4], floors_ok)
 
         # ---------------- Flow E — live room
-        sender = subprocess.Popen([sys.executable, os.path.join(ROOT, "raspberry_pi", "esp32_test_sender.py"), "--count", "15", "--interval", "2"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # the test sender runs until stopped; the checks poll (a busy software-rendered tab can lag behind)
+        WAIT = float(os.environ.get("FLOWS_WAIT_S", "20"))
+        sender = subprocess.Popen([sys.executable, os.path.join(ROOT, "raspberry_pi", "esp32_test_sender.py"), "--count", "0", "--interval", "2"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         await pg.wait_for_timeout(6000)
-        await S("() => document.querySelector('[data-testid=ctx-enter-room]') && null")
         await T("() => twin.setView('room', 2, 'f2_office_a')")
         v = await wait_view("room", room="f2_office_a")
-        st = await T("() => { const r = twin.interiors.rooms.get('f2_office_a'); return { connected: r.connected, co2: r.data.sensors.CO2, node: (twin.hotspots.find(h => h.kind === 'node') || {}).txt?.innerText, people: twin.occupants.get(r.id).target, presence: r.data.presence && r.data.presence.fused_presence, source: r.data.hardware.sender }; }")
+        live_js = "() => { const r = twin.interiors.rooms.get('f2_office_a'); return { connected: r.connected, co2: r.data.sensors.CO2, node: (twin.hotspots.find(h => h.kind === 'node') || {}).txt?.innerText, people: twin.occupants.get(r.id).target, presence: r.data.presence && r.data.presence.fused_presence, source: r.data.hardware && r.data.hardware.sender }; }"
+        t0 = time.time()
+        while True:
+            st = await T(live_js)
+            if (st["connected"] and st["co2"] is not None and st["node"] and f"{st['co2']}" in st["node"]) or time.time() - t0 > WAIT:
+                break
+            await pg.wait_for_timeout(500)
         check("E", "live room connected via the existing pipeline (test sender)", st["connected"] and st["source"] == "test_sender", st)
         check("E", "sensor node hotspot shows the measured CO2", st["node"] and f"{st['co2']}" in st["node"], st["node"])
         check("E", "occupants follow the presence sensor (0/1, never a count)", st["people"] == (1 if st["presence"] else 0), st)
         await shot("E_live_connected")
-        sender.wait(timeout=60)
-        await pg.wait_for_timeout(14000)
-        st2 = await T("() => { const r = twin.interiors.rooms.get('f2_office_a'); return { connected: r.connected, temp: r.data.sensors.Temperature, node: (twin.hotspots.find(h => h.kind === 'node') || {}).txt?.innerText, people: twin.occupants.get(r.id).target }; }")
-        check("E", "after the board stops: disconnected, no values, no people", (not st2["connected"]) and st2["temp"] is None and st2["people"] == 0 and "not connected" in (st2["node"] or ""), st2)
+        sender.terminate()
+        sender.wait(timeout=30)
+        lost_js = "() => { const r = twin.interiors.rooms.get('f2_office_a'); return { connected: r.connected, temp: r.data.sensors.Temperature, node: (twin.hotspots.find(h => h.kind === 'node') || {}).txt?.innerText, people: twin.occupants.get(r.id).target }; }"
+        t0 = time.time()
+        await pg.wait_for_timeout(11000)                       # the edge brain's board timeout is 10 s
+        while True:
+            st2 = await T(lost_js)
+            ok = (not st2["connected"]) and st2["temp"] is None and st2["people"] == 0 and "not connected" in (st2["node"] or "")
+            if ok or time.time() - t0 > 11 + WAIT:
+                break
+            await pg.wait_for_timeout(500)
+        check("E", "after the board stops: disconnected, no values, no people", ok, st2)
         await shot("E_live_lost")
 
         # ---------------- Flow F — resize and recover
