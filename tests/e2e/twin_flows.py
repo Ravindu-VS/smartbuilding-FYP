@@ -95,8 +95,12 @@ async def main():
         check("A", "floor view shows a card for each room on the floor", cards == 6, f"{cards} cards")
         await shot("A2_floor")
         await T("() => twin.cards.get('f2_meeting_b').el.click()")
-        await pg.wait_for_timeout(1500)
-        sel = await S("() => document.querySelector('[data-testid=nav-room-f2_meeting_b]')?.className.includes('ring-1')")
+        sel = False
+        for _ in range(int(float(os.environ.get("FLOWS_WAIT_S", "20")) / 0.5)):
+            sel = await S("() => !!document.querySelector('[data-testid=nav-room-f2_meeting_b]')?.className.includes('ring-1')")
+            if sel:
+                break
+            await pg.wait_for_timeout(500)
         check("A", "clicking a room card selects it in the dashboard", sel)
         await T("() => twin.cards.get('f2_meeting_b').el.click()")
         v = await wait_view("room", room="f2_meeting_b"); check("A", "second click enters the room", v["mode"] == "room" and v["room"] == "f2_meeting_b", v)

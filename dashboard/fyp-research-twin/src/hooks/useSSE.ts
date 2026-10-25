@@ -40,8 +40,15 @@ export function useSSE(url: string = `${EDGE_URL}/api/stream`) {
     };
     connect();
 
-    // Watchdog: no message for STALE_AFTER_MS -> not live (backend stopped or tick loop stalled)
+    // Watchdog: no message for STALE_AFTER_MS -> not live (backend stopped or tick loop stalled).
+    // If this timer itself fired late, the tab was frozen (busy main thread, background tab), not the backend:
+    // the messages that arrived meanwhile are still queued, so skip that tick and judge on the next one.
+    let lastTick = Date.now();
     const watchdog = setInterval(() => {
+      const now = Date.now();
+      const frozen = now - lastTick > 1500;
+      lastTick = now;
+      if (frozen) return;
       const { link } = useBuildingStore.getState();
       if (link.connected && (link.lastMessageAt === null || Date.now() - link.lastMessageAt > STALE_AFTER_MS)) {
         setLink({ connected: false, error: `no data for more than ${STALE_AFTER_MS / 1000} s` });
