@@ -6,6 +6,9 @@ import { BuildingStatePayload } from '../types/building';
 // when the edge brain runs on a Raspberry Pi instead of this computer.
 export const EDGE_URL = (process.env.NEXT_PUBLIC_EDGE_URL || 'http://127.0.0.1:8001').replace(/\/$/, '');
 
+/** A page more than this far behind the edge brain drops its queued updates and reconnects. */
+const BACKLOG_MS = 5000;
+
 /**
  * One SSE connection to the edge brain for the whole page. The 3D view receives the
  * same payloads from the page (VanillaTwinWrapper), so everything shows the same state.
@@ -22,17 +25,36 @@ export function useSSE(url: string = `${EDGE_URL}/api/stream`) {
 
     const connect = () => {
       if (!active) return;
-      es = new EventSource(url);
-      es.onmessage = (event) => {
-        if (!active) return;
+      const source = new EventSource(url);
+      es = source;
+      // Each message is a full snapshot (~100 kB). If this page is busy (slow device, software WebGL), messages
+      // queue up in the connection and the page shows ever older states. Detect it from the edge brain's send
+      // time (clock offset taken from this connection's fastest message) and reconnect to skip the backlog.
+      let offset: number | null = null;
+      source.onmessage = (event) => {
+        if (!active || es !== source) return;
+        let payload: BuildingStatePayload;
         try {
-          updateFromSSE(JSON.parse(event.data) as BuildingStatePayload);
+          payload = JSON.parse(event.data) as BuildingStatePayload;
         } catch {
           setLink({ error: 'unreadable message from the edge brain' });
+          return;
         }
+        const sent = payload.timestamp ? Date.parse(payload.timestamp) : NaN;
+        if (Number.isFinite(sent)) {
+          const d = Date.now() - sent;
+          offset = offset === null ? d : Math.min(offset, d);
+          if (d - offset > BACKLOG_MS) {
+            source.close();
+            setLink({ error: `${Math.round((d - offset) / 1000)} s behind the edge brain: skipped the queued updates` });
+            connect();
+            return;
+          }
+        }
+        updateFromSSE(payload);
       };
-      es.onerror = () => {
-        if (!active) return;
+      source.onerror = () => {
+        if (!active || es !== source) return;
         setLink({ connected: false, error: `cannot reach ${url}` });
         es?.close();
         reconnect = setTimeout(connect, 3000);
