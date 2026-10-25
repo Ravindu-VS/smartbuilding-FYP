@@ -68,10 +68,10 @@ async def main():
             return await tv()
         WAITS = []
         async def click(testid, dbl=False):
-            """Click a dashboard element; wait (up to 20 s) if it is not rendered yet - the navigation is hidden
+            """Click a dashboard element; wait (FLOWS_WAIT_S, default 20 s) if it is not rendered yet - the navigation is hidden
             while the dashboard has had no data for > 3 s (a stalled tab under software WebGL)."""
             t0 = time.time()
-            while time.time() - t0 < 20:
+            while time.time() - t0 < float(os.environ.get("FLOWS_WAIT_S", "20")):
                 if await S(f"() => !!document.querySelector('[data-testid={testid}]')"):
                     break
                 await pg.wait_for_timeout(250)
