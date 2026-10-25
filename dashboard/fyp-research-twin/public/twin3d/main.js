@@ -188,7 +188,14 @@ class App {
         const m = e.data;
         if (m.type === 'PING') this._announce();
         else if (m.type === 'CONFIG') this.onConfig(m.config);
-        else if (m.type === 'SYNC_STATE') this.onState(m);
+        else if (m.type === 'SYNC_STATE') {
+            // Each message is a full snapshot. On a slow device the page can send faster than this view applies
+            // them; processing every one built a backlog (the view fell more than a minute behind in the browser
+            // tests). Keep only the newest and apply it once the queued messages have been read.
+            const scheduled = this._pendingState != null;
+            this._pendingState = m;
+            if (!scheduled) setTimeout(() => { const st = this._pendingState; this._pendingState = null; if (st) this.onState(st); }, 0);
+        }
         else if (m.type === 'LINK_STATUS') this._link(m.ok, m.detail);
         else if (m.type === 'UI_COMMAND') this.command(m.action, m.payload);
     }
