@@ -57,11 +57,15 @@ class DriftMonitor:
             ok = col[np.isfinite(col)]
             item = {"missing_share": float(1 - len(ok) / len(col)), "train_missing_share": ref.get("missing_share")}
             if "deciles" in ref and len(ok):
-                item["psi"] = psi(ok, ref["deciles"])
+                v = psi(ok, ref["deciles"])
+                if np.isfinite(v):
+                    item["psi"] = v
+                    worst = max(worst, v)
+                else:                       # e.g. a 0/1 feature: fewer than 3 distinct training deciles
+                    item["psi"] = None
+                    item["psi_note"] = "not defined for this feature (fewer than 3 distinct training deciles)"
                 item["out_of_range"] = float(np.mean((ok < ref["min"]) | (ok > ref["max"])))
                 item["mean"], item["train_mean"] = float(ok.mean()), ref["mean"]
-                if np.isfinite(item["psi"]):
-                    worst = max(worst, item["psi"])
             out["features"][f] = item
         out["max_psi"] = worst
         if n >= self.min_rows:

@@ -222,3 +222,27 @@ def test_system_summary_has_no_hardcoded_flags(brain):
         assert k not in sysd
     assert sysd["simulation_running"] is True and sysd["data_stale"] is False
     assert sysd["sim_power_watts"] > 0 and sysd["ai_enabled"] is True
+
+
+def test_api_responses_are_strict_json():
+    """NaN / infinity would make the browser reject the whole response (found by the browser flows on
+    /api/models: an undefined drift PSI). Every endpoint sends them as null."""
+    import json as _json
+    import math as _math
+    from raspberry_pi.edge_brain import _json_safe
+    assert _json_safe({"a": float("nan"), "b": [1.0, float("inf")], "c": {"d": -float("inf"), "e": 2}}) == \
+        {"a": None, "b": [1.0, None], "c": {"d": None, "e": 2}}
+    eb.brain = new_brain()
+    eb.brain.tick(1.0)
+    c = eb.app.test_client()
+    for path in ("/api/models", "/api/rooms/current-state", "/api/analytics", "/api/system/summary", "/health"):
+        r = c.get(path)
+        assert r.status_code == 200, path
+        _json.loads(r.get_data(as_text=True), parse_constant=lambda x: (_ for _ in ()).throw(ValueError(f"{path}: {x}")))
+    from ml.drift import DriftMonitor
+    m = DriftMonitor(["flag"], {"flag": {"deciles": [0, 0, 0, 1, 1], "min": 0, "max": 1, "mean": 0.4, "missing_share": 0}},
+                     min_rows=1)
+    m.add([1.0])
+    rep = m.report()
+    assert rep["features"]["flag"]["psi"] is None and "not defined" in rep["features"]["flag"]["psi_note"]
+    assert not any(isinstance(v, float) and not _math.isfinite(v) for v in rep["features"]["flag"].values())

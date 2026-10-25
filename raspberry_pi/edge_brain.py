@@ -64,6 +64,7 @@ from typing import Dict, List, Any, Optional
 from collections import deque
 
 from flask import Flask, request, jsonify, Response
+from flask.json.provider import DefaultJSONProvider
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
                     datefmt='%H:%M:%S')
@@ -902,7 +903,24 @@ class EdgeBrain:
 # =============================================================================
 # FLASK API
 # =============================================================================
+def _json_safe(obj):
+    """NaN / infinity are not JSON: browsers reject the whole response. Send them as null (= not available)."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
+class StrictJSONProvider(DefaultJSONProvider):
+    def dumps(self, obj, **kwargs):
+        return super().dumps(_json_safe(obj), **kwargs)
+
+
 app = Flask(__name__)
+app.json = StrictJSONProvider(app)
 brain: Optional[EdgeBrain] = None
 
 
@@ -1014,7 +1032,7 @@ def sse_stream():
                     yield ": keepalive\n\n"
                     continue
                 last_seq = seq
-                data = json.dumps(brain.get_current_state(), default=str, separators=(",", ":"))
+                data = json.dumps(_json_safe(brain.get_current_state()), default=str, separators=(",", ":"))
                 yield f"id: {seq}\ndata: {data}\n\n"
                 time.sleep(0.1)          # at most ~10 pushes per second per client
             except GeneratorExit:
