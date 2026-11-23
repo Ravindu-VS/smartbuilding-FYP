@@ -112,3 +112,5 @@ docs/ACCEPTANCE_GATE.md
 # feature lists of the first occupancy pipeline (superseded by models/registry) and an old training log
 models/*_features.json
 data/training_logs/
+# the original Random Forest pipeline: the baseline every comparison in the README uses
+!models/final_unified_occupancy_pipeline.pkl
