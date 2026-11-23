@@ -1,7 +1,7 @@
 """
 Integration and end-to-end tests of the edge brain (Flask API, store, models, live/simulated separation).
 
-End-to-end flow checked by test_end_to_end_flow (numbers = the master prompt's list):
+End-to-end flow checked by test_end_to_end_flow (the project's end-to-end flow):
  1 start  2 simulation runs  3 simulated room conditions change (scenario)  4 occupancy inference
  5 controller decides  6 safety layer validates  7 simulated HVAC/lighting state updates
  8 energy and comfort are computed  9 state published (API + change sequence for SSE)

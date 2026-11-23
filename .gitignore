@@ -103,3 +103,12 @@ scripts/pc_agent.py
 data/deployment_scenarios/
 thesis/
 extract_pptx.py
+# development-process logs of the October 2026 build (kept locally; results are in the README and experiments/)
+docs/CLEANUP.md
+docs/COMPLETION_LOG.md
+docs/COMPLETION_MATRIX.md
+docs/FINAL_REPORT.md
+docs/ACCEPTANCE_GATE.md
+# feature lists of the first occupancy pipeline (superseded by models/registry) and an old training log
+models/*_features.json
+data/training_logs/
