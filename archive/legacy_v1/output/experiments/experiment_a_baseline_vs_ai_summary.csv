@@ -1,4 +1,0 @@
-Controller,Energy (kWh),Comfort Score,HVAC Runtime %,Light Runtime %,Accuracy,Precision,Recall,F1 Score,Floor 0 kWh,Floor 1 kWh,Floor 2 kWh,Floor 3 kWh,Floor 4 kWh
-Baseline (Always-On),398.4,0.7204,100.0,100.0,0.5341,0.5341,1.0,0.6963,93.36,68.88,120.0,63.36,52.8
-ML Occupancy (Random Forest),310.24,0.6934,100.0,100.0,0.5341,0.5341,1.0,0.6963,83.52,52.09,78.76,51.27,44.6
-Perfect Knowledge (Oracle),271.22,0.7057,53.4,53.4,1.0,1.0,1.0,1.0,66.01,53.86,75.44,38.36,37.56

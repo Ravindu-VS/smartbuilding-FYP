@@ -1,0 +1,202 @@
+<title>Room 101 Final Circuit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one bench-reference column; the schematic scrolls sideways on its own, tables below it. */
+:root{
+  --bg:#f5f6f3; --paper:#ffffff; --ink:#1d2421; --muted:#5b6661; --line:#d5dad6; --accent:#0f6b5c;
+  --w12:#c62828; --w5:#e06c00; --w33:#a57f00; --sig:#2563eb; --sda:#15803d; --scl:#7c3aed;
+  --r:#dc2626; --g:#16a34a; --b:#2563eb; --gnd:#1d2421; --warn-bg:#fff4e0; --warn:#8a4b00;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121614; --paper:#1a201d; --ink:#e4e9e6; --muted:#9aa6a0; --line:#2f3833; --accent:#4fc3a8;
+  --w12:#ff6b6b; --w5:#ffa149; --w33:#e8c547; --sig:#6aa2ff; --sda:#4ade80; --scl:#b794ff;
+  --r:#f87171; --g:#4ade80; --b:#7aa7ff; --gnd:#e4e9e6; --warn-bg:#2d2414; --warn:#f5c27a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121614; --paper:#1a201d; --ink:#e4e9e6; --muted:#9aa6a0; --line:#2f3833; --accent:#4fc3a8;
+  --w12:#ff6b6b; --w5:#ffa149; --w33:#e8c547; --sig:#6aa2ff; --sda:#4ade80; --scl:#b794ff;
+  --r:#f87171; --g:#4ade80; --b:#7aa7ff; --gnd:#e4e9e6; --warn-bg:#2d2414; --warn:#f5c27a; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:28px}
+header{display:grid;gap:6px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:30px;line-height:1.15;margin:0;font-weight:600;text-wrap:balance}
+h2{font-size:19px;margin:0 0 10px;font-weight:600;text-wrap:balance}
+p{margin:0;max-width:68ch}
+.lead{color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:22px;height:4px;border-radius:2px}
+.fig{background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.fig svg{display:block;min-width:1000px;width:100%;height:auto}
+.fig .cap{font-size:13px;color:var(--muted);padding:10px 16px;border-top:1px solid var(--line)}
+svg .w{fill:none;stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round}
+svg .v12{stroke:var(--w12);stroke-width:3.4} svg .v5{stroke:var(--w5);stroke-width:3} svg .v33{stroke:var(--w33)}
+svg .gnd{stroke:var(--gnd)} svg .sig{stroke:var(--sig)} svg .sda{stroke:var(--sda)} svg .scl{stroke:var(--scl)}
+svg .r{stroke:var(--r)} svg .g{stroke:var(--g)} svg .b{stroke:var(--b)}
+svg .dot{fill:var(--ink)} svg .pin{fill:var(--paper);stroke:var(--ink);stroke-width:1.4}
+svg .part{fill:var(--bg);stroke:var(--ink);stroke-width:1.4} svg .esp{fill:var(--bg);stroke:var(--accent);stroke-width:2.2}
+svg .ptitle{font:600 14px var(--sans);fill:var(--ink)} svg .psub{font:400 11.5px var(--sans);fill:var(--muted)}
+svg .pl{font:500 11px var(--mono);fill:var(--ink)} svg .rl{font:500 11px var(--mono);fill:var(--muted)}
+svg .rail{font:500 11.5px var(--mono);fill:var(--muted)} svg .nl{font:600 11px var(--mono);fill:var(--paper)}
+svg .net{stroke:none} svg .n5{fill:var(--w5)}
+svg .fuse{fill:var(--paper);stroke:var(--w12);stroke-width:2.4} svg .res{fill:var(--paper);stroke:var(--ink);stroke-width:1.4}
+svg .diode{fill:var(--ink)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:18px 20px;min-width:0}
+ol,ul{margin:0;padding-left:20px;display:grid;gap:6px}
+li{max-width:68ch}
+code,.mono{font-family:var(--mono);font-size:.92em}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+td:first-child{white-space:nowrap;font-weight:500}
+.warn{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:14px 18px;font-size:14px}
+.warn strong{color:inherit}
+.chip{display:inline-block;font-family:var(--mono);font-size:12px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+</style>
+<div class="wrap">
+<header>
+  <div class="eyebrow">Final Year Project · Smart Building · Room 101 · final build</div>
+  <h1>Room 101: final circuit for soldering</h1>
+  <p class="lead">Every part, resistor and capacitor on the Room 101 controller board, matching firmware <span class="mono">room101-2026.11.23c</span>. New in this version: the JMD0.96A-2 OLED energy display on the I²C bus, reverse-polarity protection, bulk capacitors, and LED resistor values chosen for 3.3 V GPIO.</p>
+</header>
+
+<div class="legend" aria-label="Wire colours">
+  <span><i style="background:var(--w12)"></i>12 V</span><span><i style="background:var(--w5)"></i>5 V</span>
+  <span><i style="background:var(--w33)"></i>3.3 V</span><span><i style="background:var(--gnd)"></i>GND (all joined)</span>
+  <span><i style="background:var(--sda)"></i>I²C SDA</span><span><i style="background:var(--scl)"></i>I²C SCL</span>
+  <span><i style="background:var(--sig)"></i>GPIO signal</span>
+</div>
+
+<figure class="fig" style="margin:0">
+<svg viewBox="0 0 1360 920" width="1360" height="920" role="img" aria-label="Room 101 wiring schematic"><rect class="part" x="30" y="50" width="120" height="100" rx="6"/><text class="ptitle" x="90.0" y="72" text-anchor="middle">J1 · 12 V in</text><text class="psub" x="90.0" y="88" text-anchor="middle">DC adapter ≥1 A</text><circle class="pin" cx="150" cy="82" r="3.2"/><text class="pl" x="143" y="86" text-anchor="end">+</text><circle class="pin" cx="150" cy="125" r="3.2"/><text class="pl" x="143" y="129" text-anchor="end">−</text><path class="w gnd" d="M150,125 L170,125 L170,140"/><path class="w gnd" d="M170,140 L170,150 M161,150 L179,150 M164,154 L176,154 M167,158 L173,158"/><path class="w v12" d="M150,82 L160,82"/><rect class="fuse" x="160" y="72" width="44" height="20" rx="10"/><text class="rl" x="182" y="66" text-anchor="middle">F1 1 A</text><path class="w v12" d="M204,82 L226,82"/><path class="diode" d="M226,72 L226,92 L244,82 Z"/><path class="w v12" d="M245,71 L245,93"/><text class="rl" x="240" y="66" text-anchor="middle">D1 1N5822</text><path class="w v12" d="M246,82 L380,82"/><circle class="dot" cx="315" cy="82" r="4"/><circle class="dot" cx="352" cy="82" r="4"/><path class="w v12" d="M352,82 L352,100"/><path class="w gnd" d="M342,100 L362,100 M342,106 L362,106"/><text class="rl" x="337" y="152" text-anchor="start">C1</text><text class="rl" x="337" y="164" text-anchor="start">470µF</text><text class="rl" x="337" y="176" text-anchor="start">25 V</text><path class="w gnd" d="M352,106 L352,118"/><path class="w gnd" d="M352,118 L352,128 M343,128 L361,128 M346,132 L358,132 M349,136 L355,136"/><rect class="part" x="200" y="110" width="130" height="70" rx="6"/><text class="ptitle" x="265.0" y="132" text-anchor="middle">LM2596</text><text class="psub" x="265.0" y="148" text-anchor="middle">12 V → 5.0 V</text><path class="w v12" d="M315,82 L315,110"/><circle class="pin" cx="315" cy="110" r="3.2"/><text class="pl" x="315" y="125" text-anchor="middle">IN+</text><circle class="pin" cx="230" cy="180" r="3.2"/><text class="pl" x="230" y="172" text-anchor="middle">OUT+</text><circle class="pin" cx="270" cy="180" r="3.2"/><text class="pl" x="270" y="172" text-anchor="middle">GND</text><path class="w gnd" d="M270,180 L270,190"/><path class="w gnd" d="M270,190 L270,200 M261,200 L279,200 M264,204 L276,204 M267,208 L273,208"/><rect class="part" x="380" y="40" width="170" height="120" rx="6"/><text class="ptitle" x="465.0" y="62" text-anchor="middle">INA219</text><text class="psub" x="465.0" y="78" text-anchor="middle">high side, fan branch</text><circle class="pin" cx="380" cy="82" r="3.2"/><text class="pl" x="387" y="86">VIN+</text><circle class="pin" cx="550" cy="82" r="3.2"/><text class="pl" x="543" y="86" text-anchor="end">VIN−</text><circle class="pin" cx="400" cy="160" r="3.2"/><text class="pl" x="400" y="152" text-anchor="middle">VCC</text><circle class="pin" cx="440" cy="160" r="3.2"/><text class="pl" x="440" y="152" text-anchor="middle">GND</text><circle class="pin" cx="480" cy="160" r="3.2"/><text class="pl" x="480" y="152" text-anchor="middle">SCL</text><circle class="pin" cx="520" cy="160" r="3.2"/><text class="pl" x="520" y="152" text-anchor="middle">SDA</text><path class="w gnd" d="M440,160 L440,172"/><path class="w gnd" d="M440,172 L440,182 M431,182 L449,182 M434,186 L446,186 M437,190 L443,190"/><rect class="part" x="610" y="40" width="160" height="140" rx="6"/><text class="ptitle" x="690.0" y="62" text-anchor="middle">Relay module</text><text class="psub" x="690.0" y="78" text-anchor="middle">5 V coil, active-LOW</text><path class="w v12" d="M550,82 L610,82"/><circle class="pin" cx="610" cy="82" r="3.2"/><text class="pl" x="617" y="86">COM</text><circle class="pin" cx="770" cy="82" r="3.2"/><text class="pl" x="763" y="86" text-anchor="end">NO</text><circle class="pin" cx="770" cy="118" r="3.2"/><text class="pl" x="763" y="122" text-anchor="end">NC (unused)</text><circle class="pin" cx="630" cy="180" r="3.2"/><text class="pl" x="630" y="172" text-anchor="middle">VCC</text><circle class="pin" cx="670" cy="180" r="3.2"/><text class="pl" x="670" y="172" text-anchor="middle">GND</text><circle class="pin" cx="710" cy="180" r="3.2"/><text class="pl" x="710" y="172" text-anchor="middle">IN</text><path class="w gnd" d="M670,180 L670,190"/><path class="w gnd" d="M670,190 L670,200 M661,200 L679,200 M664,204 L676,204 M667,208 L673,208"/><rect class="part" x="870" y="40" width="140" height="120" rx="6"/><text class="ptitle" x="940.0" y="62" text-anchor="middle">12 V fan</text><text class="psub" x="940.0" y="78" text-anchor="middle">2-wire, &lt;0.2 A</text><path class="w v12" d="M770,82 L870,82"/><circle class="pin" cx="870" cy="82" r="3.2"/><text class="pl" x="877" y="86">+</text><circle class="pin" cx="870" cy="130" r="3.2"/><text class="pl" x="877" y="134">−</text><path class="w gnd" d="M870,130 L820,130 L820,150"/><path class="w gnd" d="M820,150 L820,160 M811,160 L829,160 M814,164 L826,164 M817,168 L823,168"/><circle class="dot" cx="820" cy="82" r="4"/><circle class="dot" cx="820" cy="130" r="4"/><path class="w v12" d="M820,82 L820,96"/><path class="w gnd" d="M820,116 L820,130"/><path class="diode" d="M808,116 L832,116 L820,98 Z"/><path class="w gnd" d="M808,97 L832,97"/><text class="rl" x="820" y="186" text-anchor="middle">D2 1N4007</text><text class="rl" x="820" y="199" text-anchor="middle">band on fan +</text><path class="w v5" d="M230,180 L230,235 L1340,235"/><text class="rail" x="745" y="229" text-anchor="start">5 V rail (LM2596)</text><path class="w v5" d="M630,180 L630,235"/><circle class="dot" cx="630" cy="235" r="4"/><path class="w v5" d="M230,235 L195,235 L195,262"/><circle class="dot" cx="230" cy="235" r="4"/><path class="w gnd" d="M185,262 L205,262 M185,268 L205,268"/><text class="rl" x="180" y="262" text-anchor="end">C2 470µF 10V</text><text class="rl" x="180" y="275" text-anchor="end">C3 100nF at ESP32</text><path class="w gnd" d="M195,268 L195,280"/><path class="w gnd" d="M195,280 L195,290 M186,290 L204,290 M189,294 L201,294 M192,298 L198,298"/><path class="w v33" d="M400,160 L400,255 L1340,255"/><text class="rail" x="745" y="250" text-anchor="start">3.3 V (ESP32 3V3 pin)</text><path class="w scl" d="M480,160 L480,298 L1340,298"/><text class="rail" x="745" y="293" text-anchor="start">SCL</text><path class="w sda" d="M520,160 L520,280 L1340,280"/><text class="rail" x="745" y="275" text-anchor="start">SDA</text><circle class="dot" cx="400" cy="255" r="4"/><rect class="esp" x="360" y="360" width="250" height="530" rx="6"/><text class="ptitle" x="485.0" y="382" text-anchor="middle">ESP32-S3</text><text class="psub" x="485.0" y="398" text-anchor="middle">DevKitC-1</text><circle class="pin" cx="360" cy="400" r="3.2"/><text class="pl" x="367" y="404">5V</text><circle class="pin" cx="360" cy="430" r="3.2"/><text class="pl" x="367" y="434">3V3</text><circle class="pin" cx="360" cy="460" r="3.2"/><text class="pl" x="367" y="464">GND</text><path class="w v5" d="M330,235 L330,400 L360,400"/><circle class="dot" cx="330" cy="235" r="4"/><path class="w gnd" d="M360,460 L340,460 L340,470"/><path class="w gnd" d="M340,470 L340,480 M331,480 L349,480 M334,484 L346,484 M337,488 L343,488"/><path class="w v33" d="M360,430 L310,430 L310,255"/><path class="w v33" d="M310,255 L400,255"/><circle class="dot" cx="310" cy="255" r="4"/><circle class="pin" cx="610" cy="400" r="3.2"/><text class="pl" x="603" y="404" text-anchor="end">GPIO9 · SDA</text><circle class="pin" cx="610" cy="425" r="3.2"/><text class="pl" x="603" y="429" text-anchor="end">GPIO8 · SCL</text><circle class="pin" cx="610" cy="455" r="3.2"/><text class="pl" x="603" y="459" text-anchor="end">GPIO10 · relay IN</text><circle class="pin" cx="610" cy="490" r="3.2"/><text class="pl" x="603" y="494" text-anchor="end">GPIO4 · PIR</text><circle class="pin" cx="610" cy="525" r="3.2"/><text class="pl" x="603" y="529" text-anchor="end">GPIO2 · MQ DO</text><circle class="pin" cx="610" cy="560" r="3.2"/><text class="pl" x="603" y="564" text-anchor="end">GPIO1 · MQ AO (ADC)</text><circle class="pin" cx="610" cy="630" r="3.2"/><text class="pl" x="603" y="634" text-anchor="end">GPIO6 · R light</text><circle class="pin" cx="610" cy="655" r="3.2"/><text class="pl" x="603" y="659" text-anchor="end">GPIO7 · G light</text><circle class="pin" cx="610" cy="680" r="3.2"/><text class="pl" x="603" y="684" text-anchor="end">GPIO5 · B light</text><circle class="pin" cx="610" cy="725" r="3.2"/><text class="pl" x="603" y="729" text-anchor="end">GPIO11 · R AC</text><circle class="pin" cx="610" cy="750" r="3.2"/><text class="pl" x="603" y="754" text-anchor="end">GPIO12 · G AC</text><circle class="pin" cx="610" cy="775" r="3.2"/><text class="pl" x="603" y="779" text-anchor="end">GPIO13 · B AC</text><circle class="pin" cx="610" cy="820" r="3.2"/><text class="pl" x="603" y="824" text-anchor="end">GPIO14 · R status</text><circle class="pin" cx="610" cy="845" r="3.2"/><text class="pl" x="603" y="849" text-anchor="end">GPIO15 · G status</text><circle class="pin" cx="610" cy="870" r="3.2"/><text class="pl" x="603" y="874" text-anchor="end">GPIO16 · B status</text><path class="w sda" d="M610,400 L650,400 L650,280"/><circle class="dot" cx="650" cy="280" r="4"/><path class="w scl" d="M610,425 L675,425 L675,298"/><circle class="dot" cx="675" cy="298" r="4"/><path class="w sig" d="M710,180 L710,455 L610,455"/><rect class="part" x="900" y="330" width="130" height="80" rx="6"/><text class="ptitle" x="965.0" y="366" text-anchor="middle">BME280</text><text class="psub" x="965.0" y="382" text-anchor="middle">0x76 · T/RH/P</text><circle class="pin" cx="925" cy="330" r="3.2"/><text class="pl" x="925" y="345" text-anchor="middle">VCC</text><circle class="pin" cx="965" cy="330" r="3.2"/><text class="pl" x="965" y="345" text-anchor="middle">SCL</text><circle class="pin" cx="1005" cy="330" r="3.2"/><text class="pl" x="1005" y="345" text-anchor="middle">SDA</text><path class="w v33" d="M925,330 L925,255"/><circle class="dot" cx="925" cy="255" r="4"/><path class="w scl" d="M965,330 L965,298"/><circle class="dot" cx="965" cy="298" r="4"/><path class="w sda" d="M1005,330 L1005,280"/><circle class="dot" cx="1005" cy="280" r="4"/><circle class="pin" cx="965" cy="410" r="3.2"/><text class="pl" x="965" y="402" text-anchor="middle">GND</text><path class="w gnd" d="M965,410 L965,420 M956,420 L974,420 M959,424 L971,424 M962,428 L968,428"/><rect class="part" x="1050" y="330" width="130" height="80" rx="6"/><text class="ptitle" x="1115.0" y="366" text-anchor="middle">BH1750</text><text class="psub" x="1115.0" y="382" text-anchor="middle">0x23 · lux</text><circle class="pin" cx="1075" cy="330" r="3.2"/><text class="pl" x="1075" y="345" text-anchor="middle">VCC</text><circle class="pin" cx="1115" cy="330" r="3.2"/><text class="pl" x="1115" y="345" text-anchor="middle">SCL</text><circle class="pin" cx="1155" cy="330" r="3.2"/><text class="pl" x="1155" y="345" text-anchor="middle">SDA</text><path class="w v33" d="M1075,330 L1075,255"/><circle class="dot" cx="1075" cy="255" r="4"/><path class="w scl" d="M1115,330 L1115,298"/><circle class="dot" cx="1115" cy="298" r="4"/><path class="w sda" d="M1155,330 L1155,280"/><circle class="dot" cx="1155" cy="280" r="4"/><circle class="pin" cx="1115" cy="410" r="3.2"/><text class="pl" x="1115" y="402" text-anchor="middle">GND</text><path class="w gnd" d="M1115,410 L1115,420 M1106,420 L1124,420 M1109,424 L1121,424 M1112,428 L1118,428"/><rect class="part" x="1200" y="330" width="130" height="80" rx="6"/><text class="ptitle" x="1265.0" y="366" text-anchor="middle">OLED 0.96″</text><text class="psub" x="1265.0" y="382" text-anchor="middle">JMD0.96A-2 · 0x3C</text><circle class="pin" cx="1225" cy="330" r="3.2"/><text class="pl" x="1225" y="345" text-anchor="middle">VCC</text><circle class="pin" cx="1265" cy="330" r="3.2"/><text class="pl" x="1265" y="345" text-anchor="middle">SCL</text><circle class="pin" cx="1305" cy="330" r="3.2"/><text class="pl" x="1305" y="345" text-anchor="middle">SDA</text><path class="w v33" d="M1225,330 L1225,255"/><circle class="dot" cx="1225" cy="255" r="4"/><path class="w scl" d="M1265,330 L1265,298"/><circle class="dot" cx="1265" cy="298" r="4"/><path class="w sda" d="M1305,330 L1305,280"/><circle class="dot" cx="1305" cy="280" r="4"/><circle class="pin" cx="1265" cy="410" r="3.2"/><text class="pl" x="1265" y="402" text-anchor="middle">GND</text><path class="w gnd" d="M1265,410 L1265,420 M1256,420 L1274,420 M1259,424 L1271,424 M1262,428 L1268,428"/><rect class="part" x="800" y="440" width="130" height="70" rx="6"/><text class="ptitle" x="865.0" y="474" text-anchor="middle">HC-SR501 PIR</text><text class="psub" x="865.0" y="490" text-anchor="middle">3.3 V output</text><circle class="pin" cx="800" cy="490" r="3.2"/><text class="pl" x="807" y="494">OUT</text><path class="w sig" d="M610,490 L800,490"/><circle class="pin" cx="865" cy="440" r="3.2"/><text class="pl" x="865" y="455" text-anchor="middle">VCC</text><rect class="net n5" x="872" y="418" width="29.6" height="20" rx="10"/><text class="nl" x="886.8" y="432" text-anchor="middle">+5V</text><circle class="pin" cx="930" cy="495" r="3.2"/><text class="pl" x="923" y="499" text-anchor="end">GND</text><path class="w gnd" d="M930,495 L950,495 L950,498"/><path class="w gnd" d="M950,498 L950,508 M941,508 L959,508 M944,512 L956,512 M947,516 L953,516"/><rect class="part" x="980" y="500" width="150" height="90" rx="6"/><text class="ptitle" x="1055.0" y="534" text-anchor="middle">MQ-135 module</text><text class="psub" x="1055.0" y="550" text-anchor="middle">heater 5 V</text><circle class="pin" cx="980" cy="525" r="3.2"/><text class="pl" x="987" y="529">DO</text><path class="w sig" d="M610,525 L980,525"/><circle class="pin" cx="980" cy="560" r="3.2"/><text class="pl" x="987" y="564">AO</text><path class="w sig" d="M610,560 L720,560"/><circle class="dot" cx="720" cy="560" r="4"/><path class="w sig" d="M720,560 L760,560"/><rect class="res" x="760" y="554" width="60" height="12" rx="2"/><text class="rl" x="790.0" y="549" text-anchor="middle">R1 10 kΩ</text><path class="w sig" d="M820,560 L980,560"/><path class="w sig" d="M720,560 L720,575"/><rect class="res" x="714" y="572" width="12" height="28" rx="2"/><text class="rl" x="731" y="590.0">R2 15 kΩ</text><path class="w gnd" d="M720,600 L720,604"/><path class="w gnd" d="M720,604 L720,614 M711,614 L729,614 M714,618 L726,618 M717,622 L723,622"/><circle class="pin" cx="1055" cy="500" r="3.2"/><text class="pl" x="1055" y="515" text-anchor="middle">VCC</text><rect class="net n5" x="1062" y="478" width="29.6" height="20" rx="10"/><text class="nl" x="1076.8" y="492" text-anchor="middle">+5V</text><circle class="pin" cx="1055" cy="590" r="3.2"/><text class="pl" x="1055" y="582" text-anchor="middle">GND</text><path class="w gnd" d="M1055,590 L1055,600 M1046,600 L1064,600 M1049,604 L1061,604 M1052,608 L1058,608"/><rect class="part" x="980" y="625" width="150" height="85" rx="6"/><text class="ptitle" x="1055.0" y="647" text-anchor="middle">Light LED</text><text class="psub" x="1055.0" y="663" text-anchor="middle">HW-478 · PWM white</text><path class="w r" d="M610,630 L840,630"/><rect class="res" x="840" y="624" width="60" height="12" rx="2"/><text class="rl" x="870.0" y="619" text-anchor="middle">R 150 Ω</text><path class="w r" d="M900,630 L940,630 L940,648 L980,648"/><circle class="pin" cx="980" cy="648" r="3.2"/><text class="pl" x="987" y="652">R</text><path class="w g" d="M610,655 L840,655"/><rect class="res" x="840" y="649" width="60" height="12" rx="2"/><text class="rl" x="870.0" y="644" text-anchor="middle">G 68 Ω</text><path class="w g" d="M900,655 L940,655 L940,670 L980,670"/><circle class="pin" cx="980" cy="670" r="3.2"/><text class="pl" x="987" y="674">G</text><path class="w b" d="M610,680 L840,680"/><rect class="res" x="840" y="674" width="60" height="12" rx="2"/><text class="rl" x="870.0" y="669" text-anchor="middle">B 68 Ω</text><path class="w b" d="M900,680 L940,680 L940,692 L980,692"/><circle class="pin" cx="980" cy="692" r="3.2"/><text class="pl" x="987" y="696">B</text><circle class="pin" cx="1130" cy="692" r="3.2"/><text class="pl" x="1123" y="696" text-anchor="end">COM (−)</text><path class="w gnd" d="M1130,692 L1150,692 L1150,700"/><path class="w gnd" d="M1150,700 L1150,710 M1141,710 L1159,710 M1144,714 L1156,714 M1147,718 L1153,718"/><rect class="part" x="980" y="715" width="150" height="85" rx="6"/><text class="ptitle" x="1055.0" y="737" text-anchor="middle">AC indicator LED</text><text class="psub" x="1055.0" y="753" text-anchor="middle">RGB, common cathode</text><path class="w r" d="M610,725 L840,725"/><rect class="res" x="840" y="719" width="60" height="12" rx="2"/><text class="rl" x="870.0" y="714" text-anchor="middle">R 150 Ω</text><path class="w r" d="M900,725 L940,725 L940,738 L980,738"/><circle class="pin" cx="980" cy="738" r="3.2"/><text class="pl" x="987" y="742">R</text><path class="w g" d="M610,750 L840,750"/><rect class="res" x="840" y="744" width="60" height="12" rx="2"/><text class="rl" x="870.0" y="739" text-anchor="middle">G 68 Ω</text><path class="w g" d="M900,750 L940,750 L940,760 L980,760"/><circle class="pin" cx="980" cy="760" r="3.2"/><text class="pl" x="987" y="764">G</text><path class="w b" d="M610,775 L840,775"/><rect class="res" x="840" y="769" width="60" height="12" rx="2"/><text class="rl" x="870.0" y="764" text-anchor="middle">B 68 Ω</text><path class="w b" d="M900,775 L940,775 L940,782 L980,782"/><circle class="pin" cx="980" cy="782" r="3.2"/><text class="pl" x="987" y="786">B</text><circle class="pin" cx="1130" cy="782" r="3.2"/><text class="pl" x="1123" y="786" text-anchor="end">COM (−)</text><path class="w gnd" d="M1130,782 L1150,782 L1150,790"/><path class="w gnd" d="M1150,790 L1150,800 M1141,800 L1159,800 M1144,804 L1156,804 M1147,808 L1153,808"/><rect class="part" x="980" y="805" width="150" height="85" rx="6"/><text class="ptitle" x="1055.0" y="827" text-anchor="middle">Status LED</text><text class="psub" x="1055.0" y="843" text-anchor="middle">RGB, common cathode</text><path class="w r" d="M610,820 L840,820"/><rect class="res" x="840" y="814" width="60" height="12" rx="2"/><text class="rl" x="870.0" y="809" text-anchor="middle">R 150 Ω</text><path class="w r" d="M900,820 L940,820 L940,828 L980,828"/><circle class="pin" cx="980" cy="828" r="3.2"/><text class="pl" x="987" y="832">R</text><path class="w g" d="M610,845 L840,845"/><rect class="res" x="840" y="839" width="60" height="12" rx="2"/><text class="rl" x="870.0" y="834" text-anchor="middle">G 68 Ω</text><path class="w g" d="M900,845 L940,845 L940,850 L980,850"/><circle class="pin" cx="980" cy="850" r="3.2"/><text class="pl" x="987" y="854">G</text><path class="w b" d="M610,870 L840,870"/><rect class="res" x="840" y="864" width="60" height="12" rx="2"/><text class="rl" x="870.0" y="859" text-anchor="middle">B 68 Ω</text><path class="w b" d="M900,870 L940,870 L940,872 L980,872"/><circle class="pin" cx="980" cy="872" r="3.2"/><text class="pl" x="987" y="876">B</text><circle class="pin" cx="1130" cy="872" r="3.2"/><text class="pl" x="1123" y="876" text-anchor="end">COM (−)</text><path class="w gnd" d="M1130,872 L1150,872 L1150,880"/><path class="w gnd" d="M1150,880 L1150,890 M1141,890 L1159,890 M1144,894 L1156,894 M1147,898 L1153,898"/><text class="rl" x="372" y="908" text-anchor="start">onboard RGB (GPIO38): Wi-Fi link</text></svg>
+  <figcaption class="cap">Every ground symbol is the same node: 12 V adapter negative, LM2596 GND, ESP32 GND and every module GND. Dots are joints; lines that cross without a dot are not connected. Scroll sideways on a phone.</figcaption>
+</figure>
+
+<section class="card">
+  <h2>Parts list (BOM)</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Ref</th><th>Part</th><th>Value / type</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>J1</td><td>DC jack or 2-way screw terminal</td><td>12 V, adapter ≥ 1 A</td><td>power in</td></tr>
+      <tr><td>F1</td><td>Fuse + holder</td><td>1 A fast (glass 5×20 or blade)</td><td>right after J1 +</td></tr>
+      <tr><td>D1</td><td>Schottky diode</td><td>1N5822 (3 A, 40 V); band towards the circuit</td><td>after F1: wrong polarity cannot reach anything</td></tr>
+      <tr><td>C1</td><td>Electrolytic capacitor</td><td>470 µF 25 V; − to GND</td><td>fused 12 V to GND</td></tr>
+      <tr><td>U1</td><td>LM2596 buck module</td><td>set to 5.0–5.1 V before connecting</td><td>12 V → 5 V rail</td></tr>
+      <tr><td>C2</td><td>Electrolytic capacitor</td><td>470 µF 10 V (or 16 V); − to GND</td><td>5 V rail to GND</td></tr>
+      <tr><td>C3</td><td>Ceramic capacitor</td><td>100 nF</td><td>across ESP32 5V–GND pins, short leads</td></tr>
+      <tr><td>U2</td><td>ESP32-S3 DevKitC-1</td><td>on female headers (removable)</td><td>controller</td></tr>
+      <tr><td>U3</td><td>INA219 module</td><td>0x40, R100 shunt</td><td>high side of the fan branch</td></tr>
+      <tr><td>U4</td><td>BME280 module</td><td>0x76</td><td>I²C, inside the room</td></tr>
+      <tr><td>U5</td><td>BH1750 module</td><td>0x23</td><td>I²C, ceiling</td></tr>
+      <tr><td>U6</td><td>OLED JMD0.96A-2</td><td>128×64 SSD1306, 0x3C, VCC 3.3 V</td><td>I²C, front of the model</td></tr>
+      <tr><td>U7</td><td>MQ-135 module</td><td>heater 5 V (~150 mA)</td><td>wall</td></tr>
+      <tr><td>R1, R2</td><td>MQ-135 AO divider</td><td>R1 10 kΩ (AO → GPIO1), R2 15 kΩ (GPIO1 → GND)</td><td>max 3.0 V on GPIO1</td></tr>
+      <tr><td>U8</td><td>HC-SR501 PIR</td><td>VCC 5 V, OUT is 3.3 V</td><td>room corner</td></tr>
+      <tr><td>K1</td><td>5 V relay module</td><td>active-LOW input</td><td>switches the fan</td></tr>
+      <tr><td>M1</td><td>12 V fan, 40 mm</td><td>2-wire, &lt; 0.2 A</td><td>room wall</td></tr>
+      <tr><td>D2</td><td>Diode</td><td>1N4007; band on fan +</td><td>across the fan</td></tr>
+      <tr><td>LED1–LED3</td><td>RGB LEDs, common cathode</td><td>light, AC indicator, status</td><td>ceiling, AC unit, front panel</td></tr>
+      <tr><td>R3–R11</td><td>LED series resistors, ¼ W</td><td>red 150 Ω, green 68 Ω, blue 68 Ω (3 of each)</td><td>one per colour pin</td></tr>
+      <tr><td>J2–J9</td><td>Screw terminals / JST connectors</td><td>2.54 mm or 5.08 mm pitch</td><td>fan, sensors, LEDs, OLED</td></tr>
+      <tr><td>—</td><td>Raspberry Pi 4B</td><td>own 5.1 V 3 A USB-C supply</td><td>never from the LM2596</td></tr>
+    </tbody>
+  </table></div>
+  <p class="lead" style="margin-top:10px">If your HW-478 light module already has resistors on its board (small parts marked 151, 221 or similar), skip R3–R5 for that module only. The I²C modules already carry pull-up resistors, so no extra pull-ups are needed for four devices on short wires.</p>
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <h2>The 12 V fan branch, in current order</h2>
+    <ol>
+      <li>J1 <b>+12 V</b> → <b>F1 1 A</b> → <b>D1 1N5822</b> (band towards the circuit).</li>
+      <li>After D1: <b>C1</b> to ground, one wire to <b>LM2596 IN+</b>, one to <b>INA219 VIN+</b>.</li>
+      <li><b>INA219 VIN−</b> → <b>relay COM</b>; <b>relay NO</b> → <b>fan +</b>. NC stays empty.</li>
+      <li><b>Fan −</b> → ground. <b>D2 1N4007</b> across the fan, band on fan +.</li>
+      <li><b>INA219 GND</b> to the same ground, or it cannot read the bus voltage.</li>
+    </ol>
+  </section>
+  <section class="card">
+    <h2>Before you solder and power up</h2>
+    <ul>
+      <li>Set the LM2596 to <b>5.0–5.1 V</b> with a multimeter before anything else is connected.</li>
+      <li>Check polarity of C1, C2 (stripe = −) and D1, D2 (band = cathode).</li>
+      <li>Continuity: J1 − to ESP32 GND to every module GND.</li>
+      <li>No continuity between 12 V and 5 V, or 5 V and 3.3 V.</li>
+      <li>OLED, BME280, BH1750 and INA219 VCC go to <b>3.3 V</b>; PIR, relay and MQ-135 to <b>5 V</b>.</li>
+      <li>Put the ESP32 on female headers so it can be swapped or flashed off the board.</li>
+      <li>First power-up without the ESP32: measure 12 V, 5 V. Then plug it in.</li>
+    </ul>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Pin-by-pin</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Part · pin</th><th>Goes to</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>INA219 VIN+ / VIN−</td><td>12 V after D1 / relay COM</td><td>supply side / load side</td></tr>
+      <tr><td>INA219, BME280, BH1750, OLED</td><td>VCC 3V3, GND, SDA GPIO9, SCL GPIO8</td><td>addresses 0x40, 0x76, 0x23, 0x3C</td></tr>
+      <tr><td>Relay VCC / GND / IN</td><td>5 V rail / GND / GPIO10</td><td>active-LOW</td></tr>
+      <tr><td>Relay COM / NO</td><td>INA219 VIN− / fan +</td><td>NC unused</td></tr>
+      <tr><td>LM2596 IN+ / OUT+</td><td>12 V after D1 / 5 V rail</td><td>5 V rail feeds ESP32 5V pin, relay, PIR, MQ-135</td></tr>
+      <tr><td>PIR HC-SR501</td><td>VCC 5 V, OUT GPIO4, GND</td><td></td></tr>
+      <tr><td>MQ-135 AO</td><td>R1 10 kΩ → GPIO1; GPIO1 → R2 15 kΩ → GND</td><td>Pi default <span class="mono">MQ135_DIVIDER=1.667</span> (25/15)</td></tr>
+      <tr><td>MQ-135 DO / VCC</td><td>GPIO2 / 5 V</td><td></td></tr>
+      <tr><td>Light LED R / G / B</td><td>150 / 68 / 68 Ω → GPIO6 / GPIO7 / GPIO5</td><td>PWM white: OFF / DIM / ON</td></tr>
+      <tr><td>AC LED R / G / B</td><td>150 / 68 / 68 Ω → GPIO11 / GPIO12 / GPIO13</td><td>on/off colours</td></tr>
+      <tr><td>Status LED R / G / B</td><td>150 / 68 / 68 Ω → GPIO14 / GPIO15 / GPIO16</td><td>on/off colours</td></tr>
+      <tr><td>Onboard RGB (GPIO38)</td><td>on the DevKitC-1</td><td>green = Wi-Fi connected</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>What the OLED energy display shows</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Line</th><th>Example</th><th>From</th></tr></thead>
+    <tbody>
+      <tr><td>Header</td><td>ROOM 101 · ENERGY · Wi-Fi/BLE icon</td><td>link state</td></tr>
+      <tr><td>Big number</td><td>1.92 W</td><td>INA219 power, fan branch</td></tr>
+      <tr><td>Detail</td><td>11.9 V · 161 mA</td><td>INA219 bus voltage and current</td></tr>
+      <tr><td>Energy</td><td>E 3.4 Wh since boot</td><td>power integrated every reading</td></tr>
+      <tr><td>Footer</td><td>FAN ON · AI · 26.8 °C</td><td>relay, controller mode, BME280</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>What each LED means</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>LED</th><th>Colour</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>Onboard (ESP32)</td><td><span class="chip">green</span> / <span class="chip">off</span></td><td>Wi-Fi connected / not connected</td></tr>
+      <tr><td>Light LED</td><td><span class="chip">white, brightness</span></td><td>the AI's lighting decision: OFF, DIM (40 %), ON</td></tr>
+      <tr><td>AC indicator</td><td><span class="chip">green</span> <span class="chip">cyan</span> <span class="chip">blue</span> <span class="chip">magenta</span></td><td>AC standby · light cooling 27 °C · cooling · cooling at design set-point</td></tr>
+      <tr><td>Status</td><td><span class="chip">blue</span> <span class="chip">green</span> <span class="chip">yellow</span> <span class="chip">red</span> <span class="chip">white</span></td><td>AI · schedule · manual · warning · test or bench</td></tr>
+      <tr><td>Status, blinking red</td><td><span class="chip">red, 1 Hz</span></td><td>no controller over MQTT or Bluetooth; fan and LEDs off for safety</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>Expected readings after power-up</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>State</th><th>Bus voltage</th><th>Current</th><th>Power</th></tr></thead>
+    <tbody>
+      <tr><td>Relay off</td><td>about 11.6 V (12 V minus D1)</td><td>0 mA</td><td>0 W</td></tr>
+      <tr><td>Relay on, fan running</td><td>about 11.5 V</td><td>roughly 80–200 mA</td><td>roughly 1–2.3 W</td></tr>
+    </tbody>
+  </table></div>
+  <p class="lead" style="margin-top:10px">Voltage near 0 V with 12 V connected: INA219 GND not joined, or VIN− not wired. Negative current while the fan runs: VIN+ and VIN− swapped.</p>
+</section>
+
+<figure class="fig" style="margin:0">
+  <img src="room101-final-hero.png" alt="3D render of the finished Room 101 demo model" style="display:block;width:100%;height:auto">
+  <figcaption class="cap">The finished demo model (3D render, not a photo).</figcaption>
+</figure>
+</div>

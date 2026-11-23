@@ -2,7 +2,7 @@
 ESP32 test sender — for testing the edge brain WITHOUT the real board.
 
 Posts readings in the same JSON format as firmware/esp32_smart_building every 3 s,
-but with "source": "test_sender" (the firmware sends "sensor_node"). The edge brain
+but with "source": "test_sender" (the firmware sends "esp32_room101"). The edge brain
 and the dashboard therefore show Office A as connected to a TEST SENDER, not to the
 real ESP32, so test data can never be mistaken for real hardware data.
 

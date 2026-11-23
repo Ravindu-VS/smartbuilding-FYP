@@ -1,10 +1,12 @@
 """
 Trained models inside the running system (edge brain), with shadow mode and drift checks.
 
-  occupancy_twin_fusion   SHADOW: for every simulated room and control step, the learned PIR+CO2
-                          model predicts occupancy next to the estimator that actually drives the
-                          controller (the hand-built FusionEstimator).  Its output is logged and
-                          scored against the simulator's true head count, never applied.
+  occupancy_twin_fusion   ACTIVE for the simulated rooms since 23 Nov 2026 (twin/live.py, FUSION_LEARNED=1):
+                          the approved version drives the AI's P(occupied) (ml/learned_fusion.py).
+                          Here it is scored every step against the simulator's true head count next
+                          to the hand-built FusionEstimator it replaced (still computed underneath,
+                          and still used for the AC confirmation rule). FUSION_LEARNED=0 restores the
+                          October configuration, in which this model only ran in shadow.
   thermal_h30             ACTIVE (display): predicted air temperature 30 min ahead for each
                           simulated room, labelled as a prediction; scored when the 30 min have
                           passed (live MAE against the simulator's true temperature).
@@ -104,7 +106,16 @@ class LiveModels:
 
     def reload(self) -> None:
         with self.lock:
-            self.shadow = _Loaded("occupancy_twin_fusion", "shadow", self.registry, newest=True)
+            learned = os.environ.get("FUSION_LEARNED", "1") != "0"
+            # with the learned fusion live, score the approved version; otherwise the newest candidate (shadow)
+            self.shadow = _Loaded("occupancy_twin_fusion", "active" if learned else "shadow", self.registry,
+                                  newest=not learned)
+            if not hasattr(self, "learner"):
+                from ml.online_learning import OnlineLearner
+                self.learner = OnlineLearner(self.shadow.meta.get("features", []) if self.shadow.model else [],
+                                             on_promoted=self._promoted, registry=self.registry)
+                if not learned:
+                    self.learner.enabled = False
             self.thermal = _Loaded("thermal_h30", "active", self.registry)
             self.rf = _Loaded("occupancy_rf", "active", self.registry)
             self.features = OnlineFeatures()
@@ -123,6 +134,15 @@ class LiveModels:
             self.drift_shadow = DriftMonitor(self.shadow.meta.get("features", []), sref, window=5000) if self.shadow.model else None
             self.loaded_at = datetime.now().isoformat(timespec="seconds")
 
+    def _promoted(self) -> None:
+        """Online learning promoted a new occupancy_twin_fusion version: use it everywhere."""
+        from ml.learned_fusion import bump_generation
+        bump_generation()
+        with self.lock:
+            self.shadow = _Loaded("occupancy_twin_fusion", "active", self.registry)
+            self.conf_candidate, self.conf_active = Confusion(), Confusion()
+            self.agree = self.compared = 0
+
     # ------------------------------------------------------------------ twin hook
     def observe_twin(self, twin, obs: Dict, measure: bool) -> None:
         """Called by LiveTwin after each control step with the step's observations (simulated rooms)."""
@@ -136,6 +156,7 @@ class LiveModels:
                     # the twin was reset or jumped: per-room histories no longer apply
                     self.features = OnlineFeatures()
                     self.thermal_online = ThermalOnline()
+                    self.learner.reset()
                     self.pending.clear()
                     self.latest_thermal.clear()
                 self._last_twin_time = ts
@@ -160,6 +181,11 @@ class LiveModels:
             rids.append(rid)
         X = np.asarray(rows, dtype=float)
         p = m.predict(X)
+        truths = np.array([(obs[r].true_occupants or 0) > 0 for r in rids], dtype=int)
+        rule = np.array([(twin.last.get(r) or {}).get("p_rule") for r in rids], dtype=object)
+        ok = np.array([v is not None for v in rule])
+        if ok.any():
+            self.learner.add(obs[rids[0]].timestamp, X[ok], truths[ok], rule[ok].astype(float), p[ok])
         store_rows = []
         now = time.monotonic()
         do_store = self.store is not None and now - self._last_store >= STORE_EVERY_S
@@ -167,7 +193,8 @@ class LiveModels:
             o = obs[rid]
             truth = (o.true_occupants or 0) > 0
             last = twin.last.get(rid) or {}
-            p_act = last.get("p_fusion")
+            # with the learned fusion live, compare it with the hand-built estimator it replaced
+            p_act = last.get("p_rule") if last.get("p_rule") is not None else last.get("p_fusion")
             self.conf_candidate.add(p[i] >= 0.5, truth)
             if p_act is not None:
                 self.conf_active.add(p_act >= 0.5, truth)
@@ -238,9 +265,14 @@ class LiveModels:
                     "agreement_with_active": self.agree / self.compared if self.compared else None,
                     "candidate_vs_truth": self.conf_candidate.summary(),
                     "active_vs_truth": self.conf_active.summary(),
-                    "active": "FusionEstimator (rule-based PIR+CO2) - drives the controller",
-                    "note": "simulated rooms; truth = simulated head count; the candidate is never applied",
+                    "active": ("learned fusion drives the AI's P(occupied); compared with the rule-based estimator it replaced"
+                               if os.environ.get("FUSION_LEARNED", "1") != "0" else
+                               "FusionEstimator (rule-based PIR+CO2) - drives the controller"),
+                    "note": ("simulated rooms; truth = simulated head count; 'candidate' = learned fusion (live), "
+                             "'active' = rule-based estimator" if os.environ.get("FUSION_LEARNED", "1") != "0" else
+                             "simulated rooms; truth = simulated head count; the candidate is never applied"),
                 },
+                "online_learning": self.learner.status(),
                 "thermal": {"task": "thermal_h30", "version": self.thermal.version, "scored": int(len(err)),
                             "live_mae_c": float(np.mean(np.abs(err))) if len(err) else None,
                             "live_bias_c": float(np.mean(err)) if len(err) else None,

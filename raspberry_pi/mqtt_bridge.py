@@ -45,11 +45,21 @@ NUMERIC_FIELDS: Dict[str, Tuple[float, float]] = {
     "temperature": (-20.0, 70.0), "humidity": (0.0, 100.0), "pressure_hpa": (800.0, 1100.0),
     "co2": (300.0, 10000.0), "lux": (0.0, 200000.0), "measured_power_mW": (0.0, 1e7),
     "measured_voltage_v": (0.0, 60.0), "measured_current_mA": (0.0, 1e5), "mq2_raw": (0.0, 4095.0),
+    "mq135_raw": (0.0, 4095.0), "mq135_adc_mv": (0.0, 5000.0),
+    "ina219_shunt_voltage_mV": (-320.0, 320.0), "wifi_rssi_dbm": (-120.0, 0.0),
+    "uptime_s": (0.0, 315360000.0),
     "scd41_temp": (-20.0, 70.0), "scd41_humidity": (0.0, 100.0), "mmwave_distance_cm": (0.0, 1000.0),
     "actuator_fan_speed": (0.0, 255.0), "actuator_light_level": (0.0, 255.0), "actuator_servo_angle": (0.0, 180.0),
+    # manual/test holds reported by the board (seconds left), BLE MTU of the gateway link
+    "rgb_hold_s": (0.0, 600.0), "fan_hold_s": (0.0, 600.0), "ble_mtu": (23.0, 517.0),
 }
-BOOL_FIELDS = ("motion_detected", "presence", "mmwave_presence", "mmwave_moving", "mmwave_stationary")
-STRING_FIELDS = ("source", "co2_source", "presence_source", "firmware")
+# INA219 offset noise with no load reads slightly below zero (e.g. -0.2 mA); within these floors the
+# value is clamped to 0 instead of being reported as a problem
+NOISE_FLOOR = {"measured_current_mA": 2.0, "measured_power_mW": 20.0, "measured_voltage_v": 0.05}
+BOOL_FIELDS = ("motion_detected", "presence", "mmwave_presence", "mmwave_moving", "mmwave_stationary",
+               "mq135_do_high", "fan_on", "relay_on", "bench_mode")
+STRING_FIELDS = ("source", "co2_source", "presence_source", "firmware", "device_id", "actuator_rgb",
+                 "fw_version", "actuator_ac_led", "actuator_status_led")
 
 
 def topic(room_id: str, kind: str) -> str:
@@ -80,6 +90,8 @@ def validate_telemetry(room_from_topic: str, payload: Any, known_rooms) -> Tuple
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(float(v)):
             problems.append(f"{k}: not a finite number, dropped")
             continue
+        if k in NOISE_FLOOR and lo - NOISE_FLOOR[k] <= float(v) < lo:
+            v = lo
         if not lo <= float(v) <= hi:
             problems.append(f"{k}: {v} outside {lo}..{hi}, dropped")
             continue
@@ -107,6 +119,7 @@ def build_command(room_id: str, reply_to: str, decision: Dict) -> Dict:
             "hvac_action": decision["hvac_action"], "light_action": decision["light_action"],
             "fan_speed": decision["fan_speed"], "light_level": decision["light_level"],
             "servo_angle": decision["servo_angle"], "occupancy_probability": decision["occupancy_probability"],
+            **{k: decision[k] for k in ("ac_led", "status_led") if decision.get(k)},
             "ttl_s": 30}
 
 
@@ -129,6 +142,7 @@ class MqttBridge:
         self.last_connect: Optional[str] = None
         self.last_disconnect: Optional[str] = None
         self.device_status: Dict[str, str] = {}
+        self.device_detail: Dict[str, Dict[str, Any]] = {}
         self._seen: Dict[str, "OrderedDict[str, None]"] = {}
         self._pending: Dict[str, Tuple[float, str]] = {}      # command msg_id -> (sent monotonic, room)
         self.recent_rejections: deque = deque(maxlen=20)
@@ -173,7 +187,8 @@ class MqttBridge:
                 self.stats["reconnects"] += 1
             self.connected = True
             self.last_connect = _now()
-        client.subscribe([(f"{PREFIX}/room/+/telemetry", 1), (f"{PREFIX}/room/+/ack", 1), (f"{PREFIX}/room/+/status", 1)])
+        client.subscribe([(f"{PREFIX}/room/+/telemetry", 1), (f"{PREFIX}/room/+/ack", 1),
+                          (f"{PREFIX}/room/+/status", 1), (f"{PREFIX}/room/+/ble_status", 1)])
         client.publish(f"{PREFIX}/edge/status", json.dumps({"state": "online", "ts": _now()}), qos=1, retain=True)
         self._event("mqtt", f"MQTT connected to {self.host}:{self.port}")
 
@@ -199,11 +214,20 @@ class MqttBridge:
                 self._telemetry(room, payload)
             elif kind == "ack":
                 self._ack(room, payload)
-            elif kind == "status":
+            elif kind in ("status", "ble_status"):
                 state = payload.get("state") if isinstance(payload, dict) else None
                 if state in ("online", "offline"):
-                    self.device_status[room] = state
-                    self._event("hardware", f"board in {room} reports {state} (MQTT)", room)
+                    if kind == "status" or self.device_status.get(room) != "online":
+                        self.device_status[room] = state
+                        self._event("hardware", f"board in {room} reports {state} ({kind})", room)
+                    if kind == "status":
+                        # firmware room101-2026.11.23b+: detail booting / running / error (+ failed sensors)
+                        detail = payload.get("detail") if state == "online" else "offline"
+                        failed = payload.get("failed") if isinstance(payload.get("failed"), str) else None
+                        prev = self.device_detail.get(room, {})
+                        self.device_detail[room] = {"detail": detail, "failed": failed}
+                        if detail == "error" and (prev.get("detail") != "error" or prev.get("failed") != failed):
+                            self._event("hardware", f"board in {room} reports sensor error: {failed}", room)
         except Exception as e:                  # never let a bad message kill the network thread
             self.last_error = f"{type(e).__name__}: {e}"
             logger.exception("MQTT message handling failed")
@@ -228,7 +252,8 @@ class MqttBridge:
             if problems:
                 self.stats["field_problems"] += len(problems)
         clean.setdefault("source", "mqtt")
-        clean["transport"] = "mqtt"
+        # the board labels each copy with its link; the BLE gateway republishes BLE copies here
+        clean["transport"] = payload.get("transport") if payload.get("transport") in ("mqtt", "ble") else "mqtt"
         decision = self.ingest(clean)
         with self.lock:
             self.stats["accepted"] += 1
@@ -293,7 +318,8 @@ class MqttBridge:
                     "client_id": self.client_id, "auth": bool(self.username), "tls": self.tls,
                     "last_connect": self.last_connect, "last_disconnect": self.last_disconnect,
                     "last_error": self.last_error, "stats": dict(self.stats), "pending_acks": len(self._pending),
-                    "device_status": dict(self.device_status), "recent_rejections": list(self.recent_rejections),
+                    "device_status": dict(self.device_status), "device_detail": dict(self.device_detail),
+                    "recent_rejections": list(self.recent_rejections),
                     "topics": {"telemetry": topic("<room>", "telemetry"), "command": topic("<room>", "command"),
                                "ack": topic("<room>", "ack"), "status": topic("<room>", "status")}}
 

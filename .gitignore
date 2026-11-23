@@ -73,3 +73,33 @@ data/synthetic/
 experiments/results/*/scratch/
 experiments/results/run_cache/
 firmware/tools/.lib_cache/
+
+# ---- added for the final release (23 Nov 2026): local-only material, kept on the development PC ----
+# remote-commissioning relay working folder and transfer bundles
+output/agent/
+*.bundle
+# the dashboard build the Pi serves (rebuilt by scripts/build_dashboard_for_pi.sh)
+dashboard_dist/
+dashboard/fyp-research-twin/out/
+dashboard/fyp-research-twin/public/3d-twin/
+# superseded first architecture and pre-review snapshots (local history only)
+archive/
+MASTER_PROMPT.md
+# old experiment folders that were never part of this repository
+/agents/
+/ai/
+/app/
+/control/
+/decisions/
+/hardware/
+/integration/
+/panda3d_simulation/
+/sensors/
+/sim/
+/simulation/
+# local-only tools and material of the development PC
+scripts/pc_agent.py
+.pytest_cache/
+data/deployment_scenarios/
+thesis/
+extract_pptx.py

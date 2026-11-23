@@ -1,9 +1,14 @@
-// Copy this file to secrets.h (same folder) and fill in your values.
-// secrets.h is listed in .gitignore, so your Wi-Fi password is never committed.
+
+/*
+  SMART BUILDING - ROOM 101
+  Copy this file to secrets.h and replace all placeholders.
+*/
+
 #pragma once
 
-#define WIFI_SSID        "your-wifi-name"
-#define WIFI_PASSWORD    "your-wifi-password"
-
-// The edge brain (Raspberry Pi or this PC). run_local.bat prints this PC's IP address.
-#define EDGE_SERVER_URL  "http://192.168.1.20:8001/api/hardware/sensor-data"
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#define MQTT_BROKER_IP "192.168.1.100"
+#define MQTT_PORT 1883
+#define MQTT_USERNAME ""
+#define MQTT_PASSWORD ""

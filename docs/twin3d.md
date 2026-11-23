@@ -158,8 +158,7 @@ in the footer as "3D rooms 26/26"), `TWIN_STATS {fps, calls, triangles, quality}
 | `src/components/3d/VanillaTwinWrapper.tsx` | Hosts the 3D view, forwards data, follows selections |
 | `src/components/3d/TwinControls.tsx`, `TwinContext.tsx`, `PresentationHud.tsx` | View navigator, scene toolbar, context panel, presentation bar |
 
-The earlier 3D app (`public/3d-twin/`) is kept unchanged for reference at `/3d-twin/index.html`;
-the dashboard no longer uses it.
+The earlier 3D app (`public/3d-twin/`) was replaced by this one and is not part of the release.
 
 ## 8. Known limitations
 

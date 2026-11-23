@@ -1,0 +1,156 @@
+{
+ "experiment": "exp12_learned_fusion",
+ "date": "2026-11-23",
+ "scenario": "normal",
+ "seeds": [
+  1,
+  2,
+  3
+ ],
+ "days": 7,
+ "warmup_days": 7,
+ "controllers": {
+  "mo": "multi-objective, hand-built PIR+CO2 fusion (October configuration)",
+  "mo_learned": "multi-objective, learned fusion occupancy_twin_fusion v1 for P(occupied); AC confirmation rule unchanged"
+ },
+ "runs": [
+  {
+   "controller": "mo",
+   "seed": 1,
+   "wall_s": 60.0,
+   "energy_kwh": 10119.1,
+   "discomfort_pct": 13.59,
+   "pmv_h": 31.6,
+   "iaq_min": 0.0,
+   "ac_cycles": 675.0,
+   "light_switches": 1987.0,
+   "occ_all": {
+    "acc": 0.9252,
+    "f1": 0.9328,
+    "prec": 0.8788,
+    "rec": 0.9939
+   },
+   "occ_rooms": {
+    "acc": 0.9787,
+    "f1": 0.9811,
+    "prec": 0.9648,
+    "rec": 0.998
+   }
+  },
+  {
+   "controller": "mo_learned",
+   "seed": 1,
+   "wall_s": 103.3,
+   "energy_kwh": 10033.2,
+   "discomfort_pct": 12.66,
+   "pmv_h": 30.1,
+   "iaq_min": 0.0,
+   "ac_cycles": 667.0,
+   "light_switches": 2067.0,
+   "occ_all": {
+    "acc": 0.9688,
+    "f1": 0.9703,
+    "prec": 0.9659,
+    "rec": 0.9747
+   },
+   "occ_rooms": {
+    "acc": 0.988,
+    "f1": 0.9891,
+    "prec": 0.992,
+    "rec": 0.9863
+   }
+  },
+  {
+   "controller": "mo",
+   "seed": 2,
+   "wall_s": 58.5,
+   "energy_kwh": 10229.9,
+   "discomfort_pct": 14.9,
+   "pmv_h": 31.0,
+   "iaq_min": 0.0,
+   "ac_cycles": 639.0,
+   "light_switches": 2064.0,
+   "occ_all": {
+    "acc": 0.9235,
+    "f1": 0.9315,
+    "prec": 0.8761,
+    "rec": 0.9944
+   },
+   "occ_rooms": {
+    "acc": 0.9796,
+    "f1": 0.9819,
+    "prec": 0.9657,
+    "rec": 0.9986
+   }
+  },
+  {
+   "controller": "mo_learned",
+   "seed": 2,
+   "wall_s": 104.8,
+   "energy_kwh": 10135.7,
+   "discomfort_pct": 14.83,
+   "pmv_h": 30.4,
+   "iaq_min": 0.0,
+   "ac_cycles": 643.0,
+   "light_switches": 2232.0,
+   "occ_all": {
+    "acc": 0.9689,
+    "f1": 0.9704,
+    "prec": 0.9651,
+    "rec": 0.9758
+   },
+   "occ_rooms": {
+    "acc": 0.9894,
+    "f1": 0.9904,
+    "prec": 0.9919,
+    "rec": 0.9889
+   }
+  },
+  {
+   "controller": "mo",
+   "seed": 3,
+   "wall_s": 56.7,
+   "energy_kwh": 10011.5,
+   "discomfort_pct": 12.4,
+   "pmv_h": 23.1,
+   "iaq_min": 0.0,
+   "ac_cycles": 606.0,
+   "light_switches": 2008.0,
+   "occ_all": {
+    "acc": 0.9249,
+    "f1": 0.9322,
+    "prec": 0.8778,
+    "rec": 0.9938
+   },
+   "occ_rooms": {
+    "acc": 0.9784,
+    "f1": 0.9806,
+    "prec": 0.964,
+    "rec": 0.9978
+   }
+  },
+  {
+   "controller": "mo_learned",
+   "seed": 3,
+   "wall_s": 107.0,
+   "energy_kwh": 9928.8,
+   "discomfort_pct": 11.49,
+   "pmv_h": 22.1,
+   "iaq_min": 0.0,
+   "ac_cycles": 608.0,
+   "light_switches": 2128.0,
+   "occ_all": {
+    "acc": 0.9693,
+    "f1": 0.9706,
+    "prec": 0.9648,
+    "rec": 0.9765
+   },
+   "occ_rooms": {
+    "acc": 0.9889,
+    "f1": 0.9899,
+    "prec": 0.9917,
+    "rec": 0.9881
+   }
+  }
+ ]
+}

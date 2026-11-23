@@ -13,6 +13,8 @@ const lanAddresses = Object.values(os.networkInterfaces())
 const extra = (process.env.NEXT_ALLOWED_DEV_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 const nextConfig: NextConfig = {
+  // NEXT_OUTPUT=export builds a static site (out/) that the edge brain serves on the Raspberry Pi
+  ...(process.env.NEXT_OUTPUT === "export" ? { output: "export" as const, images: { unoptimized: true } } : {}),
   allowedDevOrigins: Array.from(new Set(["127.0.0.1", "localhost", ...lanAddresses, ...extra])),
   // no floating Next.js badge over the 3D view during presentations (errors are still shown)
   devIndicators: false,

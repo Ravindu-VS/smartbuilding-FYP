@@ -41,6 +41,9 @@ export default function ModelsPanel() {
   if (!m || !p) return <div className="p-3 text-[12px] text-slate-500">Loading…</div>;
   const sh = m.live?.shadow;
   const th = m.live?.thermal;
+  const ol = m.live?.online_learning;
+  const lastRound = ol?.rounds?.length ? ol.rounds[ol.rounds.length - 1] : null;
+  const learnedLive = !!sh && sh.note.includes('learned fusion (live)');
   const drift = m.live?.drift.real_room_inputs_vs_occupancy_rf_training;
   const sim = p.rooms.filter((r) => r.source === 'simulated').length;
   const hw = p.rooms.filter((r) => r.source === 'hardware');
@@ -59,17 +62,33 @@ export default function ModelsPanel() {
         <div className="text-[10px] text-slate-500 mt-1">Random Forest in use: {m.random_forest_source ?? '—'}</div>
         <div className="text-[10px] text-slate-500">Controllers: {m.controllers.map((c) => `${c.id}${c.available ? '' : ' (not approved)'}`).join(', ')}</div>
       </Box>
-      <Box title="Shadow mode: learned fusion vs live estimator" testId="models-shadow">
+      <Box title={learnedLive ? 'Occupancy model: learned fusion (live) vs rule-based' : 'Shadow mode: learned fusion vs live estimator'} testId="models-shadow">
         {sh && sh.compared_room_steps > 0 ? (
           <>
             <table className="w-full text-[10.5px]"><thead><tr className="text-slate-500"><th className="text-left font-normal">vs simulated truth</th><th>F1</th><th>precision</th><th>recall</th></tr></thead>
               <tbody>
-                <tr><td>candidate {sh.version}</td><td className="text-center">{fx(sh.candidate_vs_truth.f1, 3)}</td><td className="text-center">{fx(sh.candidate_vs_truth.precision, 3)}</td><td className="text-center">{fx(sh.candidate_vs_truth.recall, 3)}</td></tr>
-                <tr><td>live (rule-based)</td><td className="text-center">{fx(sh.active_vs_truth.f1, 3)}</td><td className="text-center">{fx(sh.active_vs_truth.precision, 3)}</td><td className="text-center">{fx(sh.active_vs_truth.recall, 3)}</td></tr>
+                <tr><td>{learnedLive ? `learned ${sh.version} (live)` : `candidate ${sh.version}`}</td><td className="text-center">{fx(sh.candidate_vs_truth.f1, 3)}</td><td className="text-center">{fx(sh.candidate_vs_truth.precision, 3)}</td><td className="text-center">{fx(sh.candidate_vs_truth.recall, 3)}</td></tr>
+                <tr><td>{learnedLive ? 'rule-based (replaced)' : 'live (rule-based)'}</td><td className="text-center">{fx(sh.active_vs_truth.f1, 3)}</td><td className="text-center">{fx(sh.active_vs_truth.precision, 3)}</td><td className="text-center">{fx(sh.active_vs_truth.recall, 3)}</td></tr>
               </tbody></table>
             <div className="text-[10px] text-slate-500 mt-1">agreement {pct(sh.agreement_with_active)} over {sh.compared_room_steps.toLocaleString()} room-minutes. {sh.note}.</div>
           </>
         ) : <div className="text-slate-500">No comparisons yet (starts when measurement runs).</div>}
+        {ol && (
+          <div className="mt-2 border-t border-slate-800 pt-1.5" data-testid="models-online-learning">
+            <div className="font-semibold text-slate-200">Continual learning {ol.enabled && !ol.unavailable ? <span className="text-emerald-300">on</span> : <span className="text-amber-300">off</span>}{ol.training_now ? <span className="text-sky-300"> · training now…</span> : null}</div>
+            {ol.unavailable ? <div className="text-amber-300 text-[10px]">{ol.unavailable}</div> : (
+              <div className="text-[10px] text-slate-400">
+                {ol.buffer_rows.toLocaleString()} labelled room-minutes collected (needs {ol.min_rows.toLocaleString()}); retrains every {ol.retrain_every_sim_h} simulated hours and goes live only if it beats the current model on newer data.
+              </div>
+            )}
+            {lastRound && (
+              <div className="text-[10px] text-slate-300 mt-0.5">
+                Last round: <b>{lastRound.result}</b>{lastRound.f1 ? ` · F1 new ${fx(lastRound.f1.candidate, 3)} vs current ${fx(lastRound.f1.approved, 3)} vs rule ${fx(lastRound.f1.hand_built, 3)}` : ''}{lastRound.why ? ` (${lastRound.why})` : ''}
+              </div>
+            )}
+            <div className="text-[9.5px] text-slate-500 mt-0.5">{ol.scope}</div>
+          </div>
+        )}
       </Box>
       <Box title="Forecast accuracy and input drift" testId="models-thermal">
         <div>30-min temperature forecast ({th?.version ?? '—'}): live MAE <b className="text-white">{fx(th?.live_mae_c, 2, ' °C')}</b> over {th?.scored ?? 0} forecasts</div>

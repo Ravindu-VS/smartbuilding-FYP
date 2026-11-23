@@ -16,6 +16,7 @@ typedef bool boolean;
 #define OUTPUT 1
 #define INPUT_PULLUP 2
 #define INPUT_PULLDOWN 3
+#define HEX 16
 #define SERIAL_8N1 0x800001c
 #define F(x) x
 #define PI 3.14159265358979
@@ -28,6 +29,11 @@ class String {
   String(const std::string& x) : s(x) {}
   String(int v) : s(std::to_string(v)) {}
   String(unsigned int v) : s(std::to_string(v)) {}
+  String(unsigned int v, unsigned char base) : s(base == HEX ? [] (unsigned int n) {
+    char value[16];
+    snprintf(value, sizeof(value), "%X", n);
+    return std::string(value);
+  }(v) : std::to_string(v)) {}
   String(long v) : s(std::to_string(v)) {}
   String(unsigned long v) : s(std::to_string(v)) {}
   String(float v, unsigned d = 2) : s(std::to_string(v)) {}
@@ -92,8 +98,10 @@ void pinMode(uint8_t, uint8_t);
 void digitalWrite(uint8_t, uint8_t);
 int digitalRead(uint8_t);
 uint16_t analogRead(uint8_t);
+uint32_t analogReadMilliVolts(uint8_t);
 void analogReadResolution(uint8_t);
 void analogSetAttenuation(int);
+void analogSetPinAttenuation(uint8_t, int);
 #define ADC_11db 3
 long random(long);
 long random(long, long);
@@ -105,9 +113,12 @@ void yield();
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
 bool ledcAttach(uint8_t pin, uint32_t freq, uint8_t resolution);
 bool ledcWrite(uint8_t pin, uint32_t duty);
+bool ledcDetach(uint8_t pin);
+void rgbLedWrite(uint8_t pin, uint8_t red, uint8_t green, uint8_t blue);
 #else
 double ledcSetup(uint8_t channel, double freq, uint8_t resolution_bits);
 void ledcAttachPin(uint8_t pin, uint8_t channel);
+void ledcDetachPin(uint8_t pin);
 void ledcWrite(uint8_t channel, uint32_t duty);
 #endif
 template <class T, class L, class H> auto constrain(T x, L l, H h) -> decltype(x + l + h) { return x < l ? l : (x > h ? h : x); }

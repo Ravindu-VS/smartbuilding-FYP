@@ -318,7 +318,7 @@ def _replay_variant(name: str, drop, ai_enabled: bool, start: str, end: str, see
     spec = next(r for r in build_spec() if r.room_id == "f2_office_a")
     ctrl = HardwareRoomController(spec)
     src = UciSource(start, minutes_per_post=3.0 / 60.0, loop=False)
-    board = VirtualBoard(src, seed=seed, interval_s=3.0, drop=list(drop),
+    board = VirtualBoard(src, seed=seed, interval_s=3.0, drop=list(drop), profile="bench_v1",
                          sensor_model=VirtualBoard.NOISY if noisy else VirtualBoard.QUIET)
     t_end = dt.fromisoformat(end)
     minutes, k, last_row = {}, 0, None
@@ -403,7 +403,7 @@ def run_real_room_replay(cfg, out_dir):
     checks = []
     n = int(cfg.get("http_readings", 200))
     for label, src in (("uci_replay", UciSource(start, 1.0)), ("room_model", TwinSource(seed, "2026-03-02T07:00", 0.5))):
-        board = VirtualBoard(src, seed=seed)
+        board = VirtualBoard(src, seed=seed, uptime0_s=3600.0)
         ok = ver = ver_n = 0
         temps_on, temps_off = [], []
         for _ in range(n):
@@ -424,9 +424,10 @@ def run_real_room_replay(cfg, out_dir):
         checks.append((f"{label}: shown as VIRTUAL BOARD ({st['sender']}/{st['sender_detail']}), not the real board",
                        st["sender"] == "virtual_board" and st["sender_detail"] == label and st["real_board"] is False))
         checks.append((f"{label}: every field the firmware sends is present", all(k in pl for k in (
-            "temperature", "humidity", "pressure_hpa", "lux", "co2", "co2_source", "scd41_temp", "motion_detected",
-            "mmwave_presence", "mmwave_distance_cm", "presence", "mq2_raw", "measured_power_mW",
-            "actuator_fan_speed", "actuator_light_level", "actuator_servo_angle", "sensor_health"))))
+            "temperature", "humidity", "pressure_hpa", "lux", "mq135_adc_mv", "mq135_raw", "motion_detected",
+            "presence", "fan_on", "measured_voltage_v", "measured_current_mA", "measured_power_mW",
+            "actuator_fan_speed", "actuator_light_level", "actuator_ac_led", "actuator_status_led",
+            "sensor_health"))))
         if label == "room_model":
             results["room_model_closed_loop"] = {"readings_with_ac_on": len(temps_on),
                                                  "mean_temp_ac_on": float(np.mean(temps_on)) if temps_on else None,
@@ -445,7 +446,9 @@ def run_real_room_replay(cfg, out_dir):
                 "variants measure the pipeline under those models, and only the CO2-only variant uses recorded "
                 "inputs alone. Sensor models per 3-s sample: quiet = PIR high 45 % of occupied samples, false "
                 "trigger 0.03 %; LD2410C presence 97 %, false 0.05 %; noisy = false triggers 0.3 % (PIR) and 1 % "
-                "(LD2410C). **Not a measurement of Room 101 and not a physical verification.**\n\n"
+                "(LD2410C). The replay uses the virtual board's `bench_v1` profile, the sensor set of the time (SCD41 NDIR "
+                "CO2, LD2410C, MQ-2, INA226); the API checks at the end use the final Room 101 board (MQ-135 eCO2, "
+                "PIR, INA219, relay fan). **Not a measurement of Room 101 and not a physical verification.**\n\n"
                 "| pipeline | minutes | F1 | precision | recall | accuracy | F1 without vacancy rule | lights on when empty | lights on when occupied | AC on when empty | damper open |\n"
                 "|---|---|---|---|---|---|---|---|---|---|---|\n")
         for name, m, nmin, ac, lit, vent, f1raw, litocc in table:

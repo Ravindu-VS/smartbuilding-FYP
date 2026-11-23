@@ -4,7 +4,10 @@ import { BuildingStatePayload } from '../types/building';
 
 // Address of the edge brain. Set NEXT_PUBLIC_EDGE_URL (e.g. http://192.168.1.20:8001)
 // when the edge brain runs on a Raspberry Pi instead of this computer.
-export const EDGE_URL = (process.env.NEXT_PUBLIC_EDGE_URL || 'http://127.0.0.1:8001').replace(/\/$/, '');
+// NEXT_PUBLIC_EDGE_URL=same-origin: the dashboard is served by the edge brain itself (the Raspberry Pi build),
+// so every API call is relative to the page's own address.
+const EDGE_ENV = process.env.NEXT_PUBLIC_EDGE_URL;
+export const EDGE_URL = EDGE_ENV === 'same-origin' ? '' : (EDGE_ENV || 'http://127.0.0.1:8001').replace(/\/$/, '');
 
 /** A page more than this far behind the edge brain drops its queued updates and reconnects. */
 const BACKLOG_MS = 5000;

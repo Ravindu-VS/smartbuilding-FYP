@@ -108,11 +108,11 @@ export default function KpiStrip() {
         <Tile label="Lights on, empty rooms" ai={fx(a.lights_on_empty_pct, 1, '%')} off={fx(b.lights_on_empty_pct, 1, '%')}
           delta={enough ? <Delta better={better(a.lights_on_empty_pct, b.lights_on_empty_pct)} text={`${fx(Math.abs(a.lights_on_empty_pct - b.lights_on_empty_pct), 1)} pts`} /> : undefined}
           title="Share of empty-room minutes (simulator truth) with the lights on." />
-        <div className="px-3 py-1.5 min-w-0" title="Occupancy estimate (P ≥ 0.5) against the simulator's head count, every room every minute. The Random Forest is the project's original model, on the same readings.">
+        <div className="px-3 py-1.5 min-w-0" title="Occupancy estimate (P ≥ 0.5) of the learned PIR+CO₂ fusion that drives the AI, against the simulator's head count, every room every minute. It keeps retraining on new data while the system runs. The Random Forest is the project's original model (trained on the real UCI office), on the same readings.">
           <div className="text-[9.5px] uppercase tracking-wider text-slate-500 truncate">Occupancy accuracy</div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-[15px] font-bold text-white" data-testid="kpi-accuracy">{isNum(fu.accuracy) ? `${(fu.accuracy * 100).toFixed(1)}%` : '—'}</span>
-            <span className="text-[10px] text-slate-400">PIR+CO₂</span>
+            <span className="text-[10px] text-slate-400">learned PIR+CO₂</span>
           </div>
           <div className="text-[10px] text-slate-500 truncate">Random Forest: {rf && isNum(rf.accuracy) ? `${(rf.accuracy * 100).toFixed(1)}%` : '—'}</div>
         </div>

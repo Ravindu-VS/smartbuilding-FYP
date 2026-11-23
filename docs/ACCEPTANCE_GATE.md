@@ -1,12 +1,12 @@
 # Final acceptance gate
 
-Evaluated on 23-25 Oct 2026 against the master prompt's checklist (section 21). PASS = verified by a test, a
+Sections A-E and G-H were evaluated on 23-25 Oct 2026 against the master prompt's checklist. PASS = verified by a test, a
 run or a recorded result; FAIL = checked and not met; BLOCKED = cannot be done in this environment (reason
 given); N/A = does not apply. Code existing is never enough for PASS.
 
-**Result: 55 PASS (3 qualified), 2 BLOCKED, 0 FAIL.** BLOCKED: measured Colombo weather (hosts refused) and the
-firmware compile / physical verification (no toolchain here; hardware not yet delivered - bring-up steps and the
-bench-check script are ready in docs/HARDWARE.md).
+**Historical result for those sections: 55 PASS (3 qualified), 2 BLOCKED, 0 FAIL.** That result does not mean
+the current physical Room 101 link has been commissioned. Section F was refreshed on 20 Nov 2026; see
+`docs/COMMISSIONING_REPORT.md` for the current MQTT/BLE, hardware and access status.
 
 ## A. Simulation
 
@@ -69,17 +69,24 @@ bench-check script are ready in docs/HARDWARE.md).
 | Safety fallback and rollback available | PASS | `GuardedController` (F1-F3), `test_registry_acceptance_promote_rollback`, `POST /api/models/rollback` |
 | Real-world online exploration not uncontrolled | PASS | no learning on the real room; PPO limited to simulated rooms; real room = rule-based estimator + optimiser + safety layer |
 
-## F. Hardware integration
+## F. Hardware integration — updated 20 Nov 2026
+
+The room is now equipped according to the owner, but this environment could not access the Pi or perform a
+physical bench run. Source implementation, prior simulated-broker evidence, owner-reported bring-up and
+independently observed commissioning results are kept separate in
+[`docs/COMMISSIONING_REPORT.md`](./COMMISSIONING_REPORT.md).
 
 | Item | Status | Evidence |
 |---|---|---|
-| Room 101 uses the correct live-room mapping | PASS | Room 101 = `f2_office_a` = the only `data_source: hardware` room; firmware sends `room_id: f2_office_a` |
-| Hardware data reaches backend and twin | PASS (software path) | HTTP and MQTT harness, experiment 10; virtual board with the firmware's exact payload replaying real UCI data and a simulated Office A, experiment 11 (every reading answered, actuator feedback verified); `raspberry_pi/test_edge_brain.py`. With the physical board: pending (hardware not yet delivered) |
-| MQTT and connection status handled | PASS (edge side) | `test_bridge_end_to_end_with_broker`, ack timeout test, status endpoint; firmware still HTTP |
-| Hardware and simulated values distinguishable | PASS | provenance per value group; test sender / harness never shown as the real board |
-| Physical verification status documented honestly | PASS | docs/HARDWARE.md status table (not compiled, not bench-tested here) |
-| Test harness for unavailable hardware | PASS | `raspberry_pi/virtual_board.py` (firmware-identical HTTP payload; UCI replay or simulated Office A; `run_local.bat virtual`), `raspberry_pi/esp32_test_sender.py`, `raspberry_pi/mqtt_device_sim.py`, `scripts/start.sh harness`; bench check rehearsed against the virtual board (22 pass, 0 fail) |
-| Firmware compiled / physically verified | BLOCKED | no Arduino-ESP32 toolchain reachable (toolchain hosts refused) and no board attached. Done instead: host-side syntax and library-API check against the real library headers (`firmware/tools/check_firmware.py`, 18/18 combinations; fixed SCD41 silently skipped with SCD4x 1.x and INA226 code that did not compile with any INA226 library); bring-up procedure and `scripts/check_hardware.py` ready for the bench |
+| Room 101 mapping and canonical topics | PASS | Firmware uses `f2_office_a` and `sb/v1/room/f2_office_a/...` |
+| Existing edge MQTT ingestion and simulated-broker path | PASS (historical software evidence) | `tests/test_store_mqtt.py`, experiment 10; this does not prove Pi or ESP32 connectivity |
+| Sensor communication (BME280, BH1750, MQ-135, PIR, INA219 I²C) | PASS (owner-reported only) | Owner's attached bring-up report; no current Serial log was available |
+| Firmware compile after current BLE/MQ-135/INA219 changes | NOT TESTED | No Arduino IDE, Arduino CLI, `g++`, `clang++`, or MSVC compiler available in this environment |
+| Pi Mosquitto, Edge Brain API, and BLE gateway runtime | BLOCKED | SSH/SCP to `172.16.0.57:22` denied by the sandbox; no remote service/API observation |
+| ESP32 telemetry/commands over MQTT | NOT TESTED | Firmware source exists; no broker topic capture from the physical board |
+| Paired BLE telemetry, command, and acknowledgement fallback | NOT TESTED | Source and host framing checks exist; no physical pairing/session evidence |
+| Relay, fan branch current/power, RGB colors and disconnect recovery | NOT TESTED | Requires the physical bench and an observed test run |
+| Pi reboot/systemd recovery and live dashboard update | NOT TESTED | Requires Pi access and an observed end-to-end run |
 
 ## G. Digital twin
 

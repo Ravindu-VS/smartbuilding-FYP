@@ -1,872 +1,1561 @@
-/**
- * =============================================================================
- * FINAL YEAR PROJECT: SMART BUILDING — ESP32-S3 SENSOR ACQUISITION NODE v2.0
- * Author: Vinusha Rathnayaka
- * Node Target: Room 101 = Office A (room id f2_office_a, floor 2 of the digital twin)
- * Microcontroller: ESP32-S3 Dual-Core (240 MHz, Wi-Fi 4)
- * =============================================================================
- * 
- * ARCHITECTURE (v2.0 — Research-Grade Hardware):
- *   ESP32-S3 is a PURE SENSOR + ACTUATOR node.
- *   It does NOT run any ML inference locally.
- *   All intelligence resides on the Raspberry Pi 4B Edge Brain.
- *
- *   Flow:
- *     1. ESP32 reads physical sensors (BME280, BH1750, SCD41, LD2410C, INA226, PIR, MQ-2)
- *     2. ESP32 POSTs raw sensor data to Raspberry Pi via HTTP
- *     3. Raspberry Pi estimates occupancy (PIR + CO2 fusion) and decides with the multi-objective
- *        controller behind the safety layer (the PPO policy is used for the simulated rooms only)
- *     4. Pi responds with control decisions (fan_speed, light_level, servo_angle, hvac_action)
- *     5. ESP32 actuates Room 101 hardware based on Pi's decision
- *
- * COMPLETE MASTER WIRING DIAGRAM (v2.0):
- * -----------------------------------------------------------------------------
- * 1. SHARED I2C SENSOR BUS (SDA: GPIO 17, SCL: GPIO 18):
- *    - GY-BME280     (0x76/0x77): Temperature / Humidity / Pressure
- *    - GY-30 BH1750  (0x23/0x5C): Ambient Illuminance (lux)
- *    - SCD41         (0x62):      CO2 (ppm) / Temperature / Humidity (NDIR)
- *    - INA226        (0x40):      Voltage / Current / Power (mW)
- * 
- * 2. UART SENSOR (Serial1):
- *    - LD2410C mmWave (TX->GPIO 16, RX->GPIO 15): 24GHz presence / distance
- *      NOTE: GPIO 15 is re-assigned from RGB Blue. RGB Blue moves to GPIO 5.
- *
- * 3. ANALOG & DIGITAL SENSORS:
- *    - MQ-2 Gas Sensor:          VCC->5V, GND->GND, AO->GPIO 1  (Analog ADC)
- *    - HW-416-B PIR Motion:      VCC->3.3V, GND->GND, S->GPIO 4 (Digital)
- * 
- * 4. PHYSICAL ACTUATORS (PWM-Controlled):
- *    - MOSFET->DC Fan:            SIG->GPIO 14  (PWM variable speed)
- *    - White LED (lighting):     Anode->GPIO 12 (PWM dimmable via MOSFET/transistor)
- *    - SG90 Servo (ventilation): SIG->GPIO 13  (50Hz PWM)
- *    - HW-478 RGB LED (status):  R->GPIO 6, G->GPIO 7, B->GPIO 5
- *    - ESP32-S3 Onboard LED:     GPIO 38 (connection status)
- * 
- * 5. NETWORK & SYSTEM:
- *    - Wi-Fi 2.4GHz STA Mode -> SSID and password from secrets.h
- *    - REST API Server -> http://<RASPBERRY_PI_IP>:8001/api/hardware/sensor-data
- *
- * SENSOR PRIORITY (graceful degradation — all optional):
- *    BME280    -> Core temperature/humidity
- *    BH1750    -> Core illuminance
- *    SCD41     -> CO2 for occupancy estimation & IAQ
- *    LD2410C   -> mmWave presence detection
- *    INA226    -> Electrical power measurement
- *    MQ-2      -> Secondary air quality
- *    PIR       -> Motion event trigger
- * =============================================================================
- */
-
-#include <WiFi.h>
-#include <HTTPClient.h>
 #include <Wire.h>
+#include <WiFi.h>
+#include <esp_coexist.h>
+#include <WiFiClient.h>
+#include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <BH1750.h>
+#include <Adafruit_INA219.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLE2902.h>
+#include <BLESecurity.h>
+#include <Preferences.h>
+#include <freertos/FreeRTOS.h>
 
-// -------------------------------------------------------------------
-// Optional sensor libraries — comment out if library not installed
-// -------------------------------------------------------------------
-// SCD41 CO2 Sensor (Sensirion I2C SCD4x). Library 1.x renamed the header and class
-// (SensirionI2cScd4x) and changed begin()/getDataReady; both versions are supported.
-#if __has_include(<SensirionI2cScd4x.h>)
-  #include <SensirionI2cScd4x.h>
-  #define HAS_SCD41_LIB true
-  #define SCD4X_LIB_V1 true
-#elif __has_include(<SensirionI2CScd4x.h>)
-  #include <SensirionI2CScd4x.h>
-  #define HAS_SCD41_LIB true
-  #define SCD4X_LIB_V1 false
-#else
-  #define HAS_SCD41_LIB false
-#endif
-
-// INA226 Power Monitor. Two libraries ship an INA226.h with different APIs:
-//   "INA226" by Rob Tillaart (Library Manager; defines INA226_LIB_VERSION)  -> recommended
-//   "INA226Lib" by Peter Buchegger / K. Jarzebski (Library Manager)          -> also supported
-#if __has_include(<INA226.h>)
-  #include <INA226.h>
-  #define HAS_INA226_LIB true
-  #if defined(INA226_LIB_VERSION)
-    #define INA226_TILLAART true
-  #else
-    #define INA226_TILLAART false
-  #endif
-#else
-  #define HAS_INA226_LIB false
-#endif
-
-// LD2410 mmWave Presence Sensor
-#if __has_include(<ld2410.h>)
-  #include <ld2410.h>
-  #define HAS_LD2410_LIB true
-#else
-  #define HAS_LD2410_LIB false
-#endif
-
-// ESP32 Servo Library
-#if __has_include(<ESP32Servo.h>)
-  #include <ESP32Servo.h>
-  #define HAS_SERVO_LIB true
-#else
-  #define HAS_SERVO_LIB false
-#endif
-
-// Include ESP32 Version header for LEDC API compatibility
-#if __has_include(<esp_arduino_version.h>)
-  #include <esp_arduino_version.h>
-#endif
-
-// =============================================================================
-// FEATURE FLAGS — set false to disable a sensor even if library exists
-// =============================================================================
-#define ENABLE_BME280     true
-#define ENABLE_BH1750     true
-#define ENABLE_SCD41      true
-#define ENABLE_LD2410C    true
-#define ENABLE_INA226     true
-#define ENABLE_MQ2        true
-#define ENABLE_PIR        true
-#define ENABLE_SERVO      true
-#define ENABLE_WHITE_LED  true
-
-// =============================================================================
-// MASTER CONFIGURATION
-// =============================================================================
-// Network & Server Config: Wi-Fi name, password and the edge brain's address are kept
-// in secrets.h (same folder, listed in .gitignore, so they are never committed).
-// Create it by copying secrets.example.h and filling in your values.
 #if __has_include("secrets.h")
-  #include "secrets.h"
-#else
-  #error "Create secrets.h from secrets.example.h (Wi-Fi name, password, edge brain URL)"
+#include "secrets.h"
 #endif
-const char* ssid = WIFI_SSID;
-const char* password = WIFI_PASSWORD;
-const char* server_url = EDGE_SERVER_URL;   // http://<edge brain IP>:8001/api/hardware/sensor-data
 
-// =============================================================================
-// GPIO PIN ASSIGNMENTS (ESP32-S3)
-// =============================================================================
-// I2C Bus (shared by BME280, BH1750, SCD41, INA226)
-#define I2C_SDA_PIN        17
-#define I2C_SCL_PIN        18
+#ifndef WIFI_SSID
+#define WIFI_SSID ""
+#endif
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD ""
+#endif
+#ifndef MQTT_BROKER_IP
+#define MQTT_BROKER_IP ""
+#endif
+#ifndef MQTT_PORT
+#define MQTT_PORT 1883
+#endif
+#ifndef MQTT_USERNAME
+#define MQTT_USERNAME ""
+#endif
+#ifndef MQTT_PASSWORD
+#define MQTT_PASSWORD ""
+#endif
 
-// LD2410C UART (Serial1)
-#define LD2410_TX_PIN      16    // ESP32 RX <- LD2410 TX
-#define LD2410_RX_PIN      15    // ESP32 TX -> LD2410 RX  (reassigned from old RGB Blue)
+#define PIN_SDA 9
+#define PIN_SCL 8
+#define PIN_MQ135_AO 1
+#define PIN_MQ135_DO 2
+#define PIN_PIR 4
+#define PIN_RELAY 10
+#define PIN_RGB_B 5
+#define PIN_RGB_R 6
+#define PIN_RGB_G 7
+// Indicator RGB LEDs (on/off per colour, no PWM: the S3 has 8 LEDC channels and the light LED uses 3).
+// "AC" LED: what the AC would be doing (the room has no AC actuator). "Status" LED: controller state.
+#define PIN_AC_R 11
+#define PIN_AC_G 12
+#define PIN_AC_B 13
+#define PIN_ST_R 14
+#define PIN_ST_G 15
+#define PIN_ST_B 16
+#ifndef RGB_BUILTIN
+#define RGB_BUILTIN 38
+#endif
 
-// Analog & Digital Sensors
-#define MQ2_PIN            1     // MQ-2 Analog Input
-#define PIR_PIN            4     // HW-416-B Digital Motion Input
+#define ROOM_ID "f2_office_a"
+#define TELEMETRY_TOPIC "sb/v1/room/f2_office_a/telemetry"
+#define COMMAND_TOPIC "sb/v1/room/f2_office_a/command"
+#define ACK_TOPIC "sb/v1/room/f2_office_a/ack"
+#define STATUS_TOPIC "sb/v1/room/f2_office_a/status"
+#define EDGE_STATUS_TOPIC "sb/v1/edge/status"
+#define BLE_DEVICE_NAME "SB-Room101"
+#define BLE_SERVICE_UUID "7c6f0001-4f3b-4c1a-9b2d-8a8b2f010101"
+#define BLE_FRAME_UUID "7c6f0002-4f3b-4c1a-9b2d-8a8b2f010101"
+#define FW_VERSION "room101-2026.11.23c"
 
-// Actuator Outputs (PWM)
-#define FAN_PWM_PIN        14    // MOSFET -> DC Fan (PWM variable speed)
-#define WHITE_LED_PIN      12    // White LED module (PWM dimmable)
-#define SERVO_PIN          13    // SG90 Servo (ventilation damper)
+const bool RELAY_ACTIVE_LOW = true;
+const bool RGB_COMMON_ANODE = false;
+const bool INDICATOR_COMMON_ANODE = false;   // the two indicator LEDs: common cathode, COM to GND
+const unsigned long SENSOR_INTERVAL_MS = 3000;
+const unsigned long MQTT_RETRY_MS = 5000;
+const unsigned long MQTT_COMMAND_TIMEOUT_MS = 30000;
+const unsigned long MQTT_RETRY_WITH_BLE_MS = 15000;   // retry less often while BLE carries the data
+const unsigned long MQTT_CONNECT_TIMEOUT_MS = 3000;   // a missing broker must not stall the loop for long
+const uint16_t MQTT_KEEPALIVE_S = 60;                 // tolerant of short radio-sharing pauses
+const unsigned long SENSOR_RETRY_MS = 30000;          // re-probe I2C sensors that were not found
+const unsigned long BENCH_HOLD_MS = 120000;           // serial bench commands hold for 2 minutes
+const uint16_t MAX_COMMAND_HOLD_S = 600;
+const uint16_t MIN_MQTT_PAUSE_S = 10;
+const uint16_t MAX_MQTT_PAUSE_S = 300;
+// BLE frames: 4-byte header + data. 16 data bytes fit the 23-byte default ATT MTU; after the
+// Pi negotiates a larger MTU each frame carries up to 240 bytes, so a telemetry message needs
+// three or four notifications instead of forty-four.
+const size_t BLE_FRAME_DATA_SIZE = 16;
+const size_t BLE_MAX_FRAME_DATA = 240;
+const uint16_t BLE_PREFERRED_MTU = 247;
+const size_t BLE_MAX_MESSAGE_SIZE = 1024;
+const uint8_t BLE_MAX_FRAMES = BLE_MAX_MESSAGE_SIZE / BLE_FRAME_DATA_SIZE;
 
-// RGB Status LED (HW-478)
-#define RGB_RED_PIN        6
-#define RGB_GREEN_PIN      7
-#define RGB_BLUE_PIN       5     // Moved from GPIO 15 (now used by LD2410C UART)
-
-// System Status
-#define ONBOARD_LED_PIN    38    // Built-in status indicator
-
-// =============================================================================
-// PWM CONFIGURATION
-// =============================================================================
-#define FAN_PWM_FREQ       25000   // 25 kHz for quiet fan operation
-#define FAN_PWM_RES        8       // 8-bit resolution (0-255)
-#define LED_PWM_FREQ       5000    // 5 kHz for LED dimming
-#define LED_PWM_RES        8       // 8-bit resolution (0-255)
-
-// LEDC channel assignments (ESP32-S3)
-#define FAN_LEDC_CH        0
-#define LED_LEDC_CH        1
-
-// =============================================================================
-// TIMING
-// =============================================================================
-unsigned long last_send_time = 0;
-const unsigned long send_interval_ms = 3000;  // Telemetry loop: 3 seconds
-
-unsigned long last_scd41_time = 0;
-const unsigned long scd41_interval_ms = 5000; // SCD41 measurement interval: 5s
-
-// =============================================================================
-// GLOBAL SENSOR OBJECTS & STATE FLAGS
-// =============================================================================
-HTTPClient http;
 Adafruit_BME280 bme;
 BH1750 lightMeter;
+Adafruit_INA219 ina219;
+// JMD0.96A-2: 0.96" 128x64 SSD1306 OLED on the same I2C bus (0x3C), used as the room's energy meter.
+const uint8_t OLED_ADDRESS = 0x3C;
+const unsigned long OLED_REFRESH_MS = 1000;
+Adafruit_SSD1306 oled(128, 64, &Wire, -1);
+bool oledAvailable = false;
+unsigned long lastOledDraw = 0;
+double energyWh = 0.0;                 // fan-branch energy since boot, integrated from INA219 power
+unsigned long lastEnergySample = 0;
+WiFiClient wifiClient;
+PubSubClient mqtt(wifiClient);
+BLEServer* bleServer = nullptr;
+BLECharacteristic* bleFrameCharacteristic = nullptr;
+Preferences blePreferences;
+portMUX_TYPE bleCommandMux = portMUX_INITIALIZER_UNLOCKED;
 
-bool bme_found = false;
-bool bh1750_found = false;
-bool scd41_found = false;
-bool ina226_found = false;
-bool ld2410_found = false;
-bool servo_attached = false;
+bool bmeAvailable = false;
+bool bh1750Available = false;
+bool ina219Available = false;
+volatile bool bleClientConnected = false;
+volatile uint16_t bleConnHandle = 0;
+volatile uint16_t blePeerMtu = 23;
+volatile bool bleNotifyFailed = false;
+uint32_t bleNotifyRetries = 0;
+uint32_t bleNotifyDrops = 0;
+uint32_t blePairingPasskey = 0;
+uint8_t bleTxSequence = 0;
+char bleCommandBuffer[BLE_MAX_MESSAGE_SIZE];
+size_t bleCommandLength = 0;
+bool bleCommandPending = false;
+uint8_t bleAssembly[BLE_MAX_FRAMES][BLE_MAX_FRAME_DATA];
+uint8_t bleAssemblyLengths[BLE_MAX_FRAMES];
+uint8_t bleAssemblySequence = 0;
+uint8_t bleAssemblyCount = 0;
+uint64_t bleAssemblyMask = 0;
+const char* rgbState = "OFF";
+char acLedState[8] = "OFF";          // ac_led from the edge: OFF ECO LOW COOL MAX
+char statusFromEdge[10] = "OFF";     // status_led from the edge: AI RULE MANUAL WARNING TEST
+const char* statusShown = "OFF";     // what the status LED shows (edge state, or LOST / BENCH locally)
+char lastStatusDetail[48] = "";
+char commandHistory[8][65] = {};
+uint8_t commandHistoryNext = 0;
 
-// SCD41 cached readings (it measures every ~5s)
-float scd41_co2 = 0.0;
-float scd41_temp = 0.0;
-float scd41_hum = 0.0;
-bool  scd41_data_ready = false;
+bool fanState = false;
+uint8_t lightLevel = 0;
+unsigned long lastSensorRead = 0;
+unsigned long lastMqttAttempt = 0;
+// The edge answers every reading with a command, so a connected MQTT link that has delivered nothing
+// for 12 s has stalled (seen on the factory guest Wi-Fi). Writing into a stalled TCP socket blocks the
+// loop for up to 10 s per write once the send buffer is full, so the socket is dropped instead.
+unsigned long lastMqttRx = 0;
+const unsigned long MQTT_STALL_MS = 12000;
+unsigned long lastCommandReceived = 0;
+unsigned long lastWifiAttempt = 0;
+bool wifiBeginStarted = false;
+uint32_t telemetrySequence = 0;
+bool edgeOnline = false;
+unsigned long mqttPausedUntil = 0;     // diagnostic MQTT pause (BLE fallback test)
+bool mqttPaused = false;
+unsigned long rgbHoldUntil = 0;        // manual/test hold: automatic commands keep off the LED
+unsigned long fanHoldUntil = 0;        // manual/test hold: automatic commands keep off the relay
+unsigned long benchUntil = 0;          // serial bench session: the operator is at the board
+bool failSafeActive = false;
+unsigned long lastSensorRetry = 0;
+uint32_t bmeRejected = 0;
 
-// INA226 cached readings
-float ina226_voltage = 0.0;
-float ina226_current_mA = 0.0;
-float ina226_power_mW = 0.0;
+struct Readings {
+  bool bmeOk = false;
+  float temperature = NAN;
+  float humidity = NAN;
+  float pressure = NAN;
+  bool luxOk = false;
+  float lux = NAN;
+  int mqRaw = 0;
+  int mqMilliVolts = 0;
+  bool mqDigitalHigh = false;
+  bool motion = false;
+  bool inaOk = false;
+  float busVoltage = NAN;
+  float shuntMilliVolts = NAN;
+  float currentMA = NAN;
+  float powerMW = NAN;
+};
+Readings latest;
 
-// LD2410C cached readings
-bool  ld2410_presence = false;
-bool  ld2410_moving = false;
-bool  ld2410_stationary = false;
-int   ld2410_distance_cm = 0;
+bool queueBleCommand(const uint8_t* payload, size_t length);
+void writeRgbPwm(uint8_t red, uint8_t green, uint8_t blue);
+void handleCommandPayload(byte* payload, unsigned int length);
+bool parseActuatorState(const char* value, bool currentState, bool& nextState);
+bool rememberCommand(const char* commandId);
 
-// Conditional global objects
-#if HAS_SCD41_LIB
-  #if SCD4X_LIB_V1
-    SensirionI2cScd4x scd41;
-  #else
-    SensirionI2CScd4x scd41;
-  #endif
+class RoomBleServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer*) override {
+    bleClientConnected = true;
+    blePeerMtu = 23;
+  }
+
+  void onDisconnect(BLEServer*) override {
+    bleClientConnected = false;
+    blePeerMtu = 23;
+    BLEDevice::startAdvertising();
+  }
+
+#if defined(CONFIG_NIMBLE_ENABLED)
+  void onConnect(BLEServer* server, ble_gap_conn_desc* desc) override {
+    bleConnHandle = desc->conn_handle;
+    onConnect(server);
+    // Ask for a relaxed 50-100 ms connection interval (units of 1.25 ms, supervision timeout 6 s).
+    // BlueZ connects at ~7.5-30 ms, which leaves the shared 2.4 GHz radio almost no time for Wi-Fi:
+    // in the 23 Nov 2026 run the board answered only 1 of 20 pings and MQTT could not connect.
+    server->updateConnParams(desc->conn_handle, 40, 80, 0, 600);
+  }
+
+  void onMtuChanged(BLEServer*, ble_gap_conn_desc* desc, uint16_t mtu) override {
+    bleConnHandle = desc->conn_handle;
+    blePeerMtu = mtu;
+    Serial.printf("BLE MTU negotiated: %u\n", (unsigned)mtu);
+  }
+#elif defined(CONFIG_BLUEDROID_ENABLED)
+  void onMtuChanged(BLEServer*, esp_ble_gatts_cb_param_t* param) override {
+    bleConnHandle = param->mtu.conn_id;
+    blePeerMtu = param->mtu.mtu;
+    Serial.printf("BLE MTU negotiated: %u\n", (unsigned)param->mtu.mtu);
+  }
+#endif
+};
+
+class RoomBleSecurityCallbacks : public BLESecurityCallbacks {
+  uint32_t onPassKeyRequest() override {
+    return blePairingPasskey;
+  }
+
+  void onPassKeyNotify(uint32_t passKey) override {
+    Serial.printf("BLE pairing passkey: %06lu\n", (unsigned long)passKey);
+  }
+
+  bool onSecurityRequest() override {
+    return true;
+  }
+
+#if defined(CONFIG_NIMBLE_ENABLED)
+  void onAuthenticationComplete(ble_gap_conn_desc*, int status) override {
+    Serial.println(status == 0 ? "BLE peer paired" : "BLE pairing failed");
+  }
+#elif defined(CONFIG_BLUEDROID_ENABLED)
+  void onAuthenticationComplete(esp_ble_auth_cmpl_t result) override {
+    Serial.println(result.success ? "BLE peer paired" : "BLE pairing failed");
+  }
 #endif
 
-#if HAS_INA226_LIB
-  #if INA226_TILLAART
-    INA226 ina226(0x40, &Wire);
-  #else
-    INA226 ina226(Wire);   // INA226Lib; the original GitHub Arduino-INA226 needs: INA226 ina226;
-  #endif
+  bool onConfirmPIN(uint32_t) override {
+    return true;
+  }
+};
+
+class RoomBleFrameCallbacks : public BLECharacteristicCallbacks {
+  void onStatus(BLECharacteristic*, Status status, uint32_t) override {
+    if (status == Status::ERROR_GATT) {
+      bleNotifyFailed = true;   // the host stack had no buffer for this notification
+    }
+  }
+
+  void onWrite(BLECharacteristic* characteristic) override {
+    const String frame = characteristic->getValue();
+    const uint8_t* frameData = reinterpret_cast<const uint8_t*>(frame.c_str());
+    const size_t frameLength = frame.length();
+    if (frameLength < 5 || frameLength > 4 + BLE_MAX_FRAME_DATA || frameData[0] != 'C') {
+      return;
+    }
+
+    const uint8_t sequence = frameData[1];
+    const uint8_t index = frameData[2];
+    const uint8_t count = frameData[3];
+    const size_t payloadLength = frameLength - 4;
+    if (count == 0 || count > BLE_MAX_FRAMES || index >= count ||
+        payloadLength > BLE_MAX_FRAME_DATA) {
+      return;
+    }
+
+    if (sequence != bleAssemblySequence || count != bleAssemblyCount) {
+      if (index != 0) {
+        return;
+      }
+      bleAssemblySequence = sequence;
+      bleAssemblyCount = count;
+      bleAssemblyMask = 0;
+      memset(bleAssemblyLengths, 0, sizeof(bleAssemblyLengths));
+    }
+
+    memcpy(bleAssembly[index], frameData + 4, payloadLength);
+    bleAssemblyLengths[index] = static_cast<uint8_t>(payloadLength);
+    bleAssemblyMask |= (uint64_t)1 << index;
+    const uint64_t expectedMask = count == 64 ? UINT64_MAX : (((uint64_t)1 << count) - 1);
+    if (bleAssemblyMask != expectedMask) {
+      return;
+    }
+
+    uint8_t complete[BLE_MAX_MESSAGE_SIZE];
+    size_t completeLength = 0;
+    for (uint8_t part = 0; part < count; part++) {
+      if (completeLength + bleAssemblyLengths[part] > sizeof(complete)) {
+        bleAssemblyMask = 0;
+        bleAssemblyCount = 0;
+        return;
+      }
+      memcpy(complete + completeLength, bleAssembly[part], bleAssemblyLengths[part]);
+      completeLength += bleAssemblyLengths[part];
+    }
+    bleAssemblyMask = 0;
+    bleAssemblyCount = 0;
+    if (!queueBleCommand(complete, completeLength)) {
+      Serial.println("BLE command rejected: command queue is full or payload size is invalid");
+    }
+  }
+};
+
+void setFan(bool on) {
+  fanState = on;
+  digitalWrite(PIN_RELAY, RELAY_ACTIVE_LOW ? (on ? LOW : HIGH) : (on ? HIGH : LOW));
+}
+
+bool holdActive(unsigned long until) {
+  return until != 0 && (long)(until - millis()) > 0;
+}
+
+uint16_t holdSecondsLeft(unsigned long until) {
+  return holdActive(until) ? (uint16_t)((until - millis() + 999UL) / 1000UL) : 0;
+}
+
+bool benchActive() {
+  return holdActive(benchUntil);
+}
+
+void setRGB(uint8_t red, uint8_t green, uint8_t blue) {
+  const bool active = red || green || blue;
+  if (!active) {
+    rgbState = "OFF";
+  } else if (red == 255 && green == 0 && blue == 0) {
+    rgbState = "RED";
+  } else if (red == 0 && green == 255 && blue == 0) {
+    rgbState = "GREEN";
+  } else if (red == 0 && green == 0 && blue == 255) {
+    rgbState = "BLUE";
+  } else if (red == 255 && green == 255 && blue == 255) {
+    rgbState = "WHITE";
+  } else {
+    rgbState = "CUSTOM";
+  }
+
+  if (RGB_COMMON_ANODE) {
+    red = 255 - red;
+    green = 255 - green;
+    blue = 255 - blue;
+  }
+  writeRgbPwm(red, green, blue);
+  lightLevel = active ? 255 : 0;
+}
+
+void writeRgbPwm(uint8_t red, uint8_t green, uint8_t blue) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWrite(PIN_RGB_R, red);
+  ledcWrite(PIN_RGB_G, green);
+  ledcWrite(PIN_RGB_B, blue);
+#else
+  ledcWrite(0, red);
+  ledcWrite(1, green);
+  ledcWrite(2, blue);
 #endif
+}
 
-#if HAS_LD2410_LIB
-  ld2410 radar;
+void attachRgbPwm() {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  const bool r = ledcAttach(PIN_RGB_R, 5000, 8);
+  const bool g = ledcAttach(PIN_RGB_G, 5000, 8);
+  const bool b = ledcAttach(PIN_RGB_B, 5000, 8);
+#else
+  ledcSetup(0, 5000, 8);
+  ledcSetup(1, 5000, 8);
+  ledcSetup(2, 5000, 8);
+  ledcAttachPin(PIN_RGB_R, 0);
+  ledcAttachPin(PIN_RGB_G, 1);
+  ledcAttachPin(PIN_RGB_B, 2);
+  const bool r = true;
+  const bool g = true;
+  const bool b = true;
 #endif
+  Serial.printf("RGB PWM on GPIO R%d/G%d/B%d: %s\n", PIN_RGB_R, PIN_RGB_G, PIN_RGB_B,
+                (r && g && b) ? "ready" : "FAILED");
+}
 
-#if HAS_SERVO_LIB
-  Servo ventServo;
+void detachRgbPwm() {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcDetach(PIN_RGB_R);
+  ledcDetach(PIN_RGB_G);
+  ledcDetach(PIN_RGB_B);
+#else
+  ledcDetachPin(PIN_RGB_R);
+  ledcDetachPin(PIN_RGB_G);
+  ledcDetachPin(PIN_RGB_B);
 #endif
+}
 
-// Current actuator state (for telemetry feedback)
-int current_fan_speed = 0;      // 0-255
-int current_light_level = 0;    // 0-255
-int current_servo_angle = 0;    // 0-180
+// Bench check of the HW-478 wiring without PWM: each colour pin is driven as a plain GPIO HIGH
+// for four seconds. Measure GPIO-to-GND with a multimeter (about 3.3 V when driven) and watch
+// the module: if the voltage is there but the LED stays dark, the fault is the module, its
+// series resistor or the common-pin connection, not the firmware.
+void rgbChannelDiagnostic() {
+  struct Channel { const char* name; int pin; };
+  const Channel channels[] = {{"RED", PIN_RGB_R}, {"GREEN", PIN_RGB_G}, {"BLUE", PIN_RGB_B}};
+  Serial.println("RGB channel diagnostic (plain GPIO, no PWM). Common pin must go to GND.");
+  detachRgbPwm();
+  for (const Channel& channel : channels) {
+    pinMode(channel.pin, OUTPUT);
+    digitalWrite(channel.pin, LOW);
+  }
+  for (const Channel& channel : channels) {
+    const int level = RGB_COMMON_ANODE ? LOW : HIGH;
+    digitalWrite(channel.pin, level);
+    Serial.printf("  %s: GPIO %d driven %s for 4 s - expect ~%s V between GPIO %d and GND\n",
+                  channel.name, channel.pin, level == HIGH ? "HIGH" : "LOW",
+                  level == HIGH ? "3.3" : "0.0", channel.pin);
+    delay(4000);
+    digitalWrite(channel.pin, RGB_COMMON_ANODE ? HIGH : LOW);
+  }
+  attachRgbPwm();
+  setRGB(0, 0, 0);
+  Serial.println("RGB channel diagnostic finished; LED OFF.");
+}
 
-// Forward Declarations
-void apply_actuation(const char* hvac_action, const char* light_action,
-                     int fan_speed, int light_level, int servo_angle);
-void setup_wifi();
-void send_telemetry();
-void set_status_led(int r, int g, int b);
-void init_scd41();
-void init_ina226();
-void init_ld2410();
-void read_scd41();
-void read_ina226();
-void read_ld2410();
+void writeIndicator(uint8_t pr, uint8_t pg, uint8_t pb, bool r, bool g, bool b) {
+  const bool on = !INDICATOR_COMMON_ANODE;
+  digitalWrite(pr, r ? on : !on);
+  digitalWrite(pg, g ? on : !on);
+  digitalWrite(pb, b ? on : !on);
+}
 
-// =============================================================================
-// SETUP
-// =============================================================================
-void setup() {
+// colours: ECO green, LOW cyan, COOL blue, MAX magenta, OFF dark
+bool acLedColour(const char* s, bool& r, bool& g, bool& b) {
+  r = g = b = false;
+  if (strcmp(s, "OFF") == 0) return true;
+  if (strcmp(s, "ECO") == 0) { g = true; return true; }
+  if (strcmp(s, "LOW") == 0) { g = b = true; return true; }
+  if (strcmp(s, "COOL") == 0) { b = true; return true; }
+  if (strcmp(s, "MAX") == 0) { r = b = true; return true; }
+  return false;
+}
+
+// colours: AI blue, RULE green, MANUAL yellow, WARNING red, TEST white; locally LOST red (blinking), BENCH white
+bool statusLedColour(const char* s, bool& r, bool& g, bool& b) {
+  r = g = b = false;
+  if (strcmp(s, "OFF") == 0) return true;
+  if (strcmp(s, "AI") == 0) { b = true; return true; }
+  if (strcmp(s, "RULE") == 0) { g = true; return true; }
+  if (strcmp(s, "MANUAL") == 0) { r = g = true; return true; }
+  if (strcmp(s, "WARNING") == 0 || strcmp(s, "LOST") == 0) { r = true; return true; }
+  if (strcmp(s, "TEST") == 0 || strcmp(s, "BENCH") == 0) { r = g = b = true; return true; }
+  return false;
+}
+
+void setAcLed(const char* s) {
+  bool r, g, b;
+  if (!acLedColour(s, r, g, b)) return;
+  strncpy(acLedState, s, sizeof(acLedState) - 1);
+  acLedState[sizeof(acLedState) - 1] = '\0';
+  writeIndicator(PIN_AC_R, PIN_AC_G, PIN_AC_B, r, g, b);
+}
+
+// Called every loop: the status LED shows the edge's state unless the board itself knows better.
+void serviceStatusLed(bool edgeLost, bool bench) {
+  const char* shown = bench ? "BENCH" : (edgeLost ? "LOST" : statusFromEdge);
+  bool r, g, b;
+  statusLedColour(shown, r, g, b);
+  if (strcmp(shown, "LOST") == 0 && (millis() / 500) % 2 == 1) {
+    r = false;    // blink 1 Hz: no controller reachable
+  }
+  statusShown = shown;
+  writeIndicator(PIN_ST_R, PIN_ST_G, PIN_ST_B, r, g, b);
+}
+
+void setOnboardStatus(bool wifiConnected) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  rgbLedWrite(RGB_BUILTIN, 0, wifiConnected ? 64 : 0, 0);
+#else
+  pinMode(RGB_BUILTIN, OUTPUT);
+  digitalWrite(RGB_BUILTIN, wifiConnected ? HIGH : LOW);
+#endif
+}
+
+size_t bleFrameDataSize() {
+  const uint16_t mtu = blePeerMtu;
+  if (mtu <= 3 + 4 + BLE_FRAME_DATA_SIZE) {
+    return BLE_FRAME_DATA_SIZE;
+  }
+  return min(BLE_MAX_FRAME_DATA, (size_t)(mtu - 3 - 4));
+}
+
+bool sendBleMessage(char kind, const uint8_t* payload, size_t length) {
+  if (!bleClientConnected || bleFrameCharacteristic == nullptr ||
+      length == 0 || length > BLE_MAX_MESSAGE_SIZE) {
+    return false;
+  }
+
+  const size_t chunk = bleFrameDataSize();
+  const uint8_t count = (length + chunk - 1) / chunk;
+  const uint8_t sequence = ++bleTxSequence;
+  // Small frames (default MTU) need more air time per message, so pace them further apart.
+  const unsigned long pacingMs = chunk > BLE_FRAME_DATA_SIZE ? 12 : 40;
+  for (uint8_t index = 0; index < count; index++) {
+    const size_t offset = index * chunk;
+    const size_t chunkLength = min(chunk, length - offset);
+    uint8_t frame[4 + BLE_MAX_FRAME_DATA];
+    frame[0] = static_cast<uint8_t>(kind);
+    frame[1] = sequence;
+    frame[2] = index;
+    frame[3] = count;
+    memcpy(frame + 4, payload + offset, chunkLength);
+    bool delivered = false;
+    for (uint8_t attempt = 0; attempt < 4 && bleClientConnected; attempt++) {
+      bleNotifyFailed = false;
+      bleFrameCharacteristic->setValue(frame, chunkLength + 4);
+      bleFrameCharacteristic->notify();
+      if (!bleNotifyFailed) {
+        delivered = true;
+        break;
+      }
+      bleNotifyRetries++;
+      delay(25 + 25 * attempt);   // let the controller drain its buffers, then resend this frame
+    }
+    if (!delivered) {
+      bleNotifyDrops++;
+      return false;
+    }
+    delay(pacingMs);
+  }
+  return true;
+}
+
+bool queueBleCommand(const uint8_t* payload, size_t length) {
+  if (length == 0 || length > sizeof(bleCommandBuffer)) {
+    return false;
+  }
+
+  bool queued = false;
+  portENTER_CRITICAL(&bleCommandMux);
+  if (!bleCommandPending) {
+    memcpy(bleCommandBuffer, payload, length);
+    bleCommandLength = length;
+    bleCommandPending = true;
+    queued = true;
+  }
+  portEXIT_CRITICAL(&bleCommandMux);
+  return queued;
+}
+
+void processBleCommand() {
+  uint8_t command[BLE_MAX_MESSAGE_SIZE];
+  size_t length = 0;
+  portENTER_CRITICAL(&bleCommandMux);
+  if (bleCommandPending) {
+    length = bleCommandLength;
+    memcpy(command, bleCommandBuffer, length);
+    bleCommandPending = false;
+    bleCommandLength = 0;
+  }
+  portEXIT_CRITICAL(&bleCommandMux);
+  if (length > 0) {
+    handleCommandPayload(command, length);
+  }
+}
+
+void initBleTransport() {
+  blePreferences.begin("sb_ble", false);
+  blePairingPasskey = blePreferences.getUInt("passkey", 0);
+  if (blePairingPasskey < 100000 || blePairingPasskey > 999999) {
+    blePairingPasskey = static_cast<uint32_t>(random(100000, 1000000));
+    blePreferences.putUInt("passkey", blePairingPasskey);
+  }
+  blePreferences.end();
+
+  BLEDevice::init(BLE_DEVICE_NAME);
+  BLEDevice::setMTU(BLE_PREFERRED_MTU);
+  BLEDevice::setSecurityCallbacks(new RoomBleSecurityCallbacks());
+  BLESecurity* security = new BLESecurity();
+  security->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_BOND);
+  security->setCapability(ESP_IO_CAP_OUT);
+  BLESecurity::setPassKey(true, blePairingPasskey);
+
+  bleServer = BLEDevice::createServer();
+  bleServer->setCallbacks(new RoomBleServerCallbacks());
+  BLEService* service = bleServer->createService(BLE_SERVICE_UUID);
+  bleFrameCharacteristic = service->createCharacteristic(
+      BLE_FRAME_UUID,
+      BLECharacteristic::PROPERTY_READ |
+      BLECharacteristic::PROPERTY_WRITE |
+      BLECharacteristic::PROPERTY_NOTIFY);
+  bleFrameCharacteristic->setAccessPermissions(
+      ESP_GATT_PERM_READ_ENC_MITM | ESP_GATT_PERM_WRITE_ENC_MITM);
+  bleFrameCharacteristic->setCallbacks(new RoomBleFrameCallbacks());
+#if defined(CONFIG_BLUEDROID_ENABLED)
+  bleFrameCharacteristic->addDescriptor(new BLE2902());
+#endif
+  service->start();
+
+  BLEAdvertising* advertising = BLEDevice::getAdvertising();
+  advertising->addServiceUUID(BLE_SERVICE_UUID);
+  advertising->setScanResponse(true);
+  BLEDevice::startAdvertising();
+  Serial.printf("BLE fallback ready: %s, pairing passkey %06lu\n",
+                BLE_DEVICE_NAME, (unsigned long)blePairingPasskey);
+}
+
+char lastAckedCommand[65] = "";
+unsigned long lastAckedAt = 0;
+
+void publishAck(const char* commandId, const char* status, bool appliedFan, uint8_t appliedLight) {
+  strncpy(lastAckedCommand, commandId, sizeof(lastAckedCommand) - 1);
+  lastAckedCommand[sizeof(lastAckedCommand) - 1] = '\0';
+  lastAckedAt = millis();
+  StaticJsonDocument<384> doc;
+  doc["schema"] = "sb.ack/1";
+  doc["msg_id"] = commandId;
+  doc["status"] = status;
+  JsonObject applied = doc.createNestedObject("applied");
+  applied["fan"] = appliedFan ? 255 : 0;
+  applied["relay"] = appliedFan;
+  applied["led"] = appliedLight;
+  applied["rgb"] = rgbState;
+  applied["ac_led"] = acLedState;
+  applied["status_led"] = statusFromEdge;
+  applied["servo"] = 0;
+  doc["rgb_hold_s"] = holdSecondsLeft(rgbHoldUntil);
+  doc["fan_hold_s"] = holdSecondsLeft(fanHoldUntil);
+
+  char payload[384];
+  size_t length = serializeJson(doc, payload, sizeof(payload));
+  // Redundant delivery: over MQTT and, while the gateway is connected, over BLE as well. The edge
+  // matches ACKs by msg_id, so a second copy is harmless; a stalled Wi-Fi link is not.
+  bool sent = false;
+  if (mqtt.connected() && !mqttPaused) {
+    sent = mqtt.publish(ACK_TOPIC, reinterpret_cast<const uint8_t*>(payload), length);
+  }
+  if (bleClientConnected) {
+    sent = sendBleMessage('A', reinterpret_cast<const uint8_t*>(payload), length) || sent;
+  }
+  if (!sent) {
+    Serial.printf("Acknowledgement unavailable: MQTT state=%d, BLE peer=%d\n",
+                  mqtt.state(), bleClientConnected);
+  }
+}
+
+bool parseActuatorState(const char* value, bool currentState, bool& nextState) {
+  if (strcmp(value, "ON") == 0) {
+    nextState = true;
+  } else if (strcmp(value, "OFF") == 0) {
+    nextState = false;
+  } else if (strcmp(value, "TOGGLE") == 0) {
+    nextState = !currentState;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+bool rememberCommand(const char* commandId) {
+  for (size_t i = 0; i < sizeof(commandHistory) / sizeof(commandHistory[0]); i++) {
+    if (strcmp(commandHistory[i], commandId) == 0) {
+      return false;
+    }
+  }
+  strncpy(commandHistory[commandHistoryNext], commandId, sizeof(commandHistory[0]) - 1);
+  commandHistory[commandHistoryNext][sizeof(commandHistory[0]) - 1] = '\0';
+  commandHistoryNext = (commandHistoryNext + 1) %
+                       (sizeof(commandHistory) / sizeof(commandHistory[0]));
+  return true;
+}
+
+void handleCommandPayload(byte* payload, unsigned int length) {
+  StaticJsonDocument<512> doc;
+  DeserializationError err = deserializeJson(doc, payload, length);
+  if (err) {
+    Serial.print("Command JSON error: ");
+    Serial.println(err.c_str());
+    return;
+  }
+
+  if (!doc["msg_id"].is<const char*>()) {
+    Serial.println("Command rejected: msg_id must be a string");
+    return;
+  }
+  const char* commandId = doc["msg_id"].as<const char*>();
+  if (commandId == nullptr || strlen(commandId) == 0 || strlen(commandId) > 64) {
+    Serial.println("Command rejected: missing or invalid msg_id");
+    return;
+  }
+
+  const char* error = nullptr;
+  if (!doc["schema"].is<const char*>() ||
+      strcmp(doc["schema"].as<const char*>(), "sb.command/1") != 0) {
+    error = "unsupported schema";
+  }
+
+  const bool hasFanSpeed = !doc["fan_speed"].isNull();
+  const bool hasFan = !doc["fan"].isNull();
+  const bool hasRelay = !doc["relay"].isNull();
+  const bool hasLightLevel = !doc["light_level"].isNull();
+  const bool hasRgb = !doc["rgb"].isNull();
+  const bool hasAcLed = !doc["ac_led"].isNull();
+  const bool hasStatusLed = !doc["status_led"].isNull();
+  // "hold_s" marks a manual/test command: the actuators it sets are kept for that many seconds and
+  // automatic (Edge Brain) commands do not change them meanwhile. "hold_s": 0 releases a hold.
+  const bool hasHold = !doc["hold_s"].isNull();
+  // "test": "mqtt_pause" disconnects MQTT for "seconds" so the BLE fallback can be commissioned.
+  const bool hasTest = !doc["test"].isNull();
+  bool nextFanState = fanState;
+  uint16_t holdSeconds = 0;
+  uint16_t pauseSeconds = 0;
+
+  if (!error && hasFanSpeed &&
+      (!doc["fan_speed"].is<int>() || doc["fan_speed"].as<int>() < 0 ||
+       doc["fan_speed"].as<int>() > 255)) {
+    error = "fan_speed must be an integer from 0 to 255";
+  }
+  if (!error && hasLightLevel &&
+      (!doc["light_level"].is<int>() || doc["light_level"].as<int>() < 0 ||
+       doc["light_level"].as<int>() > 255)) {
+    error = "light_level must be an integer from 0 to 255";
+  }
+  if (!error && hasHold) {
+    if (!doc["hold_s"].is<int>() || doc["hold_s"].as<int>() < 0 ||
+        doc["hold_s"].as<int>() > MAX_COMMAND_HOLD_S) {
+      error = "hold_s must be an integer from 0 to 600";
+    } else {
+      holdSeconds = static_cast<uint16_t>(doc["hold_s"].as<int>());
+    }
+  }
+  if (!error && hasTest) {
+    if (!doc["test"].is<const char*>() || strcmp(doc["test"].as<const char*>(), "mqtt_pause") != 0) {
+      error = "test must be \"mqtt_pause\"";
+    } else if (!doc["seconds"].is<int>() || doc["seconds"].as<int>() < MIN_MQTT_PAUSE_S ||
+               doc["seconds"].as<int>() > MAX_MQTT_PAUSE_S) {
+      error = "mqtt_pause needs seconds from 10 to 300";
+    } else if (!bleClientConnected) {
+      error = "mqtt_pause refused: no BLE gateway connected";
+    } else {
+      pauseSeconds = static_cast<uint16_t>(doc["seconds"].as<int>());
+    }
+  }
+  if (!error && ((hasFanSpeed && (hasFan || hasRelay)) || (hasFan && hasRelay))) {
+    error = "use only one of fan_speed, fan, or relay";
+  }
+  if (!error && hasRgb && hasLightLevel) {
+    error = "use either rgb or light_level, not both";
+  }
+  if (!error && hasAcLed) {
+    bool r, g, b;
+    if (!doc["ac_led"].is<const char*>() || !acLedColour(doc["ac_led"].as<const char*>(), r, g, b)) {
+      error = "ac_led must be OFF, ECO, LOW, COOL or MAX";
+    }
+  }
+  if (!error && hasStatusLed) {
+    bool r, g, b;
+    const char* st = doc["status_led"].is<const char*>() ? doc["status_led"].as<const char*>() : nullptr;
+    if (st == nullptr || !statusLedColour(st, r, g, b) || strcmp(st, "LOST") == 0 || strcmp(st, "BENCH") == 0) {
+      error = "status_led must be OFF, AI, RULE, MANUAL, WARNING or TEST";
+    }
+  }
+  if (!error && !hasFanSpeed && !hasFan && !hasRelay && !hasLightLevel && !hasRgb && !hasTest &&
+      !hasAcLed && !hasStatusLed) {
+    error = "command has no supported actuator field";
+  }
+  if (!error && hasFanSpeed) {
+    nextFanState = doc["fan_speed"].as<int>() > 0;
+  }
+  if (!error && (hasFan || hasRelay)) {
+    const bool stateIsString = hasFan ? doc["fan"].is<const char*>() :
+                                        doc["relay"].is<const char*>();
+    const char* requestedState = hasFan ? doc["fan"].as<const char*>() :
+                                          doc["relay"].as<const char*>();
+    if (!stateIsString || requestedState == nullptr) {
+      error = "fan/relay command must be a string";
+    } else if (!parseActuatorState(requestedState, fanState, nextFanState)) {
+      error = "fan/relay must be ON, OFF, or TOGGLE";
+    }
+  }
+  if (!error && hasRgb) {
+    if (!doc["rgb"].is<const char*>()) {
+      error = "rgb command must be a string";
+    } else {
+      const char* color = doc["rgb"].as<const char*>();
+      if (strcmp(color, "RED") != 0 && strcmp(color, "GREEN") != 0 &&
+          strcmp(color, "BLUE") != 0 && strcmp(color, "WHITE") != 0 &&
+          strcmp(color, "OFF") != 0) {
+        error = "rgb must be RED, GREEN, BLUE, WHITE, or OFF";
+      }
+    }
+  }
+  if (error) {
+    Serial.printf("Command rejected: %s\n", error);
+    publishAck(commandId, "rejected", fanState, lightLevel);
+    return;
+  }
+  edgeOnline = true;
+  lastCommandReceived = millis();
+  if (!rememberCommand(commandId)) {
+    // The same command arrives twice when the gateway forwards it over BLE as well as MQTT. Re-ACK
+    // only a late repeat (a QoS 1 redelivery whose first ACK may have been lost).
+    if (strcmp(lastAckedCommand, commandId) != 0 || millis() - lastAckedAt > 10000UL) {
+      publishAck(commandId, "applied", fanState, lightLevel);
+    }
+    return;
+  }
+
+  // A serial bench session has priority: the operator is at the board.
+  const bool bench = benchActive();
+  const bool manual = hasHold;
+  const unsigned long holdUntil = holdSeconds > 0 ? millis() + holdSeconds * 1000UL : 0;
+  bool fanSkipped = false;
+  bool ledSkipped = false;
+
+  if (hasFanSpeed || hasFan || hasRelay) {
+    if (bench || (!manual && holdActive(fanHoldUntil))) {
+      fanSkipped = true;
+    } else {
+      setFan(nextFanState);
+      if (manual) {
+        fanHoldUntil = holdUntil;
+      }
+    }
+  }
+  if (hasRgb || hasLightLevel) {
+    if (bench || (!manual && holdActive(rgbHoldUntil))) {
+      ledSkipped = true;
+    } else {
+      if (hasRgb) {
+        const char* color = doc["rgb"].as<const char*>();
+        if (strcmp(color, "RED") == 0) {
+          setRGB(255, 0, 0);
+        } else if (strcmp(color, "GREEN") == 0) {
+          setRGB(0, 255, 0);
+        } else if (strcmp(color, "BLUE") == 0) {
+          setRGB(0, 0, 255);
+        } else if (strcmp(color, "WHITE") == 0) {
+          setRGB(255, 255, 255);
+        } else {
+          setRGB(0, 0, 0);
+        }
+      } else {
+        const uint8_t ledLevel = static_cast<uint8_t>(doc["light_level"].as<int>());
+        setRGB(ledLevel, ledLevel, ledLevel);
+        lightLevel = ledLevel;
+      }
+      if (manual) {
+        rgbHoldUntil = holdUntil;
+      }
+    }
+  }
+
+  // indicators show the edge's view; holds and bench sessions do not apply to them
+  if (hasAcLed) {
+    setAcLed(doc["ac_led"].as<const char*>());
+  }
+  if (hasStatusLed) {
+    strncpy(statusFromEdge, doc["status_led"].as<const char*>(), sizeof(statusFromEdge) - 1);
+    statusFromEdge[sizeof(statusFromEdge) - 1] = '\0';
+  }
+
+  publishAck(commandId, "applied", fanState, lightLevel);
+
+  if (pauseSeconds > 0) {
+    mqttPausedUntil = millis() + pauseSeconds * 1000UL;
+    Serial.printf("MQTT paused for %u s by test command; BLE carries telemetry and commands\n",
+                  (unsigned)pauseSeconds);
+  }
+  Serial.printf("Command applied: fan=%s, rgb=%s, light=%u, ac=%s, status=%s%s%s%s\n",
+                fanState ? "ON" : "OFF", rgbState, (unsigned)lightLevel, acLedState, statusFromEdge,
+                manual ? " (manual hold)" : "", fanSkipped ? " [fan held]" : "",
+                ledSkipped ? " [LED held]" : "");
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  lastMqttRx = millis();
+  if (strcmp(topic, EDGE_STATUS_TOPIC) == 0) {
+    StaticJsonDocument<128> doc;
+    DeserializationError err = deserializeJson(doc, payload, length);
+    if (!err && doc["state"] == "online") {
+      edgeOnline = true;
+      lastCommandReceived = millis();
+    } else if (!err && doc["state"] == "offline") {
+      edgeOnline = false;
+      if (!benchActive()) {
+        setFan(false);
+        setRGB(0, 0, 0);
+        rgbHoldUntil = 0;
+        fanHoldUntil = 0;
+      }
+      Serial.println("MQTT edge reports offline: fail-safe actuators OFF");
+    }
+    return;
+  }
+
+  if (strcmp(topic, COMMAND_TOPIC) == 0) {
+    handleCommandPayload(payload, length);
+  }
+}
+
+void connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    setOnboardStatus(true);
+    return;
+  }
+  setOnboardStatus(false);
+
+  if (strlen(WIFI_SSID) == 0) {
+    Serial.println("Wi-Fi configuration missing in secrets.h");
+    return;
+  }
+
+  if (wifiBeginStarted) {
+    if (millis() - lastWifiAttempt < 15000) {
+      return; // Give 15 seconds for association, WPA3 handshake, and DHCP
+    }
+    Serial.println("Wi-Fi connection attempt timed out, retrying...");
+    WiFi.disconnect(false, false, 1000);
+    wifiBeginStarted = false;
+  }
+
+  lastWifiAttempt = millis();
+  wifiBeginStarted = true;
+
+  Serial.printf("Connecting to Wi-Fi SSID \"%s\" (password len: %d)...\n",
+                WIFI_SSID, (int)strlen(WIFI_PASSWORD));
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(false);
+  WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
+  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+  // Wi-Fi and BLE share the ESP32-S3's single 2.4 GHz radio. ESP-IDF coexistence needs Wi-Fi modem
+  // sleep; with sleep disabled, Wi-Fi was starved whenever BLE was busy (MQTT connect failures and
+  // broker keepalive timeouts in the 23 Nov 2026 run).
+  WiFi.setSleep(true);
+  esp_coex_preference_set(ESP_COEX_PREFER_WIFI);   // BLE is the fallback link; Wi-Fi gets the radio first
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+}
+
+bool mqttConnected() {
+  return mqtt.connected();
+}
+
+void serviceMqttPause() {
+  if (mqttPausedUntil == 0) {
+    return;
+  }
+  if (holdActive(mqttPausedUntil)) {
+    if (!mqttPaused) {
+      mqttPaused = true;
+      if (mqtt.connected()) {
+        // Tell the BLE gateway (retained) that the board left MQTT, then leave cleanly.
+        mqtt.publish(STATUS_TOPIC, "{\"state\":\"offline\",\"reason\":\"test_mqtt_pause\"}", true);
+        mqtt.loop();
+        delay(50);
+        mqtt.disconnect();
+      }
+    }
+    return;
+  }
+  mqttPausedUntil = 0;
+  mqttPaused = false;
+  lastMqttAttempt = 0;   // reconnect right away
+  Serial.println("MQTT pause ended; reconnecting");
+}
+
+// Retained board status: state online/offline (offline is the MQTT last will) plus a detail:
+// booting (first 60 s), running, or error with the sensors that are not responding.
+void publishStatusDetail(bool force) {
+  if (!mqtt.connected() || mqttPaused) {
+    return;
+  }
+  char failed[32];
+  snprintf(failed, sizeof(failed), "%s%s%s", latest.bmeOk ? "" : "bme280,", latest.luxOk ? "" : "bh1750,",
+           latest.inaOk ? "" : "ina219,");
+  const size_t failedLen = strlen(failed);
+  if (failedLen > 0) failed[failedLen - 1] = '\0';   // drop the trailing comma
+  const char* detail = millis() < 60000UL ? "booting" : (failed[0] ? "error" : "running");
+  char key[48];
+  snprintf(key, sizeof(key), "%s|%s", detail, failed);
+  if (!force && strcmp(key, lastStatusDetail) == 0) {
+    return;
+  }
+  snprintf(lastStatusDetail, sizeof(lastStatusDetail), "%s", key);
+  StaticJsonDocument<192> doc;
+  doc["state"] = "online";
+  doc["detail"] = detail;
+  if (failed[0]) {
+    doc["failed"] = failed;
+  }
+  doc["fw_version"] = FW_VERSION;
+  char out[192];
+  size_t n = serializeJson(doc, out, sizeof(out));
+  mqtt.publish(STATUS_TOPIC, reinterpret_cast<const uint8_t*>(out), n, true);
+}
+
+void connectMqtt() {
+  if (WiFi.status() != WL_CONNECTED || mqtt.connected() || mqttPaused) {
+    return;
+  }
+  if (strlen(MQTT_BROKER_IP) == 0) {
+    return;
+  }
+  const unsigned long retryMs = bleClientConnected ? MQTT_RETRY_WITH_BLE_MS : MQTT_RETRY_MS;
+  if (lastMqttAttempt != 0 && millis() - lastMqttAttempt < retryMs) {
+    return;
+  }
+  lastMqttAttempt = millis();
+
+  String clientId = "room101-esp32-";
+  clientId += String((uint32_t)ESP.getEfuseMac(), HEX);
+
+  bool connected;
+  if (strlen(MQTT_USERNAME) > 0) {
+    connected = mqtt.connect(clientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD,
+                             STATUS_TOPIC, 1, true, "{\"state\":\"offline\"}");
+  } else {
+    connected = mqtt.connect(clientId.c_str(), STATUS_TOPIC, 1, true,
+                             "{\"state\":\"offline\"}");
+  }
+
+  if (connected) {
+    lastStatusDetail[0] = '\0';
+    publishStatusDetail(true);
+    mqtt.subscribe(COMMAND_TOPIC, 1);
+    mqtt.subscribe(EDGE_STATUS_TOPIC, 1);
+    edgeOnline = true;
+    lastCommandReceived = millis();
+    lastMqttRx = millis();
+    Serial.printf("MQTT connected to %s:%d\n", MQTT_BROKER_IP, MQTT_PORT);
+  } else {
+    Serial.printf("MQTT connection failed, state=%d\n", mqtt.state());
+  }
+}
+
+void scanI2C() {
+  int found = 0;
+  Serial.println("Scanning I2C bus...");
+  for (byte address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    if (Wire.endTransmission() == 0) {
+      Serial.printf("I2C device at 0x%02X\n", address);
+      found++;
+    }
+  }
+  Serial.printf("I2C devices found: %d\n", found);
+}
+
+void initActuators() {
+  pinMode(PIN_RELAY, OUTPUT);
+  setFan(false);
+  setOnboardStatus(false);
+
+  attachRgbPwm();
+  setRGB(0, 0, 0);
+  const uint8_t indicatorPins[] = {PIN_AC_R, PIN_AC_G, PIN_AC_B, PIN_ST_R, PIN_ST_G, PIN_ST_B};
+  for (uint8_t pinNo : indicatorPins) {
+    pinMode(pinNo, OUTPUT);
+  }
+  setAcLed("OFF");
+  writeIndicator(PIN_ST_R, PIN_ST_G, PIN_ST_B, false, false, false);
+
+  pinMode(PIN_PIR, INPUT);
+  pinMode(PIN_MQ135_DO, INPUT);
+  analogReadResolution(12);
+  analogSetPinAttenuation(PIN_MQ135_AO, ADC_11db);
+}
+
+bool probeBme() {
+  if (bme.begin(0x76, &Wire) || bme.begin(0x77, &Wire)) {
+    return true;
+  }
+  return false;
+}
+
+bool probeBh1750() {
+  return lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23, &Wire) ||
+         lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x5C, &Wire);
+}
+
+void initSensors() {
+  Wire.begin(PIN_SDA, PIN_SCL);
+  Wire.setClock(100000);
+  delay(200);
+  scanI2C();
+
+  bmeAvailable = probeBme();
+  Serial.println(bmeAvailable ? "BME280: connected" : "BME280: NOT FOUND");
+  bh1750Available = probeBh1750();
+  Serial.println(bh1750Available ? "BH1750: connected" : "BH1750: NOT FOUND");
+  ina219Available = ina219.begin(&Wire);
+  Serial.println(ina219Available ? "INA219: connected" : "INA219: NOT FOUND");
+  oledAvailable = probeOled();
+  Serial.println(oledAvailable ? "OLED: connected (energy display)" : "OLED: NOT FOUND");
+  lastSensorRetry = millis();
+}
+
+// A sensor that did not answer at power-up (slow supply, loose jumper) is probed again every
+// 30 s instead of staying unavailable until the next reboot.
+bool probeOled() {
+  Wire.beginTransmission(OLED_ADDRESS);
+  if (Wire.endTransmission() != 0) {
+    return false;
+  }
+  if (!oled.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+    return false;
+  }
+  oled.clearDisplay();
+  oled.setTextColor(SSD1306_WHITE);
+  oled.display();
+  return true;
+}
+
+void integrateEnergy(const Readings& r) {
+  const unsigned long now = millis();
+  if (r.inaOk && !isnan(r.powerMW) && lastEnergySample != 0) {
+    const double watts = r.powerMW > 0 ? r.powerMW / 1000.0 : 0.0;
+    energyWh += watts * (now - lastEnergySample) / 3600000.0;
+  }
+  lastEnergySample = now;
+}
+
+// Energy meter page: power big, then volts and milliamps, energy since boot, and fan / mode / temperature.
+void drawOled() {
+  if (!oledAvailable || millis() - lastOledDraw < OLED_REFRESH_MS) {
+    return;
+  }
+  lastOledDraw = millis();
+  const Readings& r = latest;
+  char buf[32];
+  oled.clearDisplay();
+  oled.setTextSize(1);
+  oled.setCursor(0, 0);
+  oled.print("ROOM 101 ENERGY");
+  const char* link = (mqtt.connected() && !mqttPaused) ? "WiFi" : (bleClientConnected ? " BLE" : "  --");
+  oled.setCursor(104, 0);
+  oled.print(link);
+  oled.drawFastHLine(0, 10, 128, SSD1306_WHITE);
+  if (r.inaOk) {
+    const float watts = r.powerMW > 0 ? r.powerMW / 1000.0f : 0.0f;
+    snprintf(buf, sizeof(buf), watts < 10 ? "%.2f" : "%.1f", watts);
+  } else {
+    snprintf(buf, sizeof(buf), "--");
+  }
+  oled.setTextSize(3);
+  oled.setCursor(0, 15);
+  oled.print(buf);
+  oled.setTextSize(2);
+  oled.print(" W");
+  oled.setTextSize(1);
+  oled.setCursor(0, 41);
+  if (r.inaOk) {
+    snprintf(buf, sizeof(buf), "%.1f V   %d mA", r.busVoltage, (int)lroundf(r.currentMA > 0 ? r.currentMA : 0));
+  } else {
+    snprintf(buf, sizeof(buf), "INA219 not found");
+  }
+  oled.print(buf);
+  oled.setCursor(0, 49);
+  snprintf(buf, sizeof(buf), energyWh < 100 ? "Energy %.2f Wh" : "Energy %.0f Wh", energyWh);
+  oled.print(buf);
+  oled.setCursor(0, 57);
+  const char* mode = statusShown;
+  if (strcmp(mode, "RULE") == 0) mode = "SCHED";
+  if (strcmp(mode, "WARNING") == 0) mode = "WARN";
+  if (r.bmeOk) {
+    snprintf(buf, sizeof(buf), "FAN %s %s %.1fC", fanState ? "ON " : "OFF", mode, r.temperature);
+  } else {
+    snprintf(buf, sizeof(buf), "FAN %s %s", fanState ? "ON " : "OFF", mode);
+  }
+  oled.print(buf);
+  oled.display();
+}
+
+void retryMissingSensors() {
+  if (bmeAvailable && bh1750Available && ina219Available && oledAvailable) {
+    return;
+  }
+  if (millis() - lastSensorRetry < SENSOR_RETRY_MS) {
+    return;
+  }
+  lastSensorRetry = millis();
+  if (!bmeAvailable && probeBme()) {
+    bmeAvailable = true;
+    Serial.println("BME280: connected (retry)");
+  }
+  if (!bh1750Available && probeBh1750()) {
+    bh1750Available = true;
+    Serial.println("BH1750: connected (retry)");
+  }
+  if (!ina219Available && ina219.begin(&Wire)) {
+    ina219Available = true;
+    Serial.println("INA219: connected (retry)");
+  }
+  if (!oledAvailable && probeOled()) {
+    oledAvailable = true;
+    Serial.println("OLED: connected (retry)");
+  }
+}
+
+float median3(float a, float b, float c) {
+  if (isnan(a) || isnan(b) || isnan(c)) {
+    return NAN;
+  }
+  return max(min(a, b), min(max(a, b), c));
+}
+
+// Three BME280 reads 40 ms apart, median per channel, then a physical range check. A corrupted
+// I2C transfer shows up as one outlier and is discarded instead of being published.
+bool readBme(float& temperature, float& humidity, float& pressure) {
+  float t[3], h[3], p[3];
+  for (int i = 0; i < 3; i++) {
+    t[i] = bme.readTemperature();
+    h[i] = bme.readHumidity();
+    p[i] = bme.readPressure() / 100.0F;
+    if (i < 2) {
+      delay(40);
+    }
+  }
+  temperature = median3(t[0], t[1], t[2]);
+  humidity = median3(h[0], h[1], h[2]);
+  pressure = median3(p[0], p[1], p[2]);
+  const bool valid = !isnan(temperature) && !isnan(humidity) && !isnan(pressure) &&
+                     temperature > -40.0F && temperature < 85.0F &&
+                     humidity >= 0.0F && humidity <= 100.0F &&
+                     pressure > 800.0F && pressure < 1100.0F;
+  if (!valid) {
+    bmeRejected++;
+    Serial.printf("BME280 reading rejected (T=%.2f H=%.2f P=%.2f); total rejected %lu\n",
+                  temperature, humidity, pressure, (unsigned long)bmeRejected);
+    if (bmeRejected % 3 == 0) {
+      bmeAvailable = probeBme();   // re-initialise after repeated bad reads
+    }
+  }
+  return valid;
+}
+
+void readSensors(Readings& r) {
+  r = Readings();
+  if (bmeAvailable) {
+    r.bmeOk = readBme(r.temperature, r.humidity, r.pressure);
+  }
+  if (bh1750Available) {
+    const float lux = lightMeter.readLightLevel();
+    r.luxOk = lux >= 0;
+    r.lux = r.luxOk ? lux : NAN;
+  }
+  r.mqRaw = analogRead(PIN_MQ135_AO);
+  r.mqMilliVolts = analogReadMilliVolts(PIN_MQ135_AO);
+  r.mqDigitalHigh = digitalRead(PIN_MQ135_DO) == HIGH;
+  r.motion = digitalRead(PIN_PIR) == HIGH;
+  if (ina219Available) {
+    r.busVoltage = ina219.getBusVoltage_V();
+    r.shuntMilliVolts = ina219.getShuntVoltage_mV();
+    r.currentMA = ina219.getCurrent_mA();
+    r.powerMW = ina219.getPower_mW();
+    r.inaOk = !isnan(r.busVoltage) && !isnan(r.currentMA);
+  }
+}
+
+void printSensorReadings(const Readings& r) {
+  Serial.printf("T=%.2f C  H=%.2f %%  P=%.2f hPa  Lux=%.2f  MQ=%d (%dmV)  PIR=%s\n",
+                r.bmeOk ? r.temperature : 0.0, r.bmeOk ? r.humidity : 0.0,
+                r.bmeOk ? r.pressure : 0.0, r.luxOk ? r.lux : 0.0,
+                r.mqRaw, r.mqMilliVolts, r.motion ? "DETECTED" : "CLEAR");
+  if (r.inaOk) {
+    Serial.printf("INA219: bus %.3f V, shunt %.3f mV, %.2f mA, %.2f mW\n",
+                  r.busVoltage, r.shuntMilliVolts, r.currentMA, r.powerMW);
+  }
+}
+
+// `stamp` (millis() when the reading is published) makes msg_id identical on both links, so the
+// edge keeps exactly one copy of each reading.
+size_t buildTelemetry(const Readings& r, const char* transport, unsigned long stamp, char* payload,
+                      size_t capacity) {
+  StaticJsonDocument<1280> doc;
+  doc["schema"] = "sb.telemetry/1";
+  doc["room_id"] = ROOM_ID;
+  char msgId[24];
+  snprintf(msgId, sizeof(msgId), "%08lX%04lX", stamp, (unsigned long)telemetrySequence);
+  doc["msg_id"] = msgId;
+  doc["source"] = "esp32_room101";
+  doc["device_id"] = "room101-esp32";
+  doc["firmware"] = "esp32_smart_building";
+  doc["fw_version"] = FW_VERSION;
+  doc["transport"] = transport;
+  doc["ts"] = stamp;
+  doc["uptime_s"] = stamp / 1000UL;
+
+  if (r.bmeOk) {
+    doc["temperature"] = r.temperature;
+    doc["humidity"] = r.humidity;
+    doc["pressure_hpa"] = r.pressure;
+  }
+  if (r.luxOk) {
+    doc["lux"] = r.lux;
+  }
+  doc["motion_detected"] = r.motion;
+  doc["presence"] = r.motion;
+  doc["presence_source"] = "pir";
+  doc["mq135_raw"] = r.mqRaw;
+  doc["mq135_adc_mv"] = r.mqMilliVolts;
+  doc["mq135_do_high"] = r.mqDigitalHigh;
+  doc["fan_on"] = fanState;
+  doc["relay_on"] = fanState;
+  doc["actuator_rgb"] = rgbState;
+  doc["actuator_ac_led"] = acLedState;
+  doc["actuator_status_led"] = statusShown;
+  if (WiFi.status() == WL_CONNECTED) {
+    doc["wifi_rssi_dbm"] = WiFi.RSSI();
+  }
+  if (r.inaOk) {
+    doc["measured_voltage_v"] = r.busVoltage;
+    doc["ina219_shunt_voltage_mV"] = r.shuntMilliVolts;
+    doc["measured_current_mA"] = r.currentMA;
+    doc["measured_power_mW"] = r.powerMW;
+  }
+  doc["actuator_fan_speed"] = fanState ? 255 : 0;
+  doc["actuator_light_level"] = lightLevel;
+  doc["actuator_servo_angle"] = 0;
+  doc["rgb_hold_s"] = holdSecondsLeft(rgbHoldUntil);
+  doc["fan_hold_s"] = holdSecondsLeft(fanHoldUntil);
+  doc["bench_mode"] = benchActive();
+  doc["ble_mtu"] = blePeerMtu;
+
+  JsonObject health = doc.createNestedObject("sensor_health");
+  health["bme280"] = r.bmeOk;
+  health["bh1750"] = r.luxOk;
+  health["mq135"] = true;
+  health["pir"] = true;
+  health["ina219"] = r.inaOk;
+  health["relay"] = true;
+  health["rgb"] = true;
+
+  return serializeJson(doc, payload, capacity);
+}
+
+void publishTelemetry(const Readings& r) {
+  telemetrySequence++;
+  char payload[1024];
+  const bool mqttUp = mqtt.connected() && !mqttPaused;
+  const unsigned long stamp = millis();
+  size_t length = buildTelemetry(r, mqttUp ? "mqtt" : "ble", stamp, payload, sizeof(payload));
+  if (length == 0 || length >= sizeof(payload)) {
+    Serial.println("Telemetry too large for the buffer; not sent");
+    return;
+  }
+  // Redundant delivery (same msg_id on both links; the edge keeps the first copy). On the factory
+  // guest Wi-Fi the TCP link can stall for tens of seconds while still counting as connected.
+  bool sentMqtt = false;
+  bool sentBle = false;
+  if (mqttUp) {
+    sentMqtt = mqtt.publish(TELEMETRY_TOPIC, reinterpret_cast<const uint8_t*>(payload), length);
+  }
+  if (bleClientConnected) {
+    if (mqttUp) {
+      length = buildTelemetry(r, "ble", stamp, payload, sizeof(payload));
+    }
+    sentBle = sendBleMessage('T', reinterpret_cast<const uint8_t*>(payload), length);
+  }
+  const bool sent = sentMqtt || sentBle;
+  const char* transport = sentMqtt && sentBle ? "MQTT+BLE" : (sentMqtt ? "MQTT" : "BLE");
+  if (sent) {
+    Serial.printf("Telemetry sent via %s: %u bytes\n", transport, (unsigned)length);
+  } else {
+    Serial.printf("Telemetry unavailable: %u bytes, MQTT state=%d, BLE peer=%d, BLE drops=%lu\n",
+                  (unsigned)length, mqtt.state(), bleClientConnected, (unsigned long)bleNotifyDrops);
+  }
+}
+
+void printHelp() {
+  Serial.println("Bench commands (hold 2 min, fail-safe paused while the operator is at the board):");
+  Serial.println("  1 / 0      relay+fan ON / OFF");
+  Serial.println("  R G B W K  RGB red / green / blue / white / off (PWM)");
+  Serial.println("  D          RGB channel diagnostic: each colour pin plain HIGH for 4 s");
+  Serial.println("  S          read sensors      I  scan I2C      X  end bench session now");
+  Serial.println("  H          this help");
+}
+
+void startBench(const char* what) {
+  benchUntil = millis() + BENCH_HOLD_MS;
+  Serial.printf("%s (bench session until +120 s; X ends it)\n", what);
+}
+
+void handleSerialCommands() {
+  while (Serial.available()) {
+    const char command = Serial.read();
+    switch (command) {
+      case '1': setFan(true); startBench("Fan relay ON"); break;
+      case '0': setFan(false); startBench("Fan relay OFF"); break;
+      case 'R': case 'r': setRGB(255, 0, 0); startBench("RGB RED"); break;
+      case 'G': case 'g': setRGB(0, 255, 0); startBench("RGB GREEN"); break;
+      case 'B': case 'b': setRGB(0, 0, 255); startBench("RGB BLUE"); break;
+      case 'W': case 'w': setRGB(255, 255, 255); startBench("RGB WHITE"); break;
+      case 'K': case 'k': setRGB(0, 0, 0); startBench("RGB OFF"); break;
+      case 'D': case 'd': startBench("RGB channel diagnostic"); rgbChannelDiagnostic(); break;
+      case 'S': case 's': { Readings r; readSensors(r); printSensorReadings(r); break; }
+      case 'I': case 'i': scanI2C(); break;
+      case 'X': case 'x':
+        benchUntil = 0;
+        setFan(false);
+        setRGB(0, 0, 0);
+        Serial.println("Bench session ended; relay and LED OFF");
+        break;
+      case 'H': case 'h': case '?': printHelp(); break;
+      default: break;
+    }
+  }
+}
+
+void setup(void);
+void loop(void);
+
+void setup(void) {
   Serial.begin(115200);
   delay(1000);
+  Serial.println("\n==========================================");
+  Serial.println("  SMART BUILDING ROOM 101 ESP32-S3");
+  Serial.println("  firmware " FW_VERSION);
+  Serial.println("==========================================");
 
-  Serial.println("\n=======================================================");
-  Serial.println("  ESP32-S3 SENSOR NODE v2.0 — ROOM 101");
-  Serial.println("  Research-Grade Hardware-in-the-Loop Prototype");
-  Serial.println("  Intelligence: Raspberry Pi 4B Edge Brain");
-  Serial.println("=======================================================");
+  initActuators();
+  initSensors();
+  initBleTransport();
 
-  // ---------------------------------------------------------------
-  // 1. Initialize basic digital/analog sensor inputs
-  // ---------------------------------------------------------------
-  pinMode(MQ2_PIN, INPUT);
-  pinMode(PIR_PIN, INPUT);
+  wifiClient.setConnectionTimeout(MQTT_CONNECT_TIMEOUT_MS);
+  mqtt.setServer(MQTT_BROKER_IP, MQTT_PORT);
+  mqtt.setSocketTimeout(3);
+  if (!mqtt.setBufferSize(1280)) {
+    Serial.println("Failed to allocate MQTT packet buffer");
+  }
+  mqtt.setCallback(mqttCallback);
+  mqtt.setKeepAlive(MQTT_KEEPALIVE_S);
 
-  // ---------------------------------------------------------------
-  // 2. Initialize PWM actuator outputs
-  // ---------------------------------------------------------------
-  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-    // ESP32 Arduino Core v3.x — new ledcAttach() API
-    ledcAttach(FAN_PWM_PIN, FAN_PWM_FREQ, FAN_PWM_RES);
-    ledcAttach(WHITE_LED_PIN, LED_PWM_FREQ, LED_PWM_RES);
-  #else
-    // ESP32 Arduino Core v2.x — classic ledcSetup() API
-    ledcSetup(FAN_LEDC_CH, FAN_PWM_FREQ, FAN_PWM_RES);
-    ledcAttachPin(FAN_PWM_PIN, FAN_LEDC_CH);
-    ledcSetup(LED_LEDC_CH, LED_PWM_FREQ, LED_PWM_RES);
-    ledcAttachPin(WHITE_LED_PIN, LED_LEDC_CH);
-  #endif
-
-  // Set initial actuator states: OFF
-  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-    ledcWrite(FAN_PWM_PIN, 0);
-    ledcWrite(WHITE_LED_PIN, 0);
-  #else
-    ledcWrite(FAN_LEDC_CH, 0);
-    ledcWrite(LED_LEDC_CH, 0);
-  #endif
-
-  // ---------------------------------------------------------------
-  // 3. Initialize RGB Status LED (digital output)
-  // ---------------------------------------------------------------
-  pinMode(RGB_RED_PIN, OUTPUT);
-  pinMode(RGB_GREEN_PIN, OUTPUT);
-  pinMode(RGB_BLUE_PIN, OUTPUT);
-  set_status_led(0, 0, 0);  // OFF initially
-
-  // Onboard connection status LED
-  pinMode(ONBOARD_LED_PIN, OUTPUT);
-  digitalWrite(ONBOARD_LED_PIN, LOW);
-
-  // ---------------------------------------------------------------
-  // 4. Initialize Servo (SG90 ventilation actuator)
-  // ---------------------------------------------------------------
-  #if HAS_SERVO_LIB && ENABLE_SERVO
-    ventServo.attach(SERVO_PIN, 500, 2400);  // SG90 typical pulse range
-    ventServo.write(0);  // Closed position
-    servo_attached = true;
-    Serial.println("  + SG90 Servo attached on GPIO 13 (ventilation damper)");
-  #else
-    Serial.println("  i Servo library not available — ventilation actuator disabled");
-  #endif
-
-  // ---------------------------------------------------------------
-  // 5. Shared I2C Bus Initialization
-  // ---------------------------------------------------------------
-  Serial.printf("\nInitializing I2C Bus (SDA: GPIO %d, SCL: GPIO %d)...\n", I2C_SDA_PIN, I2C_SCL_PIN);
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-  Wire.setClock(100000);  // 100 kHz for sensor compatibility
-
-  // --- BME280 ---
-  #if ENABLE_BME280
-    if (bme.begin(0x76, &Wire) || bme.begin(0x77, &Wire)) {
-      bme_found = true;
-      Serial.println("  + BME280 (Temp/Humidity/Pressure) ACTIVE");
-    } else {
-      Serial.println("  i BME280 not found — temperature/humidity/pressure will not be sent");
+  // Register Wi-Fi diagnostic event callbacks
+  WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+    switch (event) {
+      case ARDUINO_EVENT_WIFI_READY:
+        Serial.println("[WiFi] Interface ready");
+        break;
+      case ARDUINO_EVENT_WIFI_STA_START:
+        Serial.println("[WiFi] Station mode started");
+        break;
+      case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+        Serial.println("[WiFi] Connected to AP! Negotiating IP address...");
+        break;
+      case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+        wifiBeginStarted = false;
+        Serial.printf("[WiFi] SUCCESS! Got IP: %s (RSSI: %d dBm)\n",
+                      WiFi.localIP().toString().c_str(), WiFi.RSSI());
+        setOnboardStatus(true);
+        break;
+      case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+        Serial.printf("[WiFi] Disconnected! Reason code: %d\n", info.wifi_sta_disconnected.reason);
+        setOnboardStatus(false);
+        break;
+      default:
+        break;
     }
-  #endif
+  });
 
-  // --- BH1750 ---
-  #if ENABLE_BH1750
-    if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23, &Wire) ||
-        lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x5C, &Wire)) {
-      bh1750_found = true;
-      Serial.println("  + BH1750 (Illuminance) ACTIVE");
-    } else {
-      Serial.println("  i BH1750 not found — light level will not be sent");
-    }
-  #endif
+  connectWiFi();
 
-  // --- SCD41 CO2 Sensor ---
-  #if HAS_SCD41_LIB && ENABLE_SCD41
-    init_scd41();
-  #else
-    Serial.println("  i SCD41 library not available — CO2 from MQ-2 estimate only");
-  #endif
-
-  // --- INA226 Power Monitor ---
-  #if HAS_INA226_LIB && ENABLE_INA226
-    init_ina226();
-  #else
-    Serial.println("  i INA226 library not available — power measurement disabled");
-  #endif
-
-  // ---------------------------------------------------------------
-  // 6. LD2410C mmWave (UART — Serial1)
-  // ---------------------------------------------------------------
-  #if HAS_LD2410_LIB && ENABLE_LD2410C
-    init_ld2410();
-  #else
-    Serial.println("  i LD2410 library not available — presence via PIR only");
-  #endif
-
-  // ---------------------------------------------------------------
-  // 7. Wi-Fi Connection
-  // ---------------------------------------------------------------
-  WiFi.setAutoReconnect(true);
-  setup_wifi();
-
-  // ---------------------------------------------------------------
-  // 8. HTTP Client Configuration
-  // ---------------------------------------------------------------
-  http.setReuse(true);
-  http.setTimeout(8000);
-
-  // Print sensor summary
-  Serial.println("\n--- SENSOR STATUS SUMMARY ---");
-  Serial.printf("  BME280:  %s\n", bme_found ? "ACTIVE" : "NOT FOUND");
-  Serial.printf("  BH1750:  %s\n", bh1750_found ? "ACTIVE" : "NOT FOUND");
-  Serial.printf("  SCD41:   %s\n", scd41_found ? "ACTIVE" : "NOT FOUND");
-  Serial.printf("  INA226:  %s\n", ina226_found ? "ACTIVE" : "NOT FOUND");
-  Serial.printf("  LD2410C: %s\n", ld2410_found ? "ACTIVE" : "NOT FOUND");
-  Serial.printf("  PIR:     ENABLED\n");
-  Serial.printf("  MQ-2:    ENABLED\n");
-  Serial.printf("  Servo:   %s\n", servo_attached ? "ATTACHED" : "NOT AVAILABLE");
-  Serial.println("-----------------------------\n");
+  Serial.println("MQTT telemetry: " TELEMETRY_TOPIC);
+  Serial.println("MQTT command:   " COMMAND_TOPIC);
+  Serial.println("BLE fallback: paired GATT service, forwards telemetry and commands");
+  printHelp();
 }
 
-// =============================================================================
-// MAIN LOOP
-// =============================================================================
-void loop() {
-  // Wi-Fi reconnection
+void loop(void) {
+  static bool previousBleConnected = false;
+  if (bleClientConnected != previousBleConnected) {
+    previousBleConnected = bleClientConnected;
+    if (bleClientConnected) {
+      edgeOnline = true;
+      lastCommandReceived = millis();
+      Serial.println("BLE gateway connected");
+    } else if (!mqtt.connected()) {
+      edgeOnline = false;
+      Serial.println("BLE gateway disconnected");
+    }
+  }
+
+  serviceMqttPause();
   if (WiFi.status() != WL_CONNECTED) {
-    digitalWrite(ONBOARD_LED_PIN, LOW);
-    set_status_led(255, 0, 0);  // RED = disconnected
-    setup_wifi();
+    connectWiFi();
   } else {
-    digitalWrite(ONBOARD_LED_PIN, HIGH);
-  }
-
-  // Read LD2410C radar continuously (it needs frequent polling)
-  #if HAS_LD2410_LIB && ENABLE_LD2410C
-    if (ld2410_found) {
-      read_ld2410();
+    static bool firstConnect = true;
+    if (firstConnect) {
+      firstConnect = false;
+      Serial.printf("Wi-Fi CONNECTED! IP: %s, RSSI: %d dBm\n",
+                    WiFi.localIP().toString().c_str(), WiFi.RSSI());
     }
-  #endif
-
-  // Periodic telemetry cycle
-  unsigned long now = millis();
-  if (now - last_send_time >= send_interval_ms) {
-    last_send_time = now;
-
-    // Read SCD41 if measurement ready (it self-times at ~5s intervals)
-    #if HAS_SCD41_LIB && ENABLE_SCD41
-      if (scd41_found) {
-        read_scd41();
+    if (!mqtt.connected()) {
+      if (!bleClientConnected) {
+        edgeOnline = false;
       }
-    #endif
-
-    // Read INA226 power
-    #if HAS_INA226_LIB && ENABLE_INA226
-      if (ina226_found) {
-        read_ina226();
-      }
-    #endif
-
-    send_telemetry();
-  }
-}
-
-// =============================================================================
-// WIFI CONNECTION ROUTINE
-// =============================================================================
-void setup_wifi() {
-  if (WiFi.status() == WL_CONNECTED) return;
-
-  Serial.printf("Connecting to Wi-Fi SSID: %s ", ssid);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-
-  int retries = 0;
-  while (WiFi.status() != WL_CONNECTED && retries < 20) {
-    delay(500);
-    Serial.print(".");
-    retries++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n+ Wi-Fi Connected Successfully!");
-    Serial.print("ESP32-S3 IP Address: ");
-    Serial.println(WiFi.localIP());
-  } else {
-    Serial.println("\nx Wi-Fi Connection Timeout! Retrying in loop...");
-  }
-}
-
-// =============================================================================
-// SENSOR INITIALIZATION FUNCTIONS
-// =============================================================================
-
-void init_scd41() {
-  #if HAS_SCD41_LIB
-    #if SCD4X_LIB_V1
-      scd41.begin(Wire, 0x62);
-    #else
-      scd41.begin(Wire);
-    #endif
-    
-    // Stop any previous measurement before reconfiguring
-    int16_t error = scd41.stopPeriodicMeasurement();
-    delay(500);
-    
-    // Start periodic measurement (one measurement every ~5 seconds)
-    error = scd41.startPeriodicMeasurement();
-    if (error == 0) {
-      scd41_found = true;
-      Serial.println("  + SCD41 CO2/Temp/Humidity sensor ACTIVE (NDIR, I2C 0x62)");
+      connectMqtt();
     } else {
-      Serial.printf("  x SCD41 start error: %d\n", error);
-    }
-  #endif
-}
-
-void init_ina226() {
-  #if HAS_INA226_LIB
-    #if INA226_TILLAART
-    if (ina226.begin()) {
-      ina226.setAverage(INA226_16_SAMPLES);
-      ina226.setMaxCurrentShunt(1.0, 0.1);  // max 1 A, 0.1 ohm shunt — adjust for your hardware
-    #else
-    if (ina226.begin(0x40)) {
-      ina226.configure(INA226_AVERAGES_16,
-                       INA226_BUS_CONV_TIME_1100US,
-                       INA226_SHUNT_CONV_TIME_1100US,
-                       INA226_MODE_SHUNT_BUS_CONT);
-      ina226.calibrate(0.1, 1.0);  // 0.1 ohm shunt, max 1A — adjust for your hardware
-    #endif
-      ina226_found = true;
-      Serial.println("  + INA226 Power Monitor ACTIVE (I2C 0x40)");
-    } else {
-      Serial.println("  i INA226 not found at I2C 0x40");
-    }
-  #endif
-}
-
-void init_ld2410() {
-  #if HAS_LD2410_LIB
-    Serial1.begin(256000, SERIAL_8N1, LD2410_TX_PIN, LD2410_RX_PIN);
-    delay(500);
-    if (radar.begin(Serial1)) {
-      ld2410_found = true;
-      Serial.println("  + LD2410C mmWave Presence Sensor ACTIVE (UART Serial1)");
-    } else {
-      Serial.println("  i LD2410C not responding on Serial1");
-    }
-  #endif
-}
-
-// =============================================================================
-// SENSOR READING FUNCTIONS
-// =============================================================================
-
-void read_scd41() {
-  #if HAS_SCD41_LIB
-    uint16_t co2_raw;
-    float temp_raw, hum_raw;
-    bool isDataReady = false;
-    
-    #if SCD4X_LIB_V1
-      scd41.getDataReadyStatus(isDataReady);
-    #else
-      scd41.getDataReadyFlag(isDataReady);
-    #endif
-    if (isDataReady) {
-      int16_t error = scd41.readMeasurement(co2_raw, temp_raw, hum_raw);
-      if (error == 0 && co2_raw > 0) {
-        scd41_co2 = (float)co2_raw;
-        scd41_temp = temp_raw;
-        scd41_hum = hum_raw;
-        scd41_data_ready = true;
+      mqtt.loop();
+      if (mqtt.connected() && !mqttPaused && millis() - lastMqttRx > MQTT_STALL_MS) {
+        Serial.printf("MQTT link stalled (nothing received for %lu s): dropping it, BLE carries the data\n",
+                      (unsigned long)(MQTT_STALL_MS / 1000));
+        wifiClient.stop();
+        lastMqttAttempt = millis();
       }
     }
-  #endif
-}
-
-void read_ina226() {
-  #if HAS_INA226_LIB
-    #if INA226_TILLAART
-      ina226_voltage = ina226.getBusVoltage();           // V
-      ina226_current_mA = ina226.getCurrent_mA();        // mA
-      ina226_power_mW = ina226.getPower_mW();            // mW
-    #else
-      ina226_voltage = ina226.readBusVoltage();
-      ina226_current_mA = ina226.readShuntCurrent() * 1000.0;  // A -> mA
-      ina226_power_mW = ina226.readBusPower() * 1000.0;        // W -> mW
-    #endif
-  #endif
-}
-
-void read_ld2410() {
-  #if HAS_LD2410_LIB
-    radar.read();
-    if (radar.isConnected()) {
-      ld2410_presence = radar.presenceDetected();
-      ld2410_moving = radar.movingTargetDetected();
-      ld2410_stationary = radar.stationaryTargetDetected();
-      
-      // Get closest detection distance
-      if (ld2410_moving) {
-        ld2410_distance_cm = radar.movingTargetDistance();
-      } else if (ld2410_stationary) {
-        ld2410_distance_cm = radar.stationaryTargetDistance();
-      } else {
-        ld2410_distance_cm = 0;
-      }
-    }
-  #endif
-}
-
-// =============================================================================
-// RGB STATUS LED (color-coded room/system state)
-// =============================================================================
-void set_status_led(int r, int g, int b) {
-  digitalWrite(RGB_RED_PIN,   r > 0 ? HIGH : LOW);
-  digitalWrite(RGB_GREEN_PIN, g > 0 ? HIGH : LOW);
-  digitalWrite(RGB_BLUE_PIN,  b > 0 ? HIGH : LOW);
-}
-
-// =============================================================================
-// TELEMETRY SAMPLING & REMOTE EDGE AI SYNC
-// =============================================================================
-void send_telemetry() {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  // ---------------------------------------------------------------
-  // 1. Read all physical sensors
-  // ---------------------------------------------------------------
-  
-  // BME280: Temperature + Humidity + Pressure.
-  // No made-up fallback values: if the sensor is missing or a read fails, the field
-  // is left out of the JSON and the edge brain shows it as missing.
-  float temp = NAN, hum = NAN, pressure = NAN;
-  if (bme_found) {
-    temp = bme.readTemperature();
-    hum = bme.readHumidity();
-    pressure = bme.readPressure() / 100.0;  // Pa -> hPa
-  }
-  bool have_temp_hum = !isnan(temp) && !isnan(hum);
-  bool have_pressure = !isnan(pressure) && pressure > 0;
-
-  // BH1750: Illuminance. Keep the last good reading when no new measurement is ready
-  // (continuous mode measures about every 120 ms, so this is at most one cycle old).
-  static float last_lux = NAN;
-  if (bh1750_found && lightMeter.measurementReady()) {
-    float l = lightMeter.readLightLevel();
-    if (l >= 0) last_lux = l;   // the library returns a negative value on error
-  }
-  float lux = last_lux;
-  bool have_lux = !isnan(lux);
-
-  // MQ-2: Gas/Air Quality (analog, secondary)
-  int raw_mq2 = analogRead(MQ2_PIN);
-  float mq2_voltage = raw_mq2 * (3.3 / 4095.0);
-  float mq2_ppm = 350.0 + (mq2_voltage * 400.0);
-
-  // PIR: Motion event
-  bool pir_motion = (digitalRead(PIR_PIN) == HIGH);
-
-  // CO2: prefer SCD41 (NDIR) over MQ-2 estimate
-  float co2_value = mq2_ppm;           // fallback: MQ-2 estimate
-  String co2_source = "mq2_estimate";
-  if (scd41_found && scd41_data_ready) {
-    co2_value = scd41_co2;
-    co2_source = "scd41_ndir";
   }
 
-  // Presence: combine PIR + LD2410C
-  bool presence = pir_motion;
-  String presence_source = "pir";
-  if (ld2410_found) {
-    presence = ld2410_presence || pir_motion;  // OR fusion: either sensor triggers
-    presence_source = "pir+mmwave";
-  }
+  processBleCommand();
+  handleSerialCommands();
+  retryMissingSensors();
 
-  // ---------------------------------------------------------------
-  // 2. Construct expanded JSON payload
-  // ---------------------------------------------------------------
-  StaticJsonDocument<512> doc;
-  
-  // Core environmental data
-  doc["room_id"]          = "f2_office_a";
-  if (have_temp_hum) {
-    doc["temperature"]    = round(temp * 100.0) / 100.0;
-    doc["humidity"]       = round(hum * 100.0) / 100.0;
-  }
-  if (have_pressure) {
-    doc["pressure_hpa"]   = round(pressure * 10.0) / 10.0;
-  }
-  doc["co2"]              = round(co2_value * 10.0) / 10.0;
-  doc["co2_source"]       = co2_source;
-  if (have_lux) {
-    doc["lux"]            = round(lux * 10.0) / 10.0;
-  }
-  doc["motion_detected"]  = pir_motion;
-  doc["mq2_raw"]          = raw_mq2;
-  doc["source"]           = "sensor_node";
-  
-  // SCD41 supplementary readings (if available)
-  if (scd41_found && scd41_data_ready) {
-    doc["scd41_temp"]     = round(scd41_temp * 100.0) / 100.0;
-    doc["scd41_humidity"] = round(scd41_hum * 100.0) / 100.0;
-  }
-  
-  // LD2410C mmWave presence (if available)
-  if (ld2410_found) {
-    doc["mmwave_presence"]   = ld2410_presence;
-    doc["mmwave_moving"]     = ld2410_moving;
-    doc["mmwave_stationary"] = ld2410_stationary;
-    doc["mmwave_distance_cm"] = ld2410_distance_cm;
-  }
-  doc["presence"]         = presence;
-  doc["presence_source"]  = presence_source;
-  
-  // INA226 power measurement (if available)
-  if (ina226_found) {
-    doc["measured_voltage_v"]  = round(ina226_voltage * 1000.0) / 1000.0;
-    doc["measured_current_mA"] = round(ina226_current_mA * 10.0) / 10.0;
-    doc["measured_power_mW"]   = round(ina226_power_mW * 10.0) / 10.0;
-  }
-  
-  // Current actuator state (for Pi feedback loop)
-  doc["actuator_fan_speed"]    = current_fan_speed;
-  doc["actuator_light_level"]  = current_light_level;
-  doc["actuator_servo_angle"]  = current_servo_angle;
-  
-  // Sensor health status
-  JsonObject health = doc.createNestedObject("sensor_health");
-  health["bme280"]  = bme_found;
-  health["bh1750"]  = bh1750_found;
-  health["scd41"]   = scd41_found;
-  health["ina226"]  = ina226_found;
-  health["ld2410c"] = ld2410_found;
-  health["servo"]   = servo_attached;
-
-  String requestBody;
-  serializeJson(doc, requestBody);
-
-  // ---------------------------------------------------------------
-  // 3. POST to Raspberry Pi Edge Brain
-  // ---------------------------------------------------------------
-  http.begin(server_url);
-  http.addHeader("Content-Type", "application/json");
-
-  int httpCode = http.POST(requestBody);
-
-  if (httpCode == 200) {
-    String response = http.getString();
-    
-    // Compact status log
-    Serial.printf("+ T=%.1fC RH=%.0f%% CO2=%.0f Lux=%.0f Pres=%s",
-                  temp, hum, co2_value, lux, presence ? "YES" : "NO");
-    if (ina226_found) {
-      Serial.printf(" P=%.0fmW", ina226_power_mW);
-    }
-    Serial.println();
-
-    // ---------------------------------------------------------------
-    // 4. Parse Pi's expanded control decision
-    // ---------------------------------------------------------------
-    StaticJsonDocument<384> respDoc;
-    if (deserializeJson(respDoc, response) == DeserializationError::Ok) {
-      const char* hvac_action  = respDoc["hvac_action"]  | "ECO";
-      const char* light_action = respDoc["light_action"] | "OFF";
-      float occ_prob           = respDoc["occupancy_probability"] | 0.0;
-      
-      // New v2.0 control fields (with backward-compatible defaults)
-      int fan_speed    = respDoc["fan_speed"]    | -1;    // 0-255, -1 = use hvac_action
-      int light_level  = respDoc["light_level"]  | -1;    // 0-255, -1 = use light_action
-      int servo_angle  = respDoc["servo_angle"]  | -1;    // 0-180, -1 = no change
-
-      Serial.printf("   Pi -> Occ=%.2f HVAC=%s Light=%s Fan=%d LED=%d Servo=%d\n",
-                    occ_prob, hvac_action, light_action, fan_speed, light_level, servo_angle);
-
-      // 5. Actuate Room 101 hardware
-      apply_actuation(hvac_action, light_action, fan_speed, light_level, servo_angle);
-    }
-
-  } else if (httpCode > 0) {
-    Serial.printf("! Pi Response Code: %d\n", httpCode);
-  } else {
-    Serial.printf("x HTTP Error: %s\n", http.errorToString(httpCode).c_str());
-    // Fail-safe: reduce actuators when Pi unreachable
-    apply_actuation("ECO", "OFF", 0, 0, -1);
-    set_status_led(255, 0, 0);  // RED = connection lost
-  }
-
-  http.end();
-}
-
-// =============================================================================
-// CLOSED-LOOP ACTUATION (Driven by Raspberry Pi Edge AI decisions)
-// =============================================================================
-void apply_actuation(const char* hvac_action, const char* light_action,
-                     int fan_speed, int light_level, int servo_angle) {
-
-  // ---------------------------------------------------------------
-  // 1. FAN CONTROL (PWM variable speed via MOSFET)
-  // ---------------------------------------------------------------
-  if (fan_speed >= 0) {
-    // Direct PWM value from Pi (0-255)
-    current_fan_speed = constrain(fan_speed, 0, 255);
-  } else {
-    // Backward compatible: use hvac_action string
-    if (strcmp(hvac_action, "HIGH") == 0) {
-      current_fan_speed = 255;
-    } else if (strcmp(hvac_action, "NORMAL") == 0 || strcmp(hvac_action, "MEDIUM") == 0) {
-      current_fan_speed = 180;
-    } else if (strcmp(hvac_action, "LOW") == 0) {
-      current_fan_speed = 100;
-    } else {  // ECO / OFF
-      current_fan_speed = 0;
+  if (millis() - lastSensorRead >= SENSOR_INTERVAL_MS) {
+    lastSensorRead = millis();
+    readSensors(latest);
+    integrateEnergy(latest);
+    printSensorReadings(latest);
+    if ((mqtt.connected() && !mqttPaused) || bleClientConnected) {
+      publishTelemetry(latest);
     }
   }
 
-  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-    ledcWrite(FAN_PWM_PIN, current_fan_speed);
-  #else
-    ledcWrite(FAN_LEDC_CH, current_fan_speed);
-  #endif
-
-  Serial.printf("   -> Fan: %d/255\n", current_fan_speed);
-
-  // ---------------------------------------------------------------
-  // 2. WHITE LED LIGHTING (PWM dimmable)
-  // ---------------------------------------------------------------
-  #if ENABLE_WHITE_LED
-    if (light_level >= 0) {
-      // Direct PWM value from Pi (0-255)
-      current_light_level = constrain(light_level, 0, 255);
-    } else {
-      // Backward compatible: use light_action string
-      if (strcmp(light_action, "OFF") == 0) {
-        current_light_level = 0;
-      } else if (strcmp(light_action, "LOW") == 0) {
-        current_light_level = 64;
-      } else if (strcmp(light_action, "MEDIUM") == 0) {
-        current_light_level = 160;
-      } else {  // ON / HIGH
-        current_light_level = 255;
-      }
-    }
-
-    #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-      ledcWrite(WHITE_LED_PIN, current_light_level);
-    #else
-      ledcWrite(LED_LEDC_CH, current_light_level);
-    #endif
-
-    Serial.printf("   -> Light: %d/255\n", current_light_level);
-  #endif
-
-  // ---------------------------------------------------------------
-  // 3. SERVO VENTILATION ACTUATOR (SG90)
-  // ---------------------------------------------------------------
-  #if HAS_SERVO_LIB && ENABLE_SERVO
-    if (servo_attached && servo_angle >= 0) {
-      current_servo_angle = constrain(servo_angle, 0, 180);
-      ventServo.write(current_servo_angle);
-      Serial.printf("   -> Servo: %d deg\n", current_servo_angle);
-    }
-  #endif
-
-  // ---------------------------------------------------------------
-  // 4. RGB STATUS LED — show system state color
-  // ---------------------------------------------------------------
-  if (current_fan_speed > 200) {
-    set_status_led(0, 0, 255);    // BLUE = active cooling
-  } else if (current_fan_speed > 0) {
-    set_status_led(0, 255, 255);  // CYAN = ventilation/low cooling
-  } else if (current_light_level > 0) {
-    set_status_led(0, 255, 0);    // GREEN = occupied, lights on
-  } else {
-    set_status_led(0, 0, 0);      // OFF = vacant/eco
+  const bool linkUp = (mqtt.connected() && !mqttPaused) || bleClientConnected;
+  if (linkUp && lastCommandReceived > 0 &&
+      millis() - lastCommandReceived > MQTT_COMMAND_TIMEOUT_MS) {
+    edgeOnline = false;
   }
+
+  // Fail-safe: no edge controller reachable -> relay and LED OFF, holds cleared. A serial bench
+  // session is the exception: the operator is physically at the board and ends it with X or
+  // after two minutes.
+  const bool edgeLost = !linkUp || !edgeOnline;
+  if (edgeLost && !benchActive()) {
+    if (!failSafeActive || fanState || lightLevel != 0) {
+      setFan(false);
+      setRGB(0, 0, 0);
+      setAcLed("OFF");
+      rgbHoldUntil = 0;
+      fanHoldUntil = 0;
+    }
+    if (!failSafeActive) {
+      failSafeActive = true;
+      Serial.println("Edge unavailable (no MQTT/BLE link or no command for 30 s): fail-safe actuators OFF");
+    }
+  } else if (!edgeLost && failSafeActive) {
+    failSafeActive = false;
+    Serial.println("Edge reachable again: actuators follow commands");
+  }
+  if (benchUntil != 0 && !benchActive()) {
+    benchUntil = 0;
+    Serial.println("Bench session expired");
+  }
+  serviceStatusLed(edgeLost, benchActive());
+  drawOled();
+  publishStatusDetail(false);
+
+  delay(10);
 }

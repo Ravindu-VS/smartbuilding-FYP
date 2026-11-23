@@ -20,7 +20,7 @@ One process runs the whole live system:
            OFF = conventional control: the room's time schedule, same safety layer.
            Every decision is logged with its explanation.
         4. Meters the energy: the simulated building's meter (one segment per switch
-           position) and each real room's INA226 meter, and compares AI with
+           position) and each real room's INA219 meter, and compares AI with
            conventional control over the same minutes on an identical copy of the
            simulated building (same weather, occupants and noise).
         5. Streams one building state to the Next.js dashboard (GET /api/stream),
@@ -63,7 +63,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from collections import deque
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, abort, send_from_directory
 from flask.json.provider import DefaultJSONProvider
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -81,6 +81,7 @@ from twin.hardware_room import HardwareRoomController                        # n
 from twin.live import CONTROLLERS, SCENARIOS, LiveTwin, controller_available  # noqa: E402
 from twin.spec import room_number_map, spec_for_frontend                     # noqa: E402
 from raspberry_pi.store import Store                                         # noqa: E402
+from raspberry_pi.co2_estimator import CO2_SOURCE_MQ135, Mq135Co2Estimator    # noqa: E402
 
 DEFAULT_DB = os.path.join(PROJECT_ROOT, "output", "edge_store.sqlite3")
 SNAPSHOT_S = float(os.environ.get("SNAPSHOT_S", "60"))     # real seconds between stored room snapshots
@@ -108,12 +109,28 @@ ROOM_NUMBERS = room_number_map()
 def reading_provenance(sender: Optional[str]) -> str:
     """The real board identifies itself as "sensor_node"; anything else (the HTTP test sender,
     the MQTT device harness) is synthetic, never stored as a measurement of the real room."""
-    return "room101_measured" if sender == "sensor_node" else "synthetic"
+    return "room101_measured" if sender in REAL_BOARD_SOURCES else "synthetic"
+
+
+REAL_BOARD_SOURCES = ("sensor_node", "esp32_room101")   # earlier and current Room 101 firmware
 
 HW_TIMEOUT_S = float(os.environ.get("HW_TIMEOUT_S", "10"))
 OUTDOOR_TEMP_C = float(os.environ.get("OUTDOOR_TEMP_C", "30"))
 CALIBRATION_FILE = os.path.join(PROJECT_ROOT, "output", "hw_calibration.json")
-CO2_SOURCE_NDIR = "scd41_ndir"        # the only CO2 reading used (the MQ-2 is not a CO2 sensor)
+CO2_SOURCE_NDIR = "scd41_ndir"        # measured CO2 (NDIR); preferred whenever a board sends it
+# Without an NDIR sensor, Room 101's CO2 is estimated from its MQ-135 (raspberry_pi/co2_estimator.py),
+# labelled "mq135_estimate" in every reading, the store and the dashboard.
+MQ135_CALIBRATION_FILE = os.path.join(PROJECT_ROOT, "output", "mq135_calibration.json")
+
+
+def make_co2_estimator() -> Mq135Co2Estimator:
+    env = os.environ.get
+    # defaults = the Room 101 circuit: module at 5 V, 1k load resistor, AO -> 10k/15k divider -> GPIO1
+    return Mq135Co2Estimator(MQ135_CALIBRATION_FILE, vcc_mv=float(env("MQ135_VCC_MV", "5000")),
+                             rl_kohm=float(env("MQ135_RL_KOHM", "1.0")),
+                             divider=float(env("MQ135_DIVIDER", str(25.0 / 15.0))),
+                             reference_ppm=float(env("MQ135_REFERENCE_PPM", "420")),
+                             warmup_s=float(env("MQ135_WARMUP_S", "1800")))
 
 
 def humidity_ratio(temp_c: Optional[float], rh_pct: Optional[float]) -> Optional[float]:
@@ -155,6 +172,43 @@ def _bool(payload: Dict[str, Any], key: str) -> Optional[bool]:
     if isinstance(val, (int, float)) and val in (0, 1):
         return bool(val)
     return None
+
+
+# Indicator LEDs on the Room 101 board (firmware room101-2026.11.23+). The room has no real AC, so one RGB
+# LED shows what the AC would be doing; another shows the controller state. Colours are set by the firmware.
+AC_LED_STATES = ("OFF", "ECO", "LOW", "COOL", "MAX")
+STATUS_LED_STATES = ("AI", "RULE", "MANUAL", "WARNING", "TEST")
+WARN_TEMP_C = 30.0
+WARN_CO2_PPM = 1200.0
+
+
+def board_indicators(control: Dict[str, Any], temp: Optional[float], co2: Optional[float],
+                     sensor_health: Optional[Dict[str, Any]], design_setpoint_c: Optional[float]) -> Dict[str, Any]:
+    """What the AC and status LEDs on the board should show for this decision."""
+    hvac, sp = control.get("hvac_action"), control.get("setpoint_c")
+    if hvac == "ECO":
+        ac = "ECO"
+    elif hvac == "LOW":
+        ac = "LOW"
+    elif hvac == "NORMAL":
+        ac = "MAX" if (sp is not None and design_setpoint_c is not None and sp <= design_setpoint_c) else "COOL"
+    else:
+        ac = "OFF"
+    warnings = list(control.get("safety_notes") or [])
+    if temp is not None and temp >= WARN_TEMP_C:
+        warnings.append(f"room temperature {temp:.1f} C >= {WARN_TEMP_C:.0f} C")
+    if co2 is not None and co2 >= WARN_CO2_PPM:
+        warnings.append(f"CO2 {co2:.0f} ppm >= {WARN_CO2_PPM:.0f} ppm")
+    failed = [k for k, v in (sensor_health or {}).items() if v is False]
+    if failed:
+        warnings.append("sensor not responding: " + ", ".join(sorted(failed)))
+    if control.get("calibrating"):
+        status = "TEST"
+    elif warnings:
+        status = "WARNING"
+    else:
+        status = {"manual": "MANUAL", "conventional": "RULE"}.get(control.get("mode"), "AI")
+    return {"ac_led": ac, "status_led": status, "warnings": warnings}
 
 
 def _round(v: Optional[float], nd: int) -> Optional[float]:
@@ -269,6 +323,7 @@ class HardwareLink:
         self.last_command: Optional[Dict[str, int]] = None  # last actuator command sent to the board
         self.verify_mismatches = 0
         self.segments: List[Dict[str, Any]] = []
+        self.co2_estimator: Optional[Mq135Co2Estimator] = None   # created for rooms with an MQ-135
 
     def status(self, now_mono: float) -> Dict[str, Any]:
         if self.last_rx_mono is None:
@@ -279,7 +334,7 @@ class HardwareLink:
         mean_interval = (sum(self.intervals) / len(self.intervals)) if self.intervals else None
         if self.sender is None:
             sender = None
-        elif self.sender == "sensor_node":
+        elif self.sender in ("sensor_node", "esp32_room101"):
             sender = "esp32_board"
         else:
             sender = str(self.sender)
@@ -320,7 +375,7 @@ class HardwareLink:
         return {"room_id": self.room_id, "room_name": self.room["display_name"],
                 "power_w": self.last_power_w if self.last_rx_mono is not None else None,
                 "total_wh": round(self.energy_wh, 4), "segments": segs, "by_mode": by,
-                "basis": "INA226 on the board (measured); only while the board posts readings"}
+                "basis": "INA219 on the board (measured); only while the board posts readings"}
 
 
 # =============================================================================
@@ -379,7 +434,8 @@ class EdgeBrain:
             except Exception as e:
                 self.models_error = f"{type(e).__name__}: {e}"
                 logger.error("Model service unavailable: %s", self.models_error)
-        self.mqtt = None                    # set by main() when MQTT_ENABLED=1
+        self.mqtt = None
+        self.ble = None
 
         logger.info("EdgeBrain initialized (API v%d)", API_VERSION)
         logger.info("  Twin: %d simulated rooms, seed %d, speed %.0fx, learning week: %s",
@@ -530,7 +586,7 @@ class EdgeBrain:
         """
         link = self._link_for(payload.get("room_id"))
         msg_id = payload.get("msg_id") if isinstance(payload.get("msg_id"), str) else None
-        transport = payload.get("transport") if payload.get("transport") in ("http", "mqtt") else "http"
+        transport = payload.get("transport") if payload.get("transport") in ("http", "mqtt", "ble") else "http"
         now_mono = time.monotonic()
         now = datetime.now()
         now_iso = now.isoformat(timespec="milliseconds")
@@ -540,6 +596,14 @@ class EdgeBrain:
         co2_reported = _num(payload, "co2")
         co2_source = payload.get("co2_source") if co2_reported is not None else None
         co2 = co2_reported if co2_source == CO2_SOURCE_NDIR else None
+        co2_estimate = None
+        if co2 is None and _num(payload, "mq135_adc_mv") is not None:
+            if link.co2_estimator is None:
+                link.co2_estimator = make_co2_estimator()
+            co2_estimate = link.co2_estimator.update(_num(payload, "mq135_adc_mv"), temp, hum,
+                                                     uptime_s=_num(payload, "uptime_s"))
+            if co2_estimate.get("co2_ppm") is not None:
+                co2, co2_source = co2_estimate["co2_ppm"], CO2_SOURCE_MQ135
         lux = _num(payload, "lux")
         pressure_hpa = _num(payload, "pressure_hpa")
         pir = _bool(payload, "motion_detected")
@@ -551,16 +615,27 @@ class EdgeBrain:
         actuator_servo = _int(payload, "actuator_servo_angle")
         power_mw = _num(payload, "measured_power_mW")
         power_w = power_mw / 1000.0 if power_mw is not None else None
+        mq2_raw = _int(payload, "mq2_raw")
+        mq135_raw = _int(payload, "mq135_raw")
+        reported_fan_on = _bool(payload, "fan_on")
+        reported_relay_on = _bool(payload, "relay_on")
 
         hr = humidity_ratio(temp, hum)
         sensors = {
             "Temperature": _round(temp, 2), "Humidity": _round(hum, 2), "Light": _round(lux, 1),
             "CO2": _round(co2, 1), "HumidityRatio": _round(hr, 6),
             "CO2_source": co2_source if co2 is not None else None,
-            "Pressure_hPa": _round(pressure_hpa, 1), "MQ2_raw": _int(payload, "mq2_raw"),
+            "Pressure_hPa": _round(pressure_hpa, 1), "MQ135_raw": mq135_raw,
+            "MQ135_adc_mV": _round(_num(payload, "mq135_adc_mv"), 0),
         }
-        if co2_reported is not None and co2 is None:
-            sensors["CO2_rejected"] = f"{co2_source or 'unknown source'}: not an NDIR CO2 reading, not used"
+        if co2_estimate is not None:
+            sensors["CO2_estimate_state"] = co2_estimate.get("state")
+            sensors["MQ135_Rs_kohm"] = co2_estimate.get("rs_corrected_kohm")
+        if mq2_raw is not None:
+            sensors["MQ2_raw"] = mq2_raw
+        reported_source = payload.get("co2_source")
+        if co2_reported is not None and reported_source != CO2_SOURCE_NDIR:
+            sensors["CO2_rejected"] = f"{reported_source or 'unknown source'}: not an NDIR CO2 reading, not used"
         scd41_temp = _num(payload, "scd41_temp")
         scd41_hum = _num(payload, "scd41_humidity")
         if scd41_temp is not None:
@@ -601,13 +676,26 @@ class EdgeBrain:
                                       f"{'AI' if ai_on else 'conventional schedule'}"))
             # actuator-state verification: the board reports what it applied before this reading
             verified = None
-            if link.last_command is not None and actuator_fan is not None and actuator_light is not None:
-                verified = (actuator_fan == link.last_command["fan"] and actuator_light == link.last_command["led"])
+            # a manual/test hold or a serial bench session on the board intentionally ignores the AI's levels
+            board_held = bool(payload.get("bench_mode")) or bool(_num(payload, "rgb_hold_s")) \
+                or bool(_num(payload, "fan_hold_s"))
+            if board_held:
+                link.verify_mismatches = 0
+            elif link.last_command is not None and actuator_fan is not None and actuator_light is not None:
+                # a relay board (it reports fan_on) can only switch the fan ON/OFF: compare the state, not the level
+                if reported_fan_on is not None:
+                    fan_ok = (actuator_fan > 0) == (link.last_command["fan"] > 0)
+                else:
+                    fan_ok = actuator_fan == link.last_command["fan"]
+                verified = fan_ok and actuator_light == link.last_command["led"]
                 link.verify_mismatches = 0 if verified else link.verify_mismatches + 1
                 if link.verify_mismatches == 3:
                     self.twin.add_event(self._sys_event(link, "the board's reported fan/LED levels have not matched the commands for 3 "
                                           "readings (check wiring or firmware)", kind="hardware"))
             control = dict(control, previous_command_verified=verified)
+            control["indicators"] = board_indicators(
+                control, temp, co2, payload.get("sensor_health") if isinstance(payload.get("sensor_health"), dict) else None,
+                getattr(link.spec, "design_setpoint", None))
             link.last_command = {"fan": int(control["fan_speed"]), "led": int(control["light_level"])}
             link.ctrl.due_outcomes(now, temp, lux, presence, co2)
             reading = {
@@ -624,8 +712,18 @@ class EdgeBrain:
                     "light_on": (actuator_light > 0) if actuator_light is not None else None,
                     "hvac_mode": ("on" if actuator_fan > 0 else "off") if actuator_fan is not None else None,
                     "hvac_speed": actuator_fan, "light_level": actuator_light, "servo_angle": actuator_servo,
+                    "fan_on": reported_fan_on if reported_fan_on is not None
+                              else (actuator_fan > 0 if actuator_fan is not None else None),
+                    "relay_on": reported_relay_on if reported_relay_on is not None
+                                else (actuator_fan > 0 if actuator_fan is not None else None),
+                    "rgb": payload.get("actuator_rgb") if isinstance(payload.get("actuator_rgb"), str) else None,
+                    "ac_led": payload.get("actuator_ac_led") if isinstance(payload.get("actuator_ac_led"), str) else None,
+                    "status_led": payload.get("actuator_status_led") if isinstance(payload.get("actuator_status_led"), str) else None,
+                    "wifi_rssi_dbm": _num(payload, "wifi_rssi_dbm"),
+                    "uptime_s": _num(payload, "uptime_s"),
                 },
                 "power_measurement": {"voltage_v": _num(payload, "measured_voltage_v"),
+                                      "shunt_voltage_mV": _num(payload, "ina219_shunt_voltage_mV"),
                                       "current_mA": _num(payload, "measured_current_mA"),
                                       "power_mW": power_mw, "available": power_mw is not None},
                 "sensor_health": payload.get("sensor_health") if isinstance(payload.get("sensor_health"), dict) else {},
@@ -684,7 +782,9 @@ class EdgeBrain:
             except Exception as e:
                 logger.error("store write failed: %s", e)
         if self.models is not None and reading_provenance(link.sender) == "room101_measured":
-            self.models.observe_real({"Temperature": temp, "Humidity": hum, "Light": lux, "CO2": co2, "HumidityRatio": hr})
+            # drift monitoring compares against NDIR training data: an MQ-135 estimate is not passed on
+            self.models.observe_real({"Temperature": temp, "Humidity": hum, "Light": lux,
+                                      "CO2": co2 if co2_source == CO2_SOURCE_NDIR else None, "HumidityRatio": hr})
         self._notify()
 
         logger.info("HARDWARE %s [%s]: T=%s Lux=%s CO2=%s Pres=%s -> P=%.2f -> lights %s, AC %s%s (fan %d, LED %d, servo %d)",
@@ -699,6 +799,7 @@ class EdgeBrain:
             "occupancy_probability": result["ai"]["occupancy_probability"],
             "fan_speed": control["fan_speed"], "light_level": control["light_level"],
             "servo_angle": control["servo_angle"],
+            "ac_led": control["indicators"]["ac_led"], "status_led": control["indicators"]["status_led"],
         }
 
     def _hardware_room_state(self, link: HardwareLink, now_mono: Optional[float] = None) -> Dict[str, Any]:
@@ -725,7 +826,7 @@ class EdgeBrain:
             "ai": dict(r["ai"]), "control": dict(r["control"]),
             "energy": {"measured_power_watts": round(pm["power_mW"] / 1000.0, 3) if pm["available"] else None,
                        "cumulative_energy_wh": round(link.energy_wh, 4) if pm["available"] else None,
-                       "basis": "measured (INA226 on the board)" if pm["available"] else None},
+                       "basis": "measured (INA219 on the board)" if pm["available"] else None},
             "ground_truth": None,        # a real room has no ground truth
             "comfort": None, "modes": None, "scenarios": [],
         })
@@ -829,7 +930,7 @@ class EdgeBrain:
             meas = reading_provenance(self.links[rid].sender) if self.links[rid].sender else None
             r["provenance"] = {"sensors": meas if st.get("connected") else "unavailable",
                                "ai": "prediction" if st.get("connected") else "unavailable",
-                               "energy": (meas + " (INA226)") if st.get("connected") and meas
+                               "energy": (meas + " (INA219)") if st.get("connected") and meas
                                and (r.get("power_measurement") or {}).get("available") else "unavailable"}
             r["freshness"] = {"age_s": st.get("age_s"), "timeout_s": st.get("timeout_s"),
                               "stale": st.get("state") == "lost", "state": st.get("state")}
@@ -936,6 +1037,36 @@ def _err(msg: str, code: int = 400):
     return jsonify({"status": "error", "message": msg}), code
 
 
+# ---------------------------------------------------------------------------
+# The dashboard, served by the edge brain itself (static export of dashboard/fyp-research-twin, built with
+# NEXT_OUTPUT=export NEXT_PUBLIC_EDGE_URL=same-origin; scripts/build_dashboard_for_pi.sh). Open
+# http://<pi>:8001/ from any device on the network; the API stays under /api/.
+# ---------------------------------------------------------------------------
+DASHBOARD_DIR = os.environ.get("DASHBOARD_DIR", os.path.join(PROJECT_ROOT, "dashboard_dist"))
+
+
+@app.route('/', methods=['GET'])
+def dashboard_index():
+    if os.path.isfile(os.path.join(DASHBOARD_DIR, "index.html")):
+        return send_from_directory(DASHBOARD_DIR, "index.html")
+    return jsonify({"service": "Smart Building Edge Brain", "api": "/api/", "health": "/health",
+                    "dashboard": f"not installed: build it into {DASHBOARD_DIR}"})
+
+
+@app.route('/<path:path>', methods=['GET'])
+def dashboard_files(path):
+    if path.startswith("api/") or ".." in path.split("/"):
+        abort(404)
+    full = os.path.join(DASHBOARD_DIR, path)
+    if os.path.isfile(full):
+        return send_from_directory(DASHBOARD_DIR, path)
+    if os.path.isfile(full + ".html"):                      # Next export: /page -> page.html
+        return send_from_directory(DASHBOARD_DIR, path + ".html")
+    if os.path.isfile(os.path.join(full, "index.html")):
+        return send_from_directory(full, "index.html")
+    abort(404)
+
+
 @app.route('/health', methods=['GET'])
 def health():
     c = brain.twin.clock() if brain else {}
@@ -965,7 +1096,8 @@ def receive_sensor_data():
         return jsonify({"status": "ok", "room_id": d["room_id"], "hvac_action": d["hvac_action"],
                         "light_action": d["light_action"], "control_mode": d["control_mode"],
                         "occupancy_probability": d["occupancy_probability"], "fan_speed": d["fan_speed"],
-                        "light_level": d["light_level"], "servo_angle": d["servo_angle"]}), 200
+                        "light_level": d["light_level"], "servo_angle": d["servo_angle"],
+                        "ac_led": d.get("ac_led"), "status_led": d.get("status_led")}), 200
     except Exception as e:
         logger.error(f"Hardware endpoint error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -1305,6 +1437,41 @@ def mqtt_status():
     return jsonify(brain.mqtt.status())
 
 
+@app.route('/api/hardware/co2', methods=['GET'])
+def co2_estimate_status():
+    """MQ-135 CO2 estimate: calibration (R0, baseline hours, provisional) and the last conversion."""
+    link = brain._link_for(request.args.get("room_id"))
+    if link.co2_estimator is None:
+        link.co2_estimator = make_co2_estimator()
+    return jsonify({"room_id": link.room_id, **link.co2_estimator.status()})
+
+
+@app.route('/api/hardware/co2/calibrate', methods=['POST'])
+def co2_estimate_calibrate():
+    """{"reference_ppm": 420} sets R0 from the last reading taken in air of that known concentration
+    (e.g. outdoors); {"release": true} returns to automatic baseline correction."""
+    data = request.get_json(force=True, silent=True) or {}
+    link = brain._link_for(data.get("room_id"))
+    est = link.co2_estimator or make_co2_estimator()
+    link.co2_estimator = est
+    if data.get("release"):
+        return jsonify({"room_id": link.room_id, **est.release_manual()})
+    rs = (est.last or {}).get("rs_corrected_kohm")
+    if rs is None:
+        return _err("no usable MQ-135 reading yet (warming up, saturated or no board connected)")
+    ref = data.get("reference_ppm", 420)
+    if not isinstance(ref, (int, float)) or not 350 <= ref <= 5000:
+        return _err("reference_ppm must be a number from 350 to 5000")
+    return jsonify({"room_id": link.room_id, **est.calibrate_now(rs, ref, manual=True)})
+
+
+@app.route('/api/hardware/ble', methods=['GET'])
+def ble_status():
+    if brain.ble is None:
+        return jsonify({"enabled": False, "note": "BLE fallback not started (set BLE_ENABLED=1)"})
+    return jsonify(brain.ble.status())
+
+
 def run_tick_loop(brain_instance: EdgeBrain, stop_event: threading.Event):
     logger.info("Edge Brain tick loop started")
     next_t = time.monotonic()
@@ -1339,6 +1506,12 @@ def main():
                                      "real_time": datetime.now().isoformat(timespec="seconds"),
                                      "sim_time": brain.twin.time.isoformat(timespec="minutes")}))
         brain.mqtt.start()
+    if os.environ.get("BLE_ENABLED", "0") == "1":
+        if brain.mqtt is None:
+            raise RuntimeError("BLE fallback requires MQTT_ENABLED=1 and a running Mosquitto broker")
+        from raspberry_pi.ble_gateway import BleGateway
+        brain.ble = BleGateway()
+        brain.ble.start()
     stop_event = threading.Event()
     threading.Thread(target=run_tick_loop, args=(brain, stop_event), daemon=True, name="EdgeBrainTickLoop").start()
     port = int(os.environ.get("API_PORT", "8001"))
@@ -1356,6 +1529,8 @@ def main():
         pass
     finally:
         stop_event.set()
+        if brain.ble is not None:
+            brain.ble.stop()
         if brain.mqtt is not None:
             brain.mqtt.stop()
         brain.physical_output.cleanup()

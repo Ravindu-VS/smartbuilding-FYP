@@ -39,6 +39,8 @@ Metrics: precision, recall, F1, balanced accuracy, ROC-AUC, confusion matrix, th
 Also: the legacy models on the same test week, a domain check on the twin (UCI -> twin, twin -> twin,
 twin -> UCI) and a learned PIR + CO2 fusion for the simulated rooms compared with the hand-built
 estimator. Registered: `occupancy_rf`, `occupancy_best`, `occupancy_co2_temporal`, `occupancy_twin_fusion`.
+Since 23 Nov 2026 the learned fusion drives the AI in the simulated rooms and retrains itself while the system
+runs (experiment 12 and docs/RETRAINING.md).
 
 ## B. Thermal prediction (`python -m ml.thermal`)
 

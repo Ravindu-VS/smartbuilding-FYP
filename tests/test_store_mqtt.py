@@ -51,6 +51,40 @@ def test_validate_telemetry():
     assert validate_telemetry(ROOM, dict(good, schema="other/9"), {ROOM})[0] is None
 
 
+def test_validate_mq135_and_ina219_telemetry():
+    payload = {
+        "schema": "sb.telemetry/1", "room_id": ROOM, "msg_id": "sensor-1",
+        "device_id": "room101-esp32", "mq135_raw": 2101, "mq135_adc_mv": 1718,
+        "mq135_do_high": False, "ina219_shunt_voltage_mV": 18.0,
+        "wifi_rssi_dbm": -50, "uptime_s": 1234, "actuator_rgb": "OFF",
+        "fan_on": False, "relay_on": False,
+    }
+
+    clean, problems = validate_telemetry(ROOM, payload, {ROOM})
+
+    assert clean["mq135_raw"] == 2101 and clean["mq135_adc_mv"] == 1718
+    assert clean["ina219_shunt_voltage_mV"] == 18.0 and clean["wifi_rssi_dbm"] == -50
+    assert clean["mq135_do_high"] is False and clean["relay_on"] is False
+    assert clean["device_id"] == "room101-esp32" and clean["actuator_rgb"] == "OFF"
+    assert problems == []
+
+    clean, problems = validate_telemetry(
+        ROOM, dict(payload, mq135_raw=5000, mq135_do_high="high", wifi_rssi_dbm=1), {ROOM}
+    )
+    assert "mq135_raw" not in clean and "mq135_do_high" not in clean and "wifi_rssi_dbm" not in clean
+    assert len(problems) == 3
+
+
+def test_ina219_zero_offset_noise_is_clamped_not_reported():
+    base = {"schema": "sb.telemetry/1", "room_id": ROOM, "msg_id": "ina-1"}
+    clean, problems = validate_telemetry(ROOM, dict(base, measured_current_mA=-0.2, measured_power_mW=-1.0,
+                                                    measured_voltage_v=-0.01), {ROOM})
+    assert clean["measured_current_mA"] == 0.0 and clean["measured_power_mW"] == 0.0
+    assert clean["measured_voltage_v"] == 0.0 and problems == []
+    clean, problems = validate_telemetry(ROOM, dict(base, measured_current_mA=-50.0), {ROOM})
+    assert "measured_current_mA" not in clean and len(problems) == 1
+
+
 def _device(host, port, on_cmd):
     import paho.mqtt.client as mqtt
     c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="test-device")

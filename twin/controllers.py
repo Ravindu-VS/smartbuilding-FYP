@@ -210,6 +210,12 @@ class RandomForestEstimator:
         import joblib
         full = path if os.path.isabs(path) else os.path.join(PROJECT_ROOT, path)
         self.pipeline = joblib.load(full)
+        # The legacy pickle's imputer predates the `_fill_dtype` attribute that newer scikit-learn reads in
+        # transform(); its inputs are plain floats, so the fill dtype is float64.
+        import numpy as np
+        for _, step in getattr(self.pipeline, "steps", []):
+            if type(step).__name__ == "SimpleImputer" and not hasattr(step, "_fill_dtype"):
+                step._fill_dtype = np.dtype("float64")
         self.lux_full = lighting_lux_full or {}
         self.name = "RandomForest(UCI)"
 

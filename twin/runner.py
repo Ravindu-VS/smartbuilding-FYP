@@ -45,12 +45,13 @@ from twin.spec import build_spec
 CONTROL_DT = 60.0
 DEFAULT_START = datetime(2026, 3, 2, 0, 0)        # a Monday in the hot, dry season
 TUNED_WEIGHTS = {"alpha": 1.0, "beta": 3.0, "gamma": 0.1, "light_margin": 0.03}   # = twin/live.py
-CONTROLLER_NAMES = ("schedule", "always_on", "threshold_rf", "mo", "ppo")
+CONTROLLER_NAMES = ("schedule", "always_on", "threshold_rf", "mo", "mo_learned", "ppo")
 CONTROLLER_LABELS = {
     "schedule": "Conventional schedule (lights on + AC at design set-point in operating hours)",
     "always_on": "Always on (reference upper bound on energy)",
     "threshold_rf": "Original project rule: thresholds on the Random Forest occupancy probability",
     "mo": "Multi-objective optimiser (PIR+CO2 fusion, 30-min look-ahead; MPC-like)",
+    "mo_learned": "Multi-objective optimiser with the learned PIR+CO2 fusion (occupancy_twin_fusion) for P(occupied)",
     "ppo": "PPO policy (rl/), behind the same guard and safety layer",
 }
 
@@ -74,6 +75,13 @@ def make_controller(name: str, specs, ppo_policy: Optional[str] = None, rf=None)
     if name == "mo":
         overrides = {r.room_id: dict(r.controller_overrides) for r in specs}
         return MultiObjectiveController(FusionEstimator(), room_overrides=overrides, **TUNED_WEIGHTS)
+    if name == "mo_learned":
+        from ml.learned_fusion import LearnedFusionEstimator
+        overrides = {r.room_id: dict(r.controller_overrides) for r in specs}
+        est = LearnedFusionEstimator.from_registry(FusionEstimator())
+        if not est.active:
+            raise ValueError(f"learned fusion not available: {est.error}")
+        return MultiObjectiveController(est, room_overrides=overrides, **TUNED_WEIGHTS)
     if name == "threshold_rf":
         rf = rf or RandomForestEstimator(lighting_lux_full={
             r.room_id: r.controller_overrides["lighting_lux_full"] for r in specs})
@@ -148,6 +156,7 @@ def run_episode(controller: str = "schedule", scenario="normal", seed: int = 1,
                                   rd["humidity_ratio"], rd["pir_seconds"], current_light=cmd[rid]["light"])
                       for rid, rd in delivered.items()]
             rf_batch.cache = dict(zip(ids, rf_batch.inner.probabilities(obs_rf)))
+        step_obs = []
         for rid in ids:
             rd = delivered[rid]
             rs = spec[rid]
@@ -167,6 +176,11 @@ def run_episode(controller: str = "schedule", scenario="normal", seed: int = 1,
                 current_hvac=cmd[rid]["hvac"], current_setpoint=cmd[rid]["sp"],
                 outdoor_temperature=b.outdoor.temperature,
                 hvac_power_w=b.physics[rid].state.hvac_electric_w, true_occupants=b.occupants[rid])
+            step_obs.append((rid, rs, vals, problems, t_in, o))
+        prep = getattr(getattr(ctrl, "estimator", None), "prepare", None)
+        if prep is not None:
+            prep([x[5] for x in step_obs])            # one batch for all rooms (learned fusion)
+        for rid, rs, vals, problems, t_in, o in step_obs:
             c0 = time.perf_counter()
             d = guarded.decide(o, problems)
             if measure:

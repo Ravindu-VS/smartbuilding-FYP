@@ -7,39 +7,43 @@ Source of truth: `firmware/esp32_smart_building/esp32_smart_building.ino` (ESP32
 
 | Item | Status | Evidence |
 |---|---|---|
-| Firmware source (sensors, actuators, HTTP client, fail-safe) | implemented | firmware file; reviewed |
-| Firmware compiled for the ESP32-S3 in this environment | **not done** - no Arduino/ESP32 toolchain reachable (GitHub release downloads refused by the network proxy) | - |
-| Firmware syntax and library-API check (host g++, stub core headers, real library headers) | passes for SCD4x 1.x / 0.x / absent x INA226 Tillaart / INA226Lib / absent x core 3.x / 2.x | `firmware/tools/check_firmware.py`, `tests/test_firmware_check.py` |
-| Bench-check script for the real room | implemented, tested against the HTTP test sender and rehearsed against the virtual board (labelled a software check) | `scripts/check_hardware.py`, `tests/test_check_hardware.py`, `experiments/results/exp11_real_room_replay/bench_rehearsal/` |
-| Virtual board (firmware-identical payload; UCI replay or simulated Office A) | implemented, tested | `raspberry_pi/virtual_board.py`, `tests/test_virtual_board.py`, experiment 11 |
-| Edge brain HTTP ingestion of the firmware's payload | implemented, tested | `raspberry_pi/test_edge_brain.py`, `tests/test_integration.py` |
+| Firmware source (BME280, BH1750, MQ-135, PIR, INA219, relay/fan, RGB, MQTT and BLE fallback) | implemented | `firmware/esp32_smart_building/esp32_smart_building.ino` |
+| Firmware compiled and flashed (previous revision) | **PASS** on the owner's PC, 20 Nov 2026 (T24) | `COMMISSIONING_REPORT.md` |
+| Firmware revision `room101-2026.11.20` (BLE MTU, holds, bench mode, sensor retry/median) | compiled for ESP32-S3 with Arduino-ESP32 core 3.3.12: 1,200,328 B flash (91 %), 67,292 B RAM (20 %); **not yet flashed** | build log in this review; flash with the runner (`--flash`) |
+| Host-side firmware syntax/core-stub check | passes for core 3.x and 2.x stubs | `firmware/tools/check_firmware.py`, `tests/test_firmware_check.py` |
+| Commissioning runner (flash, deploy, every remaining test, evidence files) | implemented; dry-run against a simulated board and a local Mosquitto only | `scripts/commission_room101.py` |
+| Virtual board (software simulation; UCI replay or simulated Office A) | implemented, tested | `raspberry_pi/virtual_board.py`, `tests/test_virtual_board.py`, experiment 11 |
+| Edge brain HTTP ingestion | implemented, tested as a separate test path | `raspberry_pi/test_edge_brain.py`, `tests/test_integration.py` |
 | MQTT transport (edge side) with schema, dedupe, acks, status | implemented, tested with a local broker and a simulated board | `tests/test_store_mqtt.py`, experiment 10 |
-| MQTT in the firmware | **not implemented** - the board posts HTTP; the edge accepts both | - |
-| Physical verification with the board on the bench | **not performed in this work** (no board attached to this environment) | - |
+| MQTT in the firmware | live telemetry and command acknowledgements reached the Pi (T12, T13 PASS) | `COMMISSIONING_REPORT.md` |
+| Paired BLE fallback | paired and GATT-connected (T21 PASS); sustained fallback freshness **FAIL** with the previous revision (T22) | `COMMISSIONING_REPORT.md` |
+| Sensor bring-up | BME280, BH1750, MQ-135, PIR and INA219 I²C communication observed in live telemetry; reference and stimulus checks still open | `COMMISSIONING_REPORT.md` |
+| RGB output | **FAIL** with the previous revision (acknowledged, owner saw no light); bench diagnostic `D` added | `COMMISSIONING_REPORT.md` |
+| Fan branch / relay and INA219 load measurement | **NOT TESTED** (12 V branch not powered yet) | `COMMISSIONING_REPORT.md` |
 | Wi-Fi credentials | in git-ignored `secrets.h` (template `secrets.example.h`) | `.gitignore` |
 
-"Implemented" means the code exists and was reviewed; "tested" means an automated test exercised it;
-"physically verified" is reserved for a run with the real board, which is still to be done.
+"Implemented" means the code exists; software tests do not establish physical operation. The owner-reported
+sensor checks are distinguished from tests run in this environment in `COMMISSIONING_REPORT.md`.
 
-## Library fixes found by the API check (24 Oct 2026)
+## Active firmware and libraries
 
-The firmware had never been compiled in this work, so its library calls were checked against the libraries'
-published headers (`firmware/tools/check_firmware.py`). Two problems were found and fixed; pins, timing and
-logic are unchanged:
+The active sketch uses Arduino-ESP32 Wi-Fi/BLE, PubSubClient, ArduinoJson, Adafruit BME280, BH1750,
+Adafruit INA219, and Preferences. The old SCD41/LD2410/INA226 descriptions elsewhere in the research and
+simulation documents describe earlier or simulated configurations, not the current physical firmware.
+The revision `room101-2026.11.20` compiles with Arduino-ESP32 core 3.3.12 (NimBLE BLE stack on the
+ESP32-S3); the board still runs the previously flashed revision until it is uploaded again.
 
-1. **SCD41 silently disabled with the current library.** Sensirion I2C SCD4x 1.x renamed the header and class
-   (`SensirionI2cScd4x`) and changed `begin()` / the data-ready call. The sketch only looked for the old header,
-   so with 1.x installed it compiled but never read CO2. It now supports 1.x and 0.4.x.
-2. **INA226 did not compile with any INA226 library.** The sketch mixed two APIs (constructor of Rob Tillaart's
-   library, methods of the Jarzebski/INA226Lib library). It now supports both libraries.
+Sensor handling in this revision: every reading cycle reads each sensor once and the same values go to the
+Serial log and the telemetry. The BME280 is read three times 40 ms apart and the median is published only if
+it is physically plausible (-40..85 C, 0..100 %RH, 800..1100 hPa); a rejected sample is left out of the
+message and `sensor_health.bme280` is false for it, and repeated rejections re-initialise the sensor. This
+addresses isolated outliers such as the 761 hPa / 85.6 %RH sample. A sensor that does not answer at power-up
+is probed again every 30 s instead of staying unavailable until the next reboot.
 
-This is a syntax and API check with stubbed core headers, not an ESP32 compile: compile and flash in the Arduino
-IDE as below.
+## Virtual board for software-only testing
 
-## Until the hardware arrives: the virtual board
-
-`raspberry_pi/virtual_board.py` stands in for the ESP32-S3 on the wire: the same HTTP POST every 3 s with
-exactly the firmware's JSON fields (checked by `tests/test_virtual_board.py` against the `.ino`), the same handling
+`raspberry_pi/virtual_board.py` stands in for the ESP32-S3 on the HTTP test path: the same HTTP POST every 3 s with
+the digital twin's payload fields, the same handling
 of the edge brain's reply (fan / LED / damper, reported back in the next reading) and the same fail-safe (fan
 and LED off when the edge brain cannot be reached). Two data sources:
 
@@ -69,36 +73,75 @@ lights-on-when-empty to 10 % (PIR + CO2) and 22 % (PIR + mmWave + CO2); with 10x
 measuring: `python3 scripts/check_hardware.py --empty-room --seconds 1800` with nobody in the room. The simulated
 rooms are unchanged (their controller is not affected).
 
-## Bring-up (when the hardware is connected)
+## Bring-up and commissioning
 
-1. **Arduino IDE 2** - Boards Manager: *esp32 by Espressif Systems* (core 2.x or 3.x; both PWM APIs are handled).
-   Board: *ESP32S3 Dev Module* (if you use the board's native USB port, set *USB CDC On Boot: Enabled* to see the
-   serial log).
-2. **Libraries** (Library Manager): *ArduinoJson* (Benoit Blanchon), *Adafruit BME280 Library* (accept *Adafruit
-   Unified Sensor* and *Adafruit BusIO*), *BH1750* (Christopher Laws), *Sensirion I2C SCD4x*, *INA226* (Rob
-   Tillaart; *INA226Lib* also works), *ld2410* (Nick Reynolds), *ESP32Servo* (Kevin Harrington). A missing
-   optional library disables that sensor (the serial log says "library not available") and the bench check
-   reports it as MISSING.
-3. Copy `secrets.example.h` to `secrets.h` (git-ignored) and set Wi-Fi name, password and `EDGE_SERVER_URL` =
-   `http://<Pi or PC IP>:8001/api/hardware/sensor-data` (`run_local.bat` prints the PC's IP). Allow port 8001
-   through the PC's firewall.
-4. Optional before flashing: `python3 firmware/tools/check_firmware.py`.
-5. Compile and upload; Serial Monitor at 115200 baud. Each sensor prints `+ ... ACTIVE` or why not (`i ... not
-   found`); fix wiring/addresses until the sensors you fitted are active.
-6. Start the edge brain (`scripts/start.sh edge` on the Pi, `run_local.bat` or `scripts/start.sh dev` on the PC)
-   and open the dashboard: Room 101 should turn LIVE (ESP32) within a few seconds.
-7. Stop the virtual board if it is running. Bench check: `python3 scripts/check_hardware.py --actuators --ask`
-   (reads 60 s of data, drives fan, LED and
-   damper through a short manual override, asks you to confirm what you see, clears the override). Result:
-   `experiments/results/hardware_bench/<date_time>/summary.md`. It is a physical verification only when the
-   sender is the real board (`esp32_board`).
-8. Disconnect test: unplug the board - Room 101 must show NOT CONNECTED within 10 s and its values disappear.
-9. Empty-room false triggers: `python3 scripts/check_hardware.py --empty-room --seconds 1800` with nobody in
-   the room (PIR / mmWave detections per hour; each one keeps the lights on for up to 15 min).
-10. LED calibration: the button in Room 101's panel (or `POST /api/hardware/calibrate-led`) measures what the LED
-   adds at the BH1750, so the AI does not mistake its own light for daylight.
-11. Record the results: update the status table above and `docs/ACCEPTANCE_GATE.md` (section F) with the bench
-    check's folder as evidence.
+1. In Arduino IDE 2 install *esp32 by Espressif Systems* and select *ESP32S3 Dev Module*. Enable USB CDC
+   On Boot when using the native USB connector.
+2. Install *PubSubClient*, *ArduinoJson*, *Adafruit BME280 Library* (with Unified Sensor and BusIO),
+   *BH1750*, and *Adafruit INA219*. BLE, Preferences and Wi-Fi are provided by the ESP32 Arduino core.
+3. Keep credentials in the git-ignored `secrets.h` copied from `secrets.example.h`. Set the board's
+   `MQTT_BROKER_IP` to the Pi's current LAN IP (not `127.0.0.1`); the Pi gateway's local broker host can
+   remain `127.0.0.1`. Ensure the Wi-Fi network permits ESP32-to-Pi TCP access on port 1883; guest or
+   client-isolated networks may block it. Do not configure router port forwarding or paste credentials
+   into source or logs.
+4. Confirm the installed wiring against the pin table below. The HW-478 photo shows no visible on-board
+   current-limiting resistors, so install one series resistor (220-330 ohm) on each R/G/B channel before
+   connecting it to the ESP32. Confirm the RGB polarity and relay active level before actuator tests;
+   firmware polarity flags are configuration, not proof. The INA219 logic VCC is not connected to the
+   12 V fan supply. Verify the fused fan path with a meter before energizing it.
+5. Compile and flash the production `.ino` in Arduino IDE; Serial Monitor is 115200 baud. After flashing,
+   record the boot log, sensor presence, Wi-Fi IP/RSSI and MQTT connection. A verified flash and valid
+   telemetry do not prove that physical actuator wiring works.
+6. On the Pi install `requirements/edge.txt`, ensure Mosquitto and BlueZ are running, then start
+   `raspberry_pi/run_edge.sh`. Confirm `/health`, `/api/hardware/mqtt`, and `/api/hardware/ble` actually answer.
+7. Pair the BLE gateway using the passkey printed by the ESP32, then confirm `connected` in
+   `/api/hardware/ble`. Advertising alone is not a successful BLE connection.
+8. Observe `sb/v1/room/f2_office_a/#` on Mosquitto. Verify telemetry and status first; then send a
+   validated `sb.command/1` JSON command on the existing command topic and verify its acknowledgement.
+   The BLE gateway uses the same topics when the board's direct MQTT status is offline.
+9. Run the tests in `docs/COMMISSIONING_REPORT.md`, including fan current measurement, all RGB colors,
+   command acknowledgement, transport recovery and Pi reboot. Record evidence and never mark an
+   unobserved hardware test PASS. `scripts/commission_room101.py` does all of this from the PC (see
+   "Commissioning runner" below) and writes the evidence to `docs/commissioning_runs/`.
+
+## Commissioning runner
+
+Run from the project folder on the Windows PC (ESP32 on USB, Pi on the LAN, Arduino Serial Monitor closed):
+
+```powershell
+.venv\Scripts\python.exe scripts\commission_room101.py --deploy-pi --flash      # first run
+.venv\Scripts\python.exe scripts\commission_room101.py --only T09,T16           # repeat some tests
+.venv\Scripts\python.exe scripts\commission_room101.py --skip-reboot            # everything but T18
+```
+
+`--deploy-pi` backs up and replaces `ble_gateway.py`, `mqtt_bridge.py` and `edge_brain.py` in
+`/home/pi/Desktop/Project-pi-ble` and restarts the Edge Brain; deploy it together with the new firmware,
+because the old gateway rejects the larger BLE frames. `--flash` compiles and uploads with the Arduino IDE's
+bundled `arduino-cli` (`--port COM8` by default). The runner then measures what it can (telemetry intervals,
+acknowledgements, INA219 current, BLE gaps, recovery times) and asks the operator only for what it cannot
+see: a reference thermometer reading, covering the light sensor, breathing on the MQ-135, waving at the PIR,
+the LED colour, the relay click and the fan. Mosquitto restart (T17) and Pi reboot (T18) use `sudo` over SSH,
+so the Pi password is typed into the terminal. Results go to `docs/commissioning_runs/run_<time>.md/.json`;
+a test is PASS only when the measurement and the operator's observation agree.
+
+## Serial bench commands (Arduino Serial Monitor, 115200 baud)
+
+| Key | Action |
+|---|---|
+| `1` / `0` | relay and fan ON / OFF |
+| `R` `G` `B` `W` `K` | RGB red / green / blue / white / off (PWM) |
+| `D` | RGB channel diagnostic: each colour pin driven as a plain GPIO HIGH for 4 s (GPIO 6, then 7, then 5) |
+| `S` | read and print all sensors |
+| `I` | scan the I²C bus |
+| `X` | end the bench session now (relay and LED OFF) |
+| `H` | help |
+
+A serial command starts a two-minute bench session: the edge fail-safe and remote commands do not override
+the operator's setting meanwhile, and everything returns to OFF when it ends. Previously the fail-safe
+switched the outputs off within 10 ms whenever no edge controller was connected, so serial colour tests
+always looked dark. For the `D` diagnostic measure each GPIO to GND with a multimeter: about 3.3 V while the
+LED stays dark points to the module, its series resistor or the common-pin connection; 0 V points to the
+pin or the board.
 
 ## Room 101
 
@@ -110,36 +153,47 @@ Room numbers are labels for the report and the dashboard; the room ids are the k
 
 | Device | Function | ESP32-S3 pins |
 |---|---|---|
-| BME280 | temperature, humidity, pressure | I2C SDA 17 / SCL 18 (0x76/0x77) |
-| BH1750 | illuminance | I2C SDA 17 / SCL 18 (0x23/0x5C) |
-| SCD41 | CO2 (NDIR), temperature, humidity | I2C SDA 17 / SCL 18 (0x62) |
-| INA226 | voltage, current, power of the board's loads | I2C SDA 17 / SCL 18 (0x40) |
-| LD2410C | 24 GHz mmWave presence, distance | UART: board RX 16 <- TX, board TX 15 -> RX |
-| MQ-2 | combustible gas (analog) | GPIO 1 (ADC) |
-| HW-416-B PIR | motion | GPIO 4 |
-| DC fan via MOSFET | stands in for the room's AC | GPIO 14 (PWM 25 kHz, 8 bit) |
-| White LED | stands in for the room lighting | GPIO 12 (PWM 5 kHz, 8 bit) |
-| SG90 servo | fresh-air damper | GPIO 13 (50 Hz) |
-| RGB status LED | status | R 6, G 7, B 5 |
-| Onboard LED | connection status | GPIO 38 |
+| BME280 | temperature, humidity, pressure | I2C SDA 9 / SCL 8 |
+| BH1750 | illuminance | I2C SDA 9 / SCL 8 |
+| INA219 | bus/shunt voltage, current, power | I2C SDA 9 / SCL 8 |
+| 0.96" OLED JMD0.96A-2 (SSD1306, 0x3C) | energy meter: power, voltage, current, Wh since boot, fan, mode, temperature (refreshed every 1 s) | I2C SDA 9 / SCL 8, VCC 3.3 V |
+| MQ-135 AO / DO | raw environmental response / comparator output | GPIO 1 ADC (through a suitable divider) / GPIO 2 |
+| HC-SR501 PIR | motion | GPIO 4 |
+| 5 V relay module | fan switching | GPIO 10 |
+| 12 V two-wire fan | load, switched by relay | relay contacts; fused 12 V branch |
+| Light LED (HW-478 RGB) | the AI's lighting decision, PWM white OFF / DIM / ON | R 6 / G 7 / B 5 through 220 ohm each; common (-) to GND |
+| AC indicator RGB LED | what the AC would do: ECO green, LOW cyan, COOL blue, MAX magenta | R 11 / G 12 / B 13 through 220 ohm each (on/off, no PWM) |
+| Status RGB LED | AI blue, schedule green, manual yellow, warning red, test white; blinking red = no controller | R 14 / G 15 / B 16 through 220 ohm each (on/off, no PWM) |
+| Onboard LED | Wi-Fi connection indication | GPIO 38 (core-dependent) |
 
-**Difference from the master prompt.** The prompt lists an older design (DHT22 on GPIO 4, BH1750 on 8/9,
-MQ135 on ADC1, PIR on GPIO 2, relay on GPIO 5, LED PWM on GPIO 6, MQTT every ~10 s). The firmware in the
-repository uses the map above and posts every 3 s over HTTP. The firmware was not changed: altering
-working pin assignments without the board to test on would be unsafe. The MQ-2 is a combustible-gas sensor;
-its reading is stored as `mq2_raw` and is never used as CO2 (only the SCD41's NDIR value, `co2_source:
-"scd41_ndir"`, is).
+The production firmware uses Room 101's canonical id `f2_office_a`, publishes to the project's existing
+`sb/v1/room/f2_office_a/...` topics, and sends telemetry every 3 s over MQTT and BLE. The board itself does
+not compute CO2; the Pi estimates it from the ADC millivolts (see "CO2 from the MQ-135" below).
+
+Indicator LEDs (firmware `room101-2026.11.23b`): every Edge Brain command carries `ac_led`
+(OFF/ECO/LOW/COOL/MAX, from the AC decision) and `status_led` (AI/RULE/MANUAL/WARNING/TEST); the board reports
+what they show as `actuator_ac_led` / `actuator_status_led`. WARNING means a safety note, room temperature
+>= 30 C, CO2 >= 1200 ppm or a sensor not responding. The board overrides the status LED locally: blinking red
+when no controller is reachable (fail-safe), white during a serial bench session. The indicator LEDs switch
+colours on/off because the S3 has 8 LEDC channels and the light LED uses three for dimming. The retained
+status topic now also carries `detail`: booting (first 60 s), running, or error with `failed` sensors.
+Pin numbers differ from the requirements document (SDA 8 / SCL 9, RGB 5/6/7); the owner chose to keep the
+wired and tested board as the reference (23 Nov 2026). The full wiring page with the INA219/relay/fan branch
+is `docs/wiring/room101-wiring.html` (final circuit with the OLED, D1 1N5822 reverse-polarity diode, C1/C2 470 uF,
+C3 100 nF, LED resistors red 150 ohm / green and blue 68 ohm; PNG: `docs/wiring/room101-final-circuit.png`).
+Firmware `room101-2026.11.23c` adds the OLED energy page; a missing OLED is probed again every 30 s like the sensors.
 
 ## Data path (sensor to twin)
 
 ```
-sensor -> ESP32-S3 reads (missing sensor = field omitted, never a default value)
-       -> HTTP POST /api/hardware/sensor-data  (or MQTT sb/v1/room/f2_office_a/telemetry)
+sensor -> ESP32-S3 reads (unavailable sensor fields omitted; sensor_health reports availability)
+       -> MQTT sb/v1/room/f2_office_a/telemetry
+          or paired BLE -> Pi BleGateway -> the same MQTT topic
        -> validation (_num: finite numbers only; MQTT: ranges, schema, msg_id, room/topic match)
        -> EdgeBrain.inject_hardware_data  (one ingestion function for both transports)
        -> SQLite store (readings, decisions; provenance room101_measured only for the real board)
        -> HardwareRoomController: PIR(+mmWave) + CO2 fusion -> multi-objective controller -> SafetyLayer
-       -> reply / MQTT command -> board actuates fan, LED, damper
+       -> sb.command/1 over MQTT or BLE -> board switches relay/fan and RGB
        -> state streamed to the dashboard (SSE) -> 3D twin and room panel
 ```
 
@@ -152,28 +206,141 @@ Failures are visible at each stage: a board that stops posting for `HW_TIMEOUT_S
 Controller -> proposed action -> SafetyLayer (R1 valid values and set-point 22-27 C, R2 equipment rooms,
 R3 heat-stress guard, R4 CO2 fresh-air rule) -> command to the board -> the next reading reports the
 actuator state (`actuator_fan_speed`, `actuator_light_level`, `actuator_servo_angle`) -> event log.
-Over MQTT the board also acknowledges each command (`sb.ack/1`); an unacknowledged command is marked
+Over MQTT or BLE the board acknowledges each command (`sb.ack/1`); an unacknowledged command is marked
 `timeout` after 10 s. Each reading's reported actuator levels are compared with the previous command
 (`control.previous_command_verified`, stored as `decisions.verified`); three mismatches in a row raise an event.
-Manual control: `POST /api/hardware/override` sets bounded fan/LED/damper levels for 1-240 min (the AI is bypassed,
-the room shows MANUAL OVERRIDE, the override ends by itself or with `clear`). The AI switch (AI OFF) returns
-every room to the conventional schedule. When the board cannot reach the edge, the firmware itself switches the fan and LED
-off (`apply_actuation("ECO", "OFF", 0, 0, -1)`) and shows a red status LED.
+Manual control: `POST /api/hardware/override` sets bounded fan/LED levels for 1-240 min. When neither MQTT
+nor BLE is available, or the edge command timeout expires, firmware switches the relay and RGB off.
 
 ## MQTT topics and schemas
 
 | Topic | Direction | QoS | Payload |
 |---|---|---|---|
-| `sb/v1/room/<room>/telemetry` | board -> edge | 1 | `sb.telemetry/1`: `room_id`, `msg_id` (1-64 chars, unique), optional `ts`, and the HTTP payload's fields |
-| `sb/v1/room/<room>/command` | edge -> board | 1 | `sb.command/1`: `msg_id`, `in_reply_to`, `hvac_action`, `light_action`, `fan_speed`, `light_level`, `servo_angle`, `occupancy_probability`, `ttl_s` |
+| `sb/v1/room/<room>/telemetry` | board -> edge | 1 | `sb.telemetry/1`: `room_id`, `msg_id`, sensor fields, MQ-135 raw/ADC reading, INA219 measurements and actuator state |
+| `sb/v1/room/<room>/command` | edge -> board | 1 | `sb.command/1`: backend `fan_speed`/`light_level`, or validated `fan`/`relay`/`rgb` manual fields |
 | `sb/v1/room/<room>/ack` | board -> edge | 1 | `sb.ack/1`: `msg_id` of the command, `status` applied/rejected, `applied` actuator states |
 | `sb/v1/room/<room>/status` | board -> edge | 1, retained, last will | `{"state": "online" \| "offline"}` |
 | `sb/v1/edge/status` | edge -> boards | 1, retained, last will | `{"state": "online" \| "offline"}` |
+
+The relay switches the fan, so `relay` and `fan` are alternate command names for the same output, not
+independent actuators. Each command needs a unique string `msg_id`. Examples for a local Pi broker:
+
+```sh
+mosquitto_pub -h 127.0.0.1 -t sb/v1/room/f2_office_a/command \
+  -m '{"schema":"sb.command/1","msg_id":"manual-fan-001","fan":"ON"}'
+mosquitto_pub -h 127.0.0.1 -t sb/v1/room/f2_office_a/command \
+  -m '{"schema":"sb.command/1","msg_id":"manual-rgb-001","rgb":"RED"}'
+```
+
+Use `fan` or `relay` with `ON`, `OFF`, or `TOGGLE`; `rgb` supports `RED`, `GREEN`, `BLUE`, `WHITE`, or
+`OFF`. Each valid command is acknowledged on the existing `ack` topic; commands sent through BLE use the
+same JSON and acknowledgement schemas.
+
+The Edge Brain answers every reading with an automatic `fan_speed`/`light_level` command, and the RGB module
+is the room light, so a plain `rgb` colour is replaced by the automatic white level within about three
+seconds. Manual and test commands therefore carry `"hold_s"` (1-600): the actuators they set keep that state
+and automatic commands leave them alone until the hold ends; `"hold_s": 0` releases a hold at once. Holds are
+reported in telemetry and acknowledgements (`rgb_hold_s`, `fan_hold_s`), the Edge Brain does not count a held
+actuator as a verification mismatch, and the edge fail-safe still clears every hold.
+
+```sh
+mosquitto_pub -h 127.0.0.1 -t sb/v1/room/f2_office_a/command \
+  -m '{"schema":"sb.command/1","msg_id":"manual-rgb-002","rgb":"RED","hold_s":30}'
+mosquitto_pub -h 127.0.0.1 -t sb/v1/room/f2_office_a/command \
+  -m '{"schema":"sb.command/1","msg_id":"ble-test-001","test":"mqtt_pause","seconds":60}'
+```
+
+`"test": "mqtt_pause"` (10-300 s, accepted only while the BLE gateway is connected) makes the board publish a
+retained `offline` status, leave MQTT and carry telemetry and commands over BLE until the pause ends. It is
+the controlled way to commission the BLE fallback without touching the network. Telemetry states the path it
+took in `transport` (`mqtt` or `ble`) and the firmware revision in `fw_version`.
 
 Credentials: `MQTT_USERNAME`, `MQTT_PASSWORD` (environment only, never logged), `MQTT_TLS=1` for TLS.
 Enable the bridge with `MQTT_ENABLED=1` (`scripts/start.sh live`). One client per process; reconnect with
 back-off 1-30 s. For a broker on the Pi, Mosquitto with `password_file` and `listener 1883 127.0.0.1` (or TLS
 on 8883 for remote boards) is the intended set-up.
+
+## Paired BLE fallback
+
+MQTT remains the preferred board transport. When the ESP32 cannot connect to MQTT but the Pi gateway is
+available, the board advertises `SB-Room101` over BLE. The Pi's `BleGateway` forwards telemetry and
+acknowledgements to the same MQTT topics and sends MQTT commands back over BLE. BLE uses the same schemas,
+with a four-byte frame header; the message limit is 1024 bytes. The ESP32 offers an ATT MTU of 247 and BlueZ
+negotiates it on connect, so each notification carries up to 240 data bytes and a telemetry message needs
+four or five frames (sixteen-byte frames, about sixty of them, only if the MTU stays at 23). A notification the
+host stack cannot buffer is retried up to three times before the message counts as dropped. The previous
+revision forced a 23-byte MTU and sent 44 frames 50 ms apart per message, which blocked the loop for over two
+seconds every reading and lost whole messages when one frame was dropped; that matches the gaps seen in T22.
+Pi gateway and firmware must be updated together: the old gateway rejects frames longer than 20 bytes. The paired BLE
+link is an alternate route to the MQTT broker, not a replacement for Mosquitto.
+**Redundant delivery (since 23 Nov 2026).** On the factory guest Wi-Fi the board's MQTT link was unreliable:
+the Pi answered 1 of 20 pings to the board, TCP stalled for tens of seconds while PubSubClient still counted
+as connected, and writes into the stalled socket blocked the loop for up to 10 s each. BLE, measured at the
+same time, delivered every frame. The system therefore uses both links at once while both are up:
+
+- the board publishes each reading over MQTT and, while the gateway is connected, over BLE too, with the
+  same `msg_id` (`transport` says which copy it is). The MQTT bridge keeps the first copy and counts the
+  other as a duplicate, so each reading is processed and answered once;
+- ACKs go over both links; the edge matches them by command `msg_id`;
+- the gateway forwards every edge command over BLE as well (`BLE_REDUNDANT=1`, the default; set `0` for the
+  old behaviour of forwarding only when the board's MQTT status is offline). The board de-duplicates by
+  command `msg_id` and does not re-acknowledge the second copy within 10 s;
+- the board drops an MQTT link that has delivered nothing for 12 s (the edge answers every reading, so
+  silence means a stall) and reconnects, instead of blocking on it;
+- Wi-Fi modem sleep is on (ESP-IDF requires it for Wi-Fi/BLE coexistence), coexistence prefers Wi-Fi, and
+  the board asks the Pi for a 50-100 ms BLE connection interval so BLE leaves air time for Wi-Fi.
+
+Measured on 23 Nov 2026 (5-minute MQTT capture on the Pi broker, firmware `room101-2026.11.23`): 95 unique
+readings in 297 s (one every 3.1 s), the only gap longer than 4.5 s was the 16 s Wi-Fi/MQTT connect after
+boot, 94 of 95 commands acknowledged. 75 readings arrived first over BLE and 20 first over MQTT. Before the
+change, a 150 s capture had 27 readings and gaps of up to 30 s. A dedicated access point or phone hotspot
+for the Pi and the board will make the MQTT half far better than the shared guest network.
+
+On the Pi, install `requirements/edge.txt` and run `raspberry_pi/run_edge.sh` with Mosquitto available.
+That launcher enables MQTT and BLE by default. For direct startup, set both `MQTT_ENABLED=1` and
+`BLE_ENABLED=1`. The gateway scans for the configured device and exposes its state at
+`GET /api/hardware/ble` (`connected`, `mqtt_connected`, `last_error`, and transfer counters). BLE status
+is also published on `sb/v1/room/f2_office_a/ble_status`; the existing MQTT bridge uses it only when the
+board's direct MQTT status is not online.
+
+For first pairing, open the ESP32 Serial Monitor at 115200 baud and note the six-digit passkey printed
+during startup. Keep it private. The Pi gateway requests pairing when it connects. If BlueZ requires an
+interactive pairing agent, stop the gateway, use `bluetoothctl` with a keyboard/display agent to pair the
+advertised device using that passkey, trust the device, then restart the gateway. Confirm the result in
+`/api/hardware/ble`; do not treat advertising alone as a completed connection. A new passkey is generated
+only if the ESP32's stored Preferences value is invalid.
+
+While BLE carries the data the firmware retries MQTT every 15 s instead of 5 s, and a TCP connect to a
+missing broker is limited to 3 s (raised from 1.5 s, which was too short on the congested guest Wi-Fi).
+
+## CO2 from the MQ-135 (estimated, `co2_source = "mq135_estimate"`)
+
+The board has no NDIR CO2 sensor, so the Edge Brain estimates CO2 from the MQ-135
+(`raspberry_pi/co2_estimator.py`). The board sends the AO voltage (`mq135_adc_mv`); the Pi converts it:
+
+    Vout = Vadc x divider        Rs = RL (Vcc - Vout) / Vout          (RL = 1 kOhm on the module, Vcc = 5 V)
+    Rs_c = Rs / f(T, RH)         temperature/humidity correction from the datasheet curve, BME280 values
+    ppm  = 116.6020682 (Rs_c / R0)^-2.769034857
+
+R0 comes from automatic baseline correction (ABC): the cleanest hour in the last 7 days (highest corrected
+Rs) is taken as fresh air, 420 ppm. For the first 24 h the value is labelled `provisional`; the first 30 min
+after a board boot are `warming_up` and give no value. The result is the median of the last five readings,
+clamped to 350..10000 ppm. It appears as `CO2` with `CO2_source = mq135_estimate`, `CO2_estimate_state` and
+`MQ135_Rs_kohm` in the room sensors, and the dashboard labels it `eCO2 (MQ-135)`. A measured NDIR value
+(`scd41_ndir`) always wins if a board sends one. Status: `GET /api/hardware/co2`.
+
+Final wiring: the module runs from 5 V and AO reaches GPIO1 through a 10k/15k divider (R1 10 k from AO to
+GPIO1, R2 15 k from GPIO1 to GND), so GPIO1 never sees more than 3.0 V. The Edge Brain's default
+`MQ135_DIVIDER` is 25/15 = 1.667 for this circuit (set it to `1.0` only for a board without the divider).
+The ESP32-S3 ADC reads up to about 3.1 V; readings at or above 3100 mV are reported `adc_saturated` and not
+used. A calibration saved for a different supply, load resistor or divider is set aside automatically and
+the baseline starts again (it is kept in `discarded_calibration` of `GET /api/hardware/co2`). Better calibration: put the board outdoors for 20-30 min, then
+`POST /api/hardware/co2/calibrate {"reference_ppm": 420}` (manual R0, kept until
+`{"release": true}`). The MQ-135 also reacts to alcohol, ammonia and VOCs, so this is an estimate, not a
+measurement; the thesis should say so.
+
+If both transports are unavailable, the firmware turns the fan and RGB outputs off. A valid command over
+either MQTT or BLE refreshes the command timeout; BLE connection by itself does not bypass the timeout.
 
 ## Test harness (no board needed)
 

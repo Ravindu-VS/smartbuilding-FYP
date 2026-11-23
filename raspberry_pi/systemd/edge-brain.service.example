@@ -1,0 +1,20 @@
+[Unit]
+Description=Smart Building Edge Brain with MQTT and BLE gateway
+Wants=network-online.target
+After=network-online.target bluetooth.target mosquitto.service
+Requires=mosquitto.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Desktop/Project-pi-ble
+Environment=MQTT_ENABLED=1
+Environment=BLE_ENABLED=1
+Environment=MQTT_HOST=127.0.0.1
+Environment=MQTT_PORT=1883
+ExecStart=/usr/bin/bash /home/pi/Desktop/Project-pi-ble/raspberry_pi/run_edge.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

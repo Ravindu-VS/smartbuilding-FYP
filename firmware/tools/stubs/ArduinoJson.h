@@ -12,6 +12,7 @@ struct JsonVariant {
   double operator|(double d) const { return d; }
   bool operator|(bool d) const { return d; }
   bool isNull() const { return true; }
+  bool operator==(const char*) const { return false; }
 };
 struct JsonObject : JsonVariant {};
 template <size_t N> struct StaticJsonDocument {
@@ -29,4 +30,6 @@ struct DeserializationError {
   const char* c_str() const { return ""; }
 };
 template <size_t N> size_t serializeJson(const StaticJsonDocument<N>&, String&) { return 0; }
+template <size_t N> size_t serializeJson(const StaticJsonDocument<N>&, char*, size_t) { return 0; }
 template <size_t N> DeserializationError deserializeJson(StaticJsonDocument<N>&, const String&) { return DeserializationError(); }
+template <size_t N, class T> DeserializationError deserializeJson(StaticJsonDocument<N>&, const T*, size_t) { return DeserializationError(); }

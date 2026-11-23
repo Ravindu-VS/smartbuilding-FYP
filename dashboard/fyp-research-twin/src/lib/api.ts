@@ -27,6 +27,8 @@ export const api = {
     post<{ scenario: { id: number; label: string } }>('/api/scenario', { kind, room_id, value, minutes }),
   clearScenarios: () => post('/api/scenario', { action: 'clear' }),
   calibrateLed: (room_id?: string) => post('/api/hardware/calibrate-led', { room_id }),
+  override: (body: { room_id: string; fan_speed?: number; light_level?: number; servo_angle?: number; minutes?: number; reason?: string; clear?: boolean }) =>
+    post('/api/hardware/override', body),
   config: () => get<BuildingConfig>('/api/building/config'),
   timeline: (q: { after?: number; room_id?: string; limit?: number; kinds?: string }) => {
     const p = new URLSearchParams();

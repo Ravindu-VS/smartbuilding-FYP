@@ -20,6 +20,7 @@ acceptance tests; the safety layer stays in front of every controller at all tim
 | 10. Evaluate candidate vs approved | `python -m ml.registry evaluate <task> <version>` (also run by promote) |
 | 11. Promote only after acceptance tests | `python -m ml.registry promote <task> <version>` or `POST /api/models/promote` |
 | 12. Roll back | `python -m ml.registry rollback <task>` or `POST /api/models/rollback`; history kept in `registry.json` |
+| 13. Continual learning (since 23 Nov 2026) | `ml/online_learning.py`: the simulated rooms' occupancy model retrains itself while the system runs (below) |
 
 ## Acceptance tests (ml/registry.py)
 
@@ -46,3 +47,26 @@ count with consent) next to the stored readings, export `readings` for the perio
 `output/edge_store.sqlite3`, add them as a third data source with provenance `room101_measured` in
 `ml/occupancy.py`, keep a later week as the test set, retrain, then `ml.registry evaluate` and `promote`.
 Until then, the real room keeps the rule-based fusion estimator and the multi-objective controller.
+
+## Continual learning while the system runs (simulated rooms)
+
+Since 23 Nov 2026 the approved learned fusion (`occupancy_twin_fusion`) drives the AI's P(occupied) in the 25
+simulated rooms (`ml/learned_fusion.py`; experiment 12: occupancy accuracy 96.9 % vs 92.5 %, 0.9 % less energy,
+slightly better comfort), and it keeps learning:
+
+1. Every control step, each simulated room adds one row: the model's 13 features, the simulator's true label
+   (head count > 0), the hand-built estimate and the approved model's estimate (buffer: the last 5 simulated days).
+2. Every 24 simulated hours (once at least one day is collected) a background thread trains a new
+   gradient-boosted model on the older 80 % of the buffer and tests it on the newest 20 % (forward in time).
+3. It goes live only if its F1 on those rows beats the approved model's by at least 0.002 **and** beats the
+   hand-built estimator, **and** it passes the registry's acceptance tests (self-test, latency, finite outputs,
+   feature list). It is then registered as a new version with its data window and metrics, promoted, and the live
+   estimators switch to it at the next control step. Otherwise the round is recorded and the approved model stays.
+4. Status and the last rounds: `GET /api/models` (`live.online_learning`) and the dashboard's Models & data tab.
+   Roll back: `python -m ml.registry rollback occupancy_twin_fusion`. Switch off: `ONLINE_LEARNING=0`;
+   October configuration (hand-built estimator, learned model in shadow): `FUSION_LEARNED=0`.
+
+Not learned online, on purpose: Room 101's occupancy (no ground-truth labels; training on the model's own
+predictions would reinforce its mistakes) and the PPO policy (reinforcement learning explores, which is done in
+the simulator, `rl/train.py`, and deployed through its acceptance test). The multi-objective controller's
+per-room occupancy prior keeps adapting online, as before.

@@ -164,7 +164,14 @@ class Registry:
                     better = val > ref if rule["higher"] else val < ref
                 check("beats reference", better, f"{val:.4f} vs reference {ref:.4f} ({rule['why']})")
                 act = self.active(task)
-                if act and act["version"] != version:
+                same = meta.get("compare_active_on_same_data") or {}
+                if act and act["version"] != version and same.get("version") == act["version"] \
+                        and isinstance(same.get("f1"), (int, float)) and rule["metric"].endswith(".f1"):
+                    # online learning: the approved model was scored on the same held-out rows
+                    tol = rule.get("tol", 0.0)
+                    check("not worse than active", val >= same["f1"] - tol,
+                          f"{val:.4f} vs active {act['version']} {same['f1']:.4f} on the same rows")
+                elif act and act["version"] != version:
                     av = _get(act["metadata"], rule["metric"])
                     if isinstance(av, (int, float)):
                         tol = rule.get("tol", 0.0)

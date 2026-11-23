@@ -8,9 +8,13 @@ export interface SensorReadings {
   CO2: number | null;
   HumidityRatio: number | null;
   PIR_seconds_since_motion?: number | null;   // simulated rooms
-  CO2_source?: string | null;                 // hardware room: "scd41_ndir" only
+  CO2_source?: string | null;                 // hardware room: "scd41_ndir" (measured) or "mq135_estimate"
+  CO2_estimate_state?: string | null;         // MQ-135 estimate: warming_up | not_calibrated | provisional | calibrated | adc_saturated
+  MQ135_Rs_kohm?: number | null;              // MQ-135 sensing resistance, temperature/humidity corrected
   CO2_rejected?: string;                      // hardware room: why a reported value was not used
   Pressure_hPa?: number | null;
+  MQ135_raw?: number | null;
+  MQ135_adc_mV?: number | null;
   MQ2_raw?: number | null;
 }
 
@@ -64,6 +68,8 @@ export interface ControlDecision {
   mode?: 'ai' | 'conventional' | 'manual';
   manual_override?: { reason: string; until: string };
   previous_command_verified?: boolean | null;
+  // board indicator LEDs for this decision (edge brain): AC LED, status LED, and why it warns
+  indicators?: { ac_led: string; status_led: string; warnings: string[] } | null;
   ai_would?: AiWould | null;        // while AI is off: what it would do
   reason: string;
   safety_notes: string[];
@@ -107,6 +113,13 @@ export interface DeviceState {
   light_level?: number | null;
   hvac_mode: string | null;
   hvac_speed: number | null;
+  fan_on?: boolean | null;
+  relay_on?: boolean | null;
+  rgb?: string | null;
+  ac_led?: string | null;           // what the board's AC indicator LED shows
+  status_led?: string | null;       // what the board's status LED shows (AI, RULE, MANUAL, WARNING, TEST, LOST, BENCH)
+  wifi_rssi_dbm?: number | null;
+  uptime_s?: number | null;
   setpoint?: number | null;
   vent_boost?: boolean;
   servo_angle?: number | null;
@@ -213,7 +226,13 @@ export interface RoomState {
   watched?: boolean;
   hardware?: HardwareStatus;
   presence?: PresenceReadings | null;
-  power_measurement?: { voltage_v: number | null; current_mA: number | null; power_mW: number | null; available: boolean } | null;
+  power_measurement?: {
+    voltage_v: number | null;
+    shunt_voltage_mV?: number | null;
+    current_mA: number | null;
+    power_mW: number | null;
+    available: boolean;
+  } | null;
   sensor_health?: Record<string, boolean> | null;
   room_number?: number;                 // 101 = the real room, 102-126 = simulated (labels; ids stay the keys)
   provenance?: Record<string, string>;  // synthetic | room101_measured | prediction | unavailable
@@ -467,6 +486,10 @@ export interface ModelsStatus {
               candidate_vs_truth: ConfusionSummary; active_vs_truth: ConfusionSummary; active: string; note: string };
     thermal: { task: string; version: string | null; scored: number; live_mae_c: number | null; live_bias_c: number | null; basis: string };
     drift: { real_room_inputs_vs_occupancy_rf_training: DriftReport | null; simulated_inputs_vs_shadow_training: DriftReport | null };
+    online_learning?: { enabled: boolean; unavailable: string | null; buffer_rows: number; min_rows: number;
+      retrain_every_sim_h: number; training_now: boolean; last_round_sim_time: string | null; scope: string;
+      rounds: { utc: string; result: string; why?: string; version?: string; train_rows?: number; test_rows?: number;
+        f1?: { candidate: number; approved: number; hand_built: number }; accuracy?: { candidate: number; approved: number; hand_built: number } }[] };
     errors: string[];
   };
   live_error: string | null;

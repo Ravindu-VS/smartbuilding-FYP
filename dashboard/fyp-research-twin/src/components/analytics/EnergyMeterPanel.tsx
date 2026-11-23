@@ -13,7 +13,7 @@ import { span } from '../building/KpiStrip';
  * The energy meter: the building's power over time with the AI switch positions
  * shaded, one row per switch period (what the building used, and what the twin copy
  * used over the same minutes under the other mode), the same hours of the day on
- * different days, and the real room's measured (INA226) meter.
+ * different days, and the real room's measured (INA219) meter.
  */
 const axis = { fontSize: 10, fill: COLORS.axis };
 const tip = {
@@ -122,7 +122,7 @@ export default function EnergyMeterPanel() {
         )}
 
         <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-2.5" data-testid="real-meter">
-          <h4 className="text-[11px] font-semibold text-slate-200 mb-1 flex items-center gap-1"><Cpu size={12} className="text-cyan-300" />Real room meter — {real?.room_name ?? 'Office A'} (INA226, measured)</h4>
+          <h4 className="text-[11px] font-semibold text-slate-200 mb-1 flex items-center gap-1"><Cpu size={12} className="text-cyan-300" />Real room meter — {real?.room_name ?? 'Office A'} (INA219, measured)</h4>
           {!real ? <div className="text-[11px] text-slate-500">No real room.</div> : (
             <>
               <div className="flex gap-4 text-[11px]">

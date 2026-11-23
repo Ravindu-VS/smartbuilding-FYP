@@ -280,9 +280,20 @@ class LiveTwin:
         self.reset(seed=seed, start=start, controller=controller, warmup=warmup)
 
     # ------------------------------------------------------------------ #
+    def _make_estimator(self):
+        """P(occupied) for the simulated rooms: the approved learned PIR+CO2 fusion (occupancy_twin_fusion,
+        F1 0.962 vs 0.932 for the hand-built estimator on an unseen simulation), with the hand-built
+        FusionEstimator underneath for the AC confirmation rule and as the fallback. FUSION_LEARNED=0 keeps
+        the hand-built estimator only (the configuration of the October experiments)."""
+        if os.environ.get("FUSION_LEARNED", "1") == "0":
+            return FusionEstimator()
+        from ml.learned_fusion import LearnedFusionEstimator
+        est = LearnedFusionEstimator.from_registry(FusionEstimator())
+        return est if est.active else est.fallback
+
     def _make_mo(self) -> MultiObjectiveController:
         overrides = {r.room_id: dict(r.controller_overrides) for r in self.specs}
-        return MultiObjectiveController(FusionEstimator(), room_overrides=overrides, **TUNED_WEIGHTS)
+        return MultiObjectiveController(self._make_estimator(), room_overrides=overrides, **TUNED_WEIGHTS)
 
     def _make_ai(self, name: str):
         if name == "mo":
@@ -358,7 +369,9 @@ class LiveTwin:
             self.ai = dict(self.mo)
         else:
             self.ai = {"ctrl": self._make_ai(self.ai_name), "base": self._make_ai(self.ai_name)}
-        self.est_view = FusionEstimator()             # the building's occupancy estimate, always on
+        # the building's occupancy estimate, always on: the AI's own estimator when the AI is the MO controller
+        mo_est = getattr(self.ai.get("ctrl"), "estimator", None) if self.ai_name == "mo" else None
+        self.est_view = mo_est if mo_est is not None else self._make_estimator()
 
     def _init_measurement_state(self) -> None:
         self.acc = {m: ModeAccumulator(self.ids) for m in MODES}
@@ -619,7 +632,9 @@ class LiveTwin:
                         self._watch_state[rid] = now_occ
                     if rid in self.watch and new != prev:
                         self._watch_state[rid] = (p_dec or 0.0) >= 0.5
-                self.last[rid] = {"decision": d, "validated": va, "p_fusion": p_f, "p_rf": rf_p.get(rid)}
+                p_rule = self.est_view.rule_probability(o) if hasattr(self.est_view, "rule_probability") else None
+                self.last[rid] = {"decision": d, "validated": va, "p_fusion": p_f, "p_rf": rf_p.get(rid),
+                                  "p_rule": p_rule}
             else:
                 self.twin_last[rid] = {"decision": d, "validated": va}
             if new != prev:
@@ -645,6 +660,13 @@ class LiveTwin:
                 rf_b = dict(zip(self.ids, self.rf.probabilities([obs_b[r] for r in self.ids])))
                 self.ai["ctrl"].estimator.cache = rf_p
                 self.ai["base"].estimator.cache = rf_b
+        # learned fusion: one batch per copy and control step (keeps each estimator's history continuous)
+        for key, obs in (("ctrl", obs_c), ("base", obs_b)):
+            prep = getattr(getattr(self.ai.get(key), "estimator", None), "prepare", None)
+            if prep is not None:
+                prep(list(obs.values()))
+        if hasattr(self.est_view, "prepare"):
+            self.est_view.prepare(list(obs_c.values()))
         if not measure:
             # learning week: both copies run the AI so each copy's controller learns
             saved = self.ai_enabled

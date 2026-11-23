@@ -16,6 +16,39 @@ import RoomHistoryChart from './RoomHistoryChart';
  * one returned to the board with its last reading (same AI as the simulated rooms).
  */
 
+function co2Label(source?: string | null, state?: string | null): string {
+  if (source === 'scd41_ndir') return 'CO₂ (SCD41)';
+  if (source === 'mq135_estimate') return state === 'calibrated' ? 'eCO₂ (MQ-135)' : 'eCO₂ (MQ-135, provisional)';
+  if (state === 'warming_up') return 'eCO₂ (MQ-135 warming up)';
+  return 'CO₂';
+}
+
+// colours of the board's indicator LEDs (same as the firmware)
+const AC_LED: Record<string, { color: string; text: string }> = {
+  OFF: { color: '#475569', text: 'off' }, ECO: { color: '#22c55e', text: 'AC standby (ECO)' },
+  LOW: { color: '#22d3ee', text: 'AC light cooling (27 °C)' }, COOL: { color: '#3b82f6', text: 'AC cooling' },
+  MAX: { color: '#d946ef', text: 'AC cooling at design set-point' },
+};
+const STATUS_LED: Record<string, { color: string; text: string }> = {
+  OFF: { color: '#475569', text: 'off' }, AI: { color: '#3b82f6', text: 'AI control' },
+  RULE: { color: '#22c55e', text: 'conventional schedule' }, MANUAL: { color: '#facc15', text: 'manual override' },
+  WARNING: { color: '#ef4444', text: 'warning' }, TEST: { color: '#f8fafc', text: 'test / calibration' },
+  LOST: { color: '#ef4444', text: 'no controller (blinking)' }, BENCH: { color: '#f8fafc', text: 'serial bench session' },
+};
+
+function Led({ label, state, map, testId }: { label: string; state: string | null | undefined; map: Record<string, { color: string; text: string }>; testId: string }) {
+  const m = state ? map[state] : undefined;
+  return (
+    <div className="flex items-center gap-1.5 rounded border border-slate-700 px-1.5 py-1 min-w-0" data-testid={testId}>
+      <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: m?.color ?? '#334155', boxShadow: m && state !== 'OFF' ? `0 0 6px ${m.color}` : 'none' }} />
+      <div className="min-w-0">
+        <div className="text-[9px] uppercase text-slate-500 leading-tight">{label}</div>
+        <div className="text-[10.5px] text-white font-mono leading-tight truncate">{state ?? '—'}<span className="text-slate-400 font-sans"> {m?.text ?? ''}</span></div>
+      </div>
+    </div>
+  );
+}
+
 function ago(seconds: number | null) {
   if (!isNum(seconds)) return '—';
   if (seconds < 60) return `${seconds.toFixed(1)} s ago`;
@@ -48,6 +81,7 @@ export default function HardwareRoomPanel({ room, events, history }: { room: Roo
   const hw = room.hardware ?? null;
   const now = useNow(500);
   const [cal, setCal] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const ageNow = hw && isNum(hw.age_s) && link.lastMessageAt !== null ? hw.age_s + Math.max(0, now - link.lastMessageAt) / 1000 : null;
   const status: 'never' | 'lost' | 'test' | 'live' = !hw || hw.state === 'never_connected' ? 'never' : !hw.connected ? 'lost' : hw.real_board ? 'live' : 'test';
   const live = status === 'live' || status === 'test';
@@ -56,6 +90,9 @@ export default function HardwareRoomPanel({ room, events, history }: { room: Roo
   const applied = live ? room.device_state ?? null : null;
   const control = live ? room.control : null;
   const power = live ? room.energy?.measured_power_watts ?? null : null;
+  const gasRaw = s?.MQ135_raw ?? s?.MQ2_raw ?? null;
+  const gasLabel = s?.MQ135_raw != null ? 'MQ-135 response (raw)'
+    : s?.MQ2_raw != null ? 'MQ-2 response (raw)' : 'Gas response (raw)';
   const lastDecision = [...events].reverse().find((e) => e.kind === 'decision') ?? null;
   const pill = { never: 'NOT CONNECTED', lost: 'NOT CONNECTED', test: senderLabel(hw), live: 'CONNECTED' }[status];
 
@@ -86,11 +123,18 @@ export default function HardwareRoomPanel({ room, events, history }: { room: Roo
           <Card label="Temperature" value={fx(s?.Temperature, 1)} unit="°C" testId="hw-temp" />
           <Card label="Humidity" value={fx(s?.Humidity, 0)} unit="%" testId="hw-hum" />
           <Card label="Light" value={fx(s?.Light, 0)} unit="lux" testId="hw-lux" />
-          <Card label="CO₂ (SCD41)" value={fx(s?.CO2, 0)} unit="ppm" testId="hw-co2" />
+          <Card label={co2Label(s?.CO2_source, s?.CO2_estimate_state)} value={fx(s?.CO2, 0)} unit="ppm" testId="hw-co2" />
           <Card label={`Presence${presence?.source ? ` (${presence.source})` : ''}`} value={presence?.fused_presence == null ? '—' : presence.fused_presence ? 'Yes' : 'No'} unit="" testId="hw-presence" />
           <Card label="Pressure" value={fx(s?.Pressure_hPa ?? null, 0)} unit="hPa" testId="hw-pressure" />
+          <Card label={gasLabel} value={fx(gasRaw, 0)} unit="ADC" testId="hw-gas-raw" />
+          <Card label="MQ-135 ADC pin" value={fx(s?.MQ135_adc_mV ?? null, 0)} unit="mV" testId="hw-gas-mv" />
         </div>
         {s?.CO2_rejected && <div className="text-[10px] text-amber-300 mt-1">CO₂ value not used: {s.CO2_rejected}</div>}
+        {s?.CO2_source === 'mq135_estimate' || (s?.CO2_estimate_state && s?.CO2 == null) ? (
+          <div className="text-[10px] text-slate-400 mt-1" data-testid="hw-co2-note">
+            CO₂ is estimated from the MQ-135 gas sensor ({s?.CO2_estimate_state?.replace('_', ' ') ?? 'unknown'}), baseline-calibrated to 420 ppm fresh air; the sensor also reacts to VOCs and alcohol, so it is not an NDIR measurement.
+          </div>
+        ) : null}
         {live && room.ai && (
           <div className="mt-2">
             <div className="flex justify-between text-[10.5px]"><span className="text-slate-400">AI estimate P(occupied) — PIR{presence?.source?.includes('mmwave') ? '/mmWave' : ''} + CO₂</span><span className="font-bold text-white" data-testid="hw-prob">{fx(room.ai.occupancy_probability, 2)}</span></div>
@@ -130,16 +174,67 @@ export default function HardwareRoomPanel({ room, events, history }: { room: Roo
               <div className="rounded border border-slate-700 py-1"><div className="text-slate-500 text-[9px] uppercase">Servo</div><div className="font-mono text-white">{control.servo_angle}°</div></div>
             </div>
             <div className="text-[10px] text-slate-500 mt-1.5" data-testid="hw-applied">
-              {applied ? `Board reports applied: fan ${applied.hvac_speed ?? '—'}/255, LED ${applied.light_level ?? '—'}/255, servo ${applied.servo_angle ?? '—'}° (reported with its next reading)` : 'Board actuator state: —'}
+              {applied ? `Board reports applied: fan ${applied.hvac_speed ?? '—'}/255, relay ${applied.relay_on == null ? '—' : applied.relay_on ? 'ON' : 'OFF'}, RGB ${applied.rgb ?? '—'}, LED ${applied.light_level ?? '—'}/255, servo ${applied.servo_angle ?? '—'}° (reported with its next reading)` : 'Board actuator state: —'}
             </div>
           </>
         ) : <div className="text-[11px] text-slate-500">No decision without board data.</div>}
       </Section>
 
+      <Section icon={<Zap size={12} />} title="Manual control and board LEDs">
+        {control ? (
+          <>
+            <div className="grid grid-cols-1 gap-1">
+              <Led label="AC indicator LED" state={control.indicators?.ac_led} map={AC_LED} testId="hw-led-ac" />
+              <Led label="Light LED" state={control.light_action} map={{ OFF: { color: '#475569', text: 'lights off' }, DIM: { color: '#fde68a', text: `dim (${control.light_level}/255)` }, ON: { color: '#fffbeb', text: 'lights on' } }} testId="hw-led-light" />
+              <Led label="Status LED" state={control.indicators?.status_led} map={STATUS_LED} testId="hw-led-status" />
+            </div>
+            {applied && (applied.ac_led || applied.status_led) && (
+              <div className="text-[10px] text-slate-500 mt-1">Board shows: AC {applied.ac_led ?? '—'}, status {applied.status_led ?? '—'} (reported with its next reading)</div>
+            )}
+            {control.indicators?.warnings?.length ? (
+              <ul className="mt-1 text-[10px] text-red-300 list-disc pl-4" data-testid="hw-warnings">
+                {control.indicators.warnings.map((w) => <li key={w}>{w}</li>)}
+              </ul>
+            ) : null}
+            <div className="mt-2 grid grid-cols-2 gap-1">
+              {([['Fan ON', { fan_speed: 255 }], ['Fan OFF', { fan_speed: 0 }]] as const).map(([label, v]) => (
+                <button key={label} disabled={!live || !!busy} data-testid={`hw-manual-${label.replace(' ', '-').toLowerCase()}`}
+                  className={`px-2 py-1.5 rounded-md text-[11px] font-semibold text-white disabled:opacity-40 ${label === 'Fan ON' ? 'bg-emerald-700 hover:bg-emerald-600' : 'bg-slate-700 hover:bg-slate-600'}`}
+                  onClick={async () => { setBusy(label); try { await api.override({ room_id: room.room_id, fan_speed: v.fan_speed, light_level: control.light_level, servo_angle: control.servo_angle, minutes: 10, reason: `${label} from the dashboard` }); } catch (e) { alert(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); } }}>
+                  {busy === label ? '…' : label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-1 grid grid-cols-3 gap-1">
+              {([['Light OFF', 0], ['Light DIM', 102], ['Light ON', 255]] as const).map(([label, level]) => (
+                <button key={label} disabled={!live || !!busy} data-testid={`hw-manual-${label.replace(' ', '-').toLowerCase()}`}
+                  className="px-2 py-1 rounded-md text-[11px] font-semibold bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-40"
+                  onClick={async () => { setBusy(label); try { await api.override({ room_id: room.room_id, fan_speed: control.fan_speed, light_level: level, servo_angle: control.servo_angle, minutes: 10, reason: `${label} from the dashboard` }); } catch (e) { alert(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); } }}>
+                  {busy === label ? '…' : label}
+                </button>
+              ))}
+            </div>
+            <button disabled={!live || !!busy || control.mode !== 'manual'} data-testid="hw-manual-clear"
+              className="mt-1 w-full px-2 py-1 rounded-md text-[11px] font-semibold bg-sky-700 hover:bg-sky-600 text-white disabled:opacity-40"
+              onClick={async () => { setBusy('clear'); try { await api.override({ room_id: room.room_id, clear: true }); } catch (e) { alert(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); } }}>
+              Return control to the {control.ai_would ? 'schedule' : 'AI'}
+            </button>
+            <div className="text-[9.5px] text-slate-500 mt-1">A manual command holds for 10 minutes and bypasses the AI; the fan goes through the relay (ON/OFF only).</div>
+          </>
+        ) : <div className="text-[11px] text-slate-500">Manual control needs the board connected.</div>}
+      </Section>
+
       <Section icon={<Zap size={12} />} title="Board energy meter and calibration">
         <div className="text-[12px] font-bold text-white" data-testid="hw-power">
-          {isNum(power) ? `${power.toFixed(2)} W measured (INA226)` : live ? 'not measured (no INA226 reading)' : '—'}
+          {isNum(power) ? `${power.toFixed(2)} W measured (INA219)` : live ? 'not measured (no INA219 reading)' : '—'}
         </div>
+        {live && room.power_measurement?.available && (
+          <div className="grid grid-cols-3 gap-1 mt-1 text-[10px] text-slate-400" data-testid="hw-ina219">
+            <div>Bus {fx(room.power_measurement.voltage_v, 2)} V</div>
+            <div>Current {fx(room.power_measurement.current_mA, 1)} mA</div>
+            <div>Shunt {fx(room.power_measurement.shunt_voltage_mV ?? null, 2)} mV</div>
+          </div>
+        )}
         {room.meter && (
           <div className="mt-1.5">
             <div className="grid grid-cols-3 gap-1 text-[10px]">
@@ -150,7 +245,7 @@ export default function HardwareRoomPanel({ room, events, history }: { room: Roo
             <ul className="mt-1 space-y-0.5">
               {[...room.meter.segments].reverse().slice(0, 4).map((sg, i) => (
                 <li key={`${sg.start}-${i}`} className="text-[10px] font-mono text-slate-400">
-                  <span className={sg.mode === 'ai' ? 'text-sky-300' : 'text-orange-300'}>AI {sg.mode === 'ai' ? 'ON ' : 'OFF'}</span> {sg.start.slice(11, 19)}–{sg.end ? sg.end.slice(11, 19) : 'now'} · {fx(sg.wh, 4, ' Wh')} · {sg.avg_w !== null ? `${sg.avg_w.toFixed(2)} W avg` : 'no INA226 data'}
+                  <span className={sg.mode === 'ai' ? 'text-sky-300' : 'text-orange-300'}>AI {sg.mode === 'ai' ? 'ON ' : 'OFF'}</span> {sg.start.slice(11, 19)}–{sg.end ? sg.end.slice(11, 19) : 'now'} · {fx(sg.wh, 4, ' Wh')} · {sg.avg_w !== null ? `${sg.avg_w.toFixed(2)} W avg` : 'no INA219 data'}
                 </li>
               ))}
             </ul>

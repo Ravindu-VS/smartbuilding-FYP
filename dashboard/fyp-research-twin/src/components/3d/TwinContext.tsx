@@ -144,7 +144,7 @@ export default function TwinContext() {
               <Stat label="Power, AI on" value={<span className="flex items-center gap-1"><Zap size={13} />{fx(ai.power_w / 1000, 2)} kW</span>} tone="ai" />
               <Stat label="Power, AI off" value={`${fx(conv.power_w / 1000, 2)} kW`} tone="off" sub="same room, same minute (twin)" />
             </>}
-            {hw && r.energy && <Stat label="Power (measured)" value={`${fx(r.energy.measured_power_watts, 2)} W`} sub="INA226 on the board" />}
+            {hw && r.energy && <Stat label="Power (measured)" value={`${fx(r.energy.measured_power_watts, 2)} W`} sub="INA219 on the board" />}
           </div>
         )}
         {r.control?.reason && (
