@@ -71,6 +71,11 @@ def override(fan, light, reason):
 def main():
     global HW
     h = get("/health")
+    for _ in range(60):                    # the board may still be booting (e.g. right after flashing)
+        if h["hardware"]["connected"]:
+            break
+        time.sleep(2)
+        h = get("/health")
     hw = h["hardware"]
     HW = hw["room_id"]
     print(f"edge brain {h.get('status')} on {h.get('host')}, board room {HW}\n")
