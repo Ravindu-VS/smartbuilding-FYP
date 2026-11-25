@@ -60,6 +60,7 @@ firmware/esp32_smart_building/secrets.h
 # Digital twin cache and local calibration
 output/twin_cache/
 output/hw_calibration.json
+output/mq135_calibration.json
 
 # Public datasets: raw downloads and regenerable processed tables
 # (fetch: scripts/fetch_datasets.py, rebuild: scripts/preprocess_datasets.py; checksums in data/manifest.json)

@@ -47,13 +47,13 @@ ESP32-S3: BME280, BH1750, MQ-135, PIR, INA219,     MQTT + BLE      Mosquitto bro
 | BH1750 | light (lux) | I²C (0x23) |
 | INA219 | voltage, current, power of the 12 V fan branch (high side) | I²C (0x40) |
 | 0.96" OLED (JMD0.96A-2, SSD1306) | energy meter: W, V, mA, Wh, fan, mode | I²C (0x3C) |
-| MQ-135 | gas response; the Pi estimates CO2 from it (labelled eCO2) | AO → 10k/15k divider → GPIO1, DO → GPIO2 |
+| MQ-135 | gas response; the Pi estimates CO2 from it (labelled eCO2) | AO → 10k/15k divider → GPIO1, DO → 10k/22k divider → GPIO2 |
 | HC-SR501 PIR | motion / presence | GPIO4 |
-| 5 V relay + 12 V 40 mm fan | the room's cooling load (ON/OFF) | GPIO10 (active-LOW) |
+| 5 V relay + 12 V 40 mm fan | the room's cooling load (ON/OFF) | GPIO10 → BC547 driver → relay IN |
 | Light RGB LED | the AI's lighting decision (white, OFF / DIM / ON) | GPIO6 / 7 / 5 (PWM) |
 | AC indicator RGB LED | what the AC would do (ECO green, LOW cyan, COOL blue, MAX magenta) | GPIO11 / 12 / 13 |
 | Status RGB LED | AI blue, schedule green, manual yellow, warning red, no controller blinking red | GPIO14 / 15 / 16 |
-| LM2596, 1 A fuse, 1N5822, 470 µF ×2, 100 nF, 1N4007 | power: 12 V in, 5 V rail, protection | see the schematic |
+| LM2596, 1 A fuse, 1N5822, 1N5819, 470 µF ×2, 100 nF, 1N4007 | power: 12 V in, 5 V rail, protection | see the schematic |
 
 Full circuit, parts list, pin table and expected readings: [docs/wiring/room101-wiring.html](docs/wiring/room101-wiring.html)
 (open it in a browser) and [docs/wiring/room101-final-circuit.png](docs/wiring/room101-final-circuit.png).

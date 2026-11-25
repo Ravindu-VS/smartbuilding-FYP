@@ -40,7 +40,30 @@
 #define MQTT_PASSWORD ""
 #endif
 
+// ===================================================================================================
+// ROOM 101 WIRING (ESP32-S3-DevKitC-1 v1.0). Full circuit: docs/wiring/room101-wiring.html
+//   GPIO   header  connects to
+//   9      J1-15   I2C SDA  -> INA219 SDA, BME280 SDA, BH1750 SDA, OLED SDA
+//   8      J1-12   I2C SCL  -> INA219 SCL, BME280 SCL, BH1750 SCL, OLED SCL
+//   1      J3-4    MQ-135 AO through R1 10k; R2 15k from GPIO1 to GND (AO x 15/25, max 3.0 V)
+//   2      J3-5    MQ-135 DO through R3 10k; R4 22k from GPIO2 to GND (DO swings to 5 V on the module)
+//   4      J1-4    HC-SR501 PIR OUT (3.3 V output, no resistor)
+//   10     J1-16   R5 1k -> Q1 BC547 base; R6 10k base -> GND; Q1 collector -> relay IN, emitter -> GND
+//                  (GPIO10 HIGH = Q1 on = relay IN low = fan ON)
+//   6/7/5  J1-6/7/5     light LED HW-478 R/G/B through 150/68/68 ohm, common (-) to GND
+//   11/12/13 J1-17/18/19 AC indicator LED R/G/B through 150/68/68 ohm, long leg (-) to GND
+//   14/15/16 J1-20/8/9   status LED R/G/B through 150/68/68 ohm, long leg (-) to GND
+//   48     J3-16         onboard RGB LED of the DevKitC-1 v1.0 (no wire): Wi-Fi/MQTT link state
+// I2C addresses: INA219 0x40, BME280 0x76, BH1750 0x23 (ADDR to GND), OLED SSD1306 0x3C (JMD0.96A-2: GND VCC SCL SDA)
+// Power: 12 V in -> F1 1 A -> D1 1N5822 -> C1 470 uF -> LM2596 (5.0 V) -> C2 470 uF = +5 V rail
+//        +5 V rail -> relay VCC, PIR VCC, MQ-135 VCC, and D3 1N5819 -> ESP32 5V pin (J1-21, C3 100 nF to GND)
+//        ESP32 3V3 (J1-1) -> INA219, BME280, BH1750, OLED VCC
+// Raspberry Pi 4B: no wire to this board (Wi-Fi/MQTT + Bluetooth LE), own 5.1 V 3 A USB-C supply
+// Fan branch: +12 V (after D1) -> INA219 VIN+ -> VIN- -> relay COM -> NO -> fan + ; fan - -> GND; D2 1N4007 across the fan
+// ===================================================================================================
 #define PIN_SDA 9
+#define INA219_SAMPLES 16
+#define INA219_SHUNT_OHMS 0.1f   // R100 shunt on the INA219 module
 #define PIN_SCL 8
 #define PIN_MQ135_AO 1
 #define PIN_MQ135_DO 2
@@ -58,7 +81,7 @@
 #define PIN_ST_G 15
 #define PIN_ST_B 16
 #ifndef RGB_BUILTIN
-#define RGB_BUILTIN 38
+#define RGB_BUILTIN 48   // ESP32-S3-DevKitC-1 v1.0: onboard addressable RGB LED on GPIO48 (v1.1 boards use 38)
 #endif
 
 #define ROOM_ID "f2_office_a"
@@ -70,9 +93,12 @@
 #define BLE_DEVICE_NAME "SB-Room101"
 #define BLE_SERVICE_UUID "7c6f0001-4f3b-4c1a-9b2d-8a8b2f010101"
 #define BLE_FRAME_UUID "7c6f0002-4f3b-4c1a-9b2d-8a8b2f010101"
-#define FW_VERSION "room101-2026.11.23c"
+#define FW_VERSION "room101-2026.11.25"
 
-const bool RELAY_ACTIVE_LOW = true;
+// The relay module (5 V coil, low-level trigger) is driven through NPN transistor Q1 (BC547, R5 1k to the base,
+// R6 10k base to GND; docs/wiring/room101-wiring.html): GPIO10 HIGH turns Q1 on, pulls IN low and closes the relay.
+// So the pin is active-HIGH, and the fan stays off while the board boots (GPIO10 floats, R6 holds Q1 off).
+const bool RELAY_ACTIVE_LOW = false;
 const bool RGB_COMMON_ANODE = false;
 const bool INDICATOR_COMMON_ANODE = false;   // the two indicator LEDs: common cathode, COM to GND
 const unsigned long SENSOR_INTERVAL_MS = 3000;
@@ -1050,6 +1076,7 @@ void scanI2C() {
 }
 
 void initActuators() {
+  setFan(false);                 // set the OFF level first, so switching the pin to output never pulses the relay
   pinMode(PIN_RELAY, OUTPUT);
   setFan(false);
   setOnboardStatus(false);
@@ -1247,15 +1274,31 @@ void readSensors(Readings& r) {
     r.luxOk = lux >= 0;
     r.lux = r.luxOk ? lux : NAN;
   }
-  r.mqRaw = analogRead(PIN_MQ135_AO);
-  r.mqMilliVolts = analogReadMilliVolts(PIN_MQ135_AO);
+  // MQ-135: mean of 8 ADC samples (the ESP32-S3 ADC has a few mV of noise per sample)
+  long mqRawSum = 0, mqMvSum = 0;
+  for (int i = 0; i < 8; i++) {
+    mqRawSum += analogRead(PIN_MQ135_AO);
+    mqMvSum += analogReadMilliVolts(PIN_MQ135_AO);
+  }
+  r.mqRaw = (int)(mqRawSum / 8);
+  r.mqMilliVolts = (int)(mqMvSum / 8);
   r.mqDigitalHigh = digitalRead(PIN_MQ135_DO) == HIGH;
   r.motion = digitalRead(PIN_PIR) == HIGH;
   if (ina219Available) {
-    r.busVoltage = ina219.getBusVoltage_V();
-    r.shuntMilliVolts = ina219.getShuntVoltage_mV();
-    r.currentMA = ina219.getCurrent_mA();
-    r.powerMW = ina219.getPower_mW();
+    // The fan's motor draws a pulsing current, and the chip's own current and power registers come from
+    // different conversions, so they disagree (e.g. 79.7 mA x 11.69 V reported as 1174 mW). Average 16 pairs of
+    // bus and shunt voltage over ~20 ms, take the current from the shunt voltage (R100 = 0.1 ohm) and the power
+    // as volts x amps, so V, I and P always agree.
+    float busSum = 0, shuntSum = 0;
+    for (int i = 0; i < INA219_SAMPLES; i++) {
+      busSum += ina219.getBusVoltage_V();
+      shuntSum += ina219.getShuntVoltage_mV();
+      delayMicroseconds(1200);
+    }
+    r.busVoltage = busSum / INA219_SAMPLES;
+    r.shuntMilliVolts = shuntSum / INA219_SAMPLES;
+    r.currentMA = r.shuntMilliVolts / INA219_SHUNT_OHMS;          // mV / ohm = mA
+    r.powerMW = r.busVoltage * r.currentMA;                       // V x mA = mW
     r.inaOk = !isnan(r.busVoltage) && !isnan(r.currentMA);
   }
 }

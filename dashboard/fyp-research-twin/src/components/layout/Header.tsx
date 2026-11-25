@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Cpu, Server, Play, Pause, FastForward, RotateCcw, Presentation, Sun, Moon, Cloud, Brain, Power } from 'lucide-react';
+import { Cpu, Server, Play, Pause, FastForward, RotateCcw, Presentation, Sun, Moon, Cloud, Power } from 'lucide-react';
 import { backendIsCurrent, senderLabel, useBuildingStore } from '../../store/useBuildingStore';
 import { api } from '../../lib/api';
 import { fx } from '../../lib/format';
@@ -39,16 +39,11 @@ export function AiSwitch({ live, learning, busy, on, onToggle }: { live: boolean
   );
 }
 
-const CONTROLLER_NAME: Record<string, string> = {
-  mo: 'Thesis AI optimizer', threshold_rf: 'Rule on Random Forest', ppo: 'PPO (reinforcement learning)',
-};
-
 export default function Header() {
   const raw = useBuildingStore((s) => s.raw);
   const link = useBuildingStore((s) => s.link);
   const hw = useBuildingStore((s) => s.hardware);
-  const config = useBuildingStore((s) => s.config);
-  const setDemoOpen = useBuildingStore((s) => s.setDemoOpen);
+    const setDemoOpen = useBuildingStore((s) => s.setDemoOpen);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -134,31 +129,16 @@ export default function Header() {
       <div className="flex items-center gap-2">
         <AiSwitch live={live} learning={learning} busy={!!busy} on={raw?.ai_enabled ?? true}
           onToggle={(v) => run('ai', () => api.setAi(v))} />
-        <div className="flex items-center gap-1" title="Which AI runs while AI control is ON (the comparison restarts)">
-          <Brain size={13} className="text-sky-300" />
-          <select
-            className="bg-slate-800 border border-slate-700 rounded-md text-[11px] px-1 py-1 max-w-[150px] disabled:opacity-40"
-            value={raw?.system?.ai_controller ?? 'mo'}
-            disabled={!live || !!busy}
-            onChange={(e) => run('ctrl', () => api.setController(e.target.value))}
-            data-testid="controller"
-          >
-            {(config?.controllers ?? [{ id: 'mo', label: 'AI optimizer' }]).map((c) => (
-              <option key={c.id} value={c.id} disabled={c.available === false} title={c.available === false ? c.availability : c.label}>
-                {CONTROLLER_NAME[c.id] ?? c.id}{c.available === false ? ' (not approved yet)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
         <Pill tone={live ? 'ok' : 'bad'} label={<><Server size={12} />Edge</>} value={oldBackend ? 'OLD VERSION' : live ? 'LIVE' : 'OFFLINE'} testId="link-status" />
         <Pill tone={live && hw?.connected ? (hw.real_board ? 'ok' : 'warn') : 'bad'} label={<><Cpu size={12} />ESP32</>} value={boardValue} testId="header-board-status" />
         <button
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-600 hover:bg-sky-500 text-white text-[12px] font-semibold disabled:opacity-40"
           disabled={!live || learning}
+          title="Run the whole system automatically for five minutes"
           onClick={() => setDemoOpen(true)}
           data-testid="btn-demo"
         >
-          <Presentation size={14} /> Viva demo
+          <Presentation size={14} /> Demo
         </button>
       </div>
       {err && <div className="absolute right-4 top-14 mt-1 text-[11px] bg-red-950 border border-red-800 text-red-200 px-2 py-1 rounded">{err}</div>}

@@ -151,20 +151,22 @@ Room numbers are labels for the report and the dashboard; the room ids are the k
 
 ## Board pin map (from the firmware)
 
+Full circuit with every module's printed pin order and the exact header positions: [wiring/room101-wiring.html](wiring/room101-wiring.html).
+
 | Device | Function | ESP32-S3 pins |
 |---|---|---|
 | BME280 | temperature, humidity, pressure | I2C SDA 9 / SCL 8 |
 | BH1750 | illuminance | I2C SDA 9 / SCL 8 |
 | INA219 | bus/shunt voltage, current, power | I2C SDA 9 / SCL 8 |
 | 0.96" OLED JMD0.96A-2 (SSD1306, 0x3C) | energy meter: power, voltage, current, Wh since boot, fan, mode, temperature (refreshed every 1 s) | I2C SDA 9 / SCL 8, VCC 3.3 V |
-| MQ-135 AO / DO | raw environmental response / comparator output | GPIO 1 ADC (through a suitable divider) / GPIO 2 |
-| HC-SR501 PIR | motion | GPIO 4 |
-| 5 V relay module | fan switching | GPIO 10 |
+| MQ-135 AO / DO | raw environmental response / comparator output | AO → R1 10k → GPIO 1 (J3-4), R2 15k to GND / DO → R3 10k → GPIO 2 (J3-5), R4 22k to GND |
+| HC-SR501 PIR | motion (VCC 5 V, OUT 3.3 V) | OUT → GPIO 4 (J1-4) |
+| 5 V relay module (low-level trigger) | fan switching | GPIO 10 (J1-16) → R5 1k → BC547 Q1 base, R6 10k base to GND; Q1 collector → relay IN, emitter → GND. GPIO 10 HIGH = fan ON |
 | 12 V two-wire fan | load, switched by relay | relay contacts; fused 12 V branch |
-| Light LED (HW-478 RGB) | the AI's lighting decision, PWM white OFF / DIM / ON | R 6 / G 7 / B 5 through 220 ohm each; common (-) to GND |
-| AC indicator RGB LED | what the AC would do: ECO green, LOW cyan, COOL blue, MAX magenta | R 11 / G 12 / B 13 through 220 ohm each (on/off, no PWM) |
-| Status RGB LED | AI blue, schedule green, manual yellow, warning red, test white; blinking red = no controller | R 14 / G 15 / B 16 through 220 ohm each (on/off, no PWM) |
-| Onboard LED | Wi-Fi connection indication | GPIO 38 (core-dependent) |
+| Light LED (HW-478 RGB) | the AI's lighting decision, PWM white OFF / DIM / ON | R 6 / G 7 / B 5 through 150 / 68 / 68 ohm; common (-) to GND |
+| AC indicator RGB LED | what the AC would do: ECO green, LOW cyan, COOL blue, MAX magenta | R 11 / G 12 / B 13 through 150 / 68 / 68 ohm (on/off, no PWM) |
+| Status RGB LED | AI blue, schedule green, manual yellow, warning red, test white; blinking red = no controller | R 14 / G 15 / B 16 through 150 / 68 / 68 ohm (on/off, no PWM) |
+| Onboard RGB LED | Wi-Fi/MQTT connection indication | GPIO 48 (J3-16) on the DevKitC-1 v1.0 used here (GPIO 38 on v1.1 boards) |
 
 The production firmware uses Room 101's canonical id `f2_office_a`, publishes to the project's existing
 `sb/v1/room/f2_office_a/...` topics, and sends telemetry every 3 s over MQTT and BLE. The board itself does
@@ -181,7 +183,7 @@ Pin numbers differ from the requirements document (SDA 8 / SCL 9, RGB 5/6/7); th
 wired and tested board as the reference (23 Nov 2026). The full wiring page with the INA219/relay/fan branch
 is `docs/wiring/room101-wiring.html` (final circuit with the OLED, D1 1N5822 reverse-polarity diode, C1/C2 470 uF,
 C3 100 nF, LED resistors red 150 ohm / green and blue 68 ohm; PNG: `docs/wiring/room101-final-circuit.png`).
-Firmware `room101-2026.11.23c` adds the OLED energy page; a missing OLED is probed again every 30 s like the sensors.
+Firmware `room101-2026.11.24` (OLED energy page; relay driven through Q1, GPIO 10 active-HIGH); a missing OLED is probed again every 30 s like the sensors.
 
 ## Data path (sensor to twin)
 

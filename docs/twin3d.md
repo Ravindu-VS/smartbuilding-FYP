@@ -172,18 +172,24 @@ The earlier 3D app (`public/3d-twin/`) was replaced by this one and is not part 
 - Frame rates could only be checked on a machine without a GPU; on a laptop without a dedicated
   GPU use "Fast" quality (it is chosen automatically when needed).
 
-## 9. Viva demonstration sequence (about 5 minutes)
+## 9. Demonstration (5 minutes, automatic)
 
-1. Open http://localhost:3000, click **Presentation** (top-right of the 3D view). Building view:
-   point out the architecture, the site, the LIVE beacon on Office A and its real status.
-2. Switch **AI CONTROL** off and on in the top bar: power with AI vs AI off and the saving update.
-3. Click floor pill **L2**: the floor cutaway with a card per room; Office A carries LIVE.
-4. Click **Meeting Room B** twice: inside, people at the table, the AC hotspot, the thermostat.
-   Turn on **Airflow** (wind icon): supply jets and return air follow the AC's real output.
-   Turn on **Temperature**. Use the eye icon for eye level, then Esc back to the floor.
-5. Open **Office A**: with the board (or the test sender) it shows the measured CO₂, light,
-   humidity, the fan PWM as AC airflow and presence; unplug it and within 10 s the room shows
-   "board not connected" and no values.
-6. Run **Viva demo** step 1 or 2 (header button): the 3D view goes into the room while the
-   scenario plays, and the AI decisions appear in the decision log.
-7. Press Esc twice to return to the building, or start **Auto tour** for a hands-free close.
+Click **Demo** in the top bar. Opening the panel moves the twin to 07:00 on a weekday and holds it there
+(a few seconds); then click **Start the 5-minute demo**. It runs without further clicks and ticks off what
+it observes in the live state:
+
+1. The system (0:00-0:25): edge brain live, Room 101 board connected, live readings, 25 simulated rooms.
+2. Real actuators (0:25-1:25): the Pi drives the board: light ON, DIM, OFF, then the fan through the
+   relay; the status LED shows MANUAL and the INA219/OLED show the fan's power.
+3. The AI runs the real room (1:25-1:55): manual control ends; wave at the PIR and the AI decides.
+4. AI ON vs AI OFF (1:55-2:55): the whole building from 07:00, three simulated hours on its
+   schedule, then three hours of AI, each compared minute for minute with the twin's other mode.
+5. People arrive, CO2 rises (2:55-3:55): Meeting Room B fills, the learned occupancy model detects
+   it, the AC starts and the safety layer ventilates above 1000 ppm.
+6. A heat load appears (3:55-4:30): +4 kW in Office B2, the AC holds the temperature.
+7. Machine learning (4:30-4:50): live accuracy of the learned model next to the rule it replaced,
+   continual-learning status, forecast error.
+8. Result (4:50-5:00): back to AI control and normal speed; the energy comparison stays recorded.
+
+If the twin is still fast-forwarding when step 4 is due, the demo clock waits for it. Without
+a connected board, the hardware checks are marked "board not connected" and the rest still runs.
