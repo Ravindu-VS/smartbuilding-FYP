@@ -1,0 +1,42 @@
+# Terraform (Azure) validation, recorded 2026-11-28 11:44 UTC
+# OpenTofu v1.10.6 (reads the same configuration as Terraform) with the azurerm 4.40.0 and random 3.7.2 providers.
+# Not applied: plan/apply need your Azure credentials (az login, or OIDC in the CI deploy workflow).
+
+$ tofu fmt -check -recursive
+(no changes needed)
+
+$ tofu init -backend=false
+- Installing hashicorp/random v3.7.2...
+- Installed hashicorp/random v3.7.2 (unauthenticated)
+- Installing hashicorp/azurerm v4.40.0...
+- Installed hashicorp/azurerm v4.40.0 (unauthenticated)
+OpenTofu has been successfully initialized!
+
+$ tofu validate
+Success! The configuration is valid.
+
+$ resources declared
+"random_string" "suffix"
+"azurerm_resource_group" "rg"
+"azurerm_virtual_network" "vnet"
+"azurerm_subnet" "app"
+"azurerm_network_security_group" "app"
+"azurerm_subnet_network_security_group_association" "app"
+"azurerm_public_ip" "vm"
+"azurerm_network_interface" "vm"
+"azurerm_linux_virtual_machine" "vm"
+"azurerm_container_registry" "acr"
+"azurerm_role_assignment" "vm_acr_pull"
+"azurerm_key_vault" "kv"
+"azurerm_role_assignment" "vm_kv_read"
+"azurerm_role_assignment" "deployer_kv_admin"
+"azurerm_storage_account" "backups"
+"azurerm_storage_container" "backups"
+"azurerm_role_assignment" "vm_backup_writer"
+"azurerm_log_analytics_workspace" "logs"
+"azurerm_monitor_diagnostic_setting" "kv"
+"azurerm_monitor_metric_alert" "vm_cpu"
+"azurerm_monitor_action_group" "owner"
+"azurerm_consumption_budget_resource_group" "monthly"
+
+$ cloud-init renders to valid YAML (write_files: sb-env-from-keyvault, sb-deploy)

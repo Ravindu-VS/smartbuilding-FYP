@@ -1,0 +1,26 @@
+# Local cluster (k3s / kind / minikube) with images built on this machine (docker compose build).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [../../base]
+namespace: smartbuilding
+secretGenerator:
+  - {name: smartbuilding-secrets, envs: [secrets.env]}
+  - {name: smartbuilding-mqtt, envs: [mqtt.env]}
+images:
+  - {name: ghcr.io/ravindu-vs/smartbuilding/mlflow, newName: local/sb/mlflow, newTag: dev}
+  - {name: ghcr.io/ravindu-vs/smartbuilding/trainer, newName: local/sb/trainer, newTag: dev}
+  - {name: ghcr.io/ravindu-vs/smartbuilding/ml-api, newName: local/sb/ml-api, newTag: dev}
+  - {name: ghcr.io/ravindu-vs/smartbuilding/ingestion, newName: local/sb/ingestion, newTag: dev}
+patches:
+  - target: {kind: Deployment}
+    patch: |-
+      - {op: add, path: /spec/template/spec/containers/0/imagePullPolicy, value: IfNotPresent}
+  - target: {kind: StatefulSet}
+    patch: |-
+      - {op: add, path: /spec/template/spec/containers/0/imagePullPolicy, value: IfNotPresent}
+  - target: {kind: Job}
+    patch: |-
+      - {op: add, path: /spec/template/spec/containers/0/imagePullPolicy, value: IfNotPresent}
+  - target: {kind: Deployment, name: ml-api}
+    patch: |-
+      - {op: replace, path: /spec/replicas, value: 2}

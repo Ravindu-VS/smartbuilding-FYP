@@ -1,0 +1,20 @@
+# docker compose ps
+# Recorded 2026-11-28 10:56 UTC in the development workspace (Ubuntu 24.04, Docker 29.10.0, Compose 5.7.1).
+# Base images: local stand-ins built from Ubuntu 24.04 packages and official release binaries, because this
+# workspace cannot reach Docker Hub; the repository defaults (python:3.12-slim, postgres:16-alpine,
+# eclipse-mosquitto, prom/*) are what CI and a normal host use. Grafana could not be downloaded here: its
+# dashboards were checked query-by-query against this Prometheus (dashboards-check.txt).
+
+SERVICE         IMAGE                                                                     STATUS                      PORTS
+alertmanager    local/alertmanager:latest                                                 Up 21 minutes (healthy)     127.0.0.1:9093->9093/tcp
+board-sim       local/sb/edge-brain:dev                                                   Up 4 minutes                8001/tcp
+cadvisor        local/cadvisor:latest                                                     Up 21 minutes               
+edge-brain      local/sb/edge-brain:dev                                                   Up 4 minutes (healthy)      127.0.0.1:8001->8001/tcp
+ingestion       local/sb/ingestion:dev                                                    Up 41 seconds (healthy)     8090/tcp
+ml-api          local/sb/ml-api:dev                                                       Up 2 minutes (healthy)      127.0.0.1:8080->8080/tcp
+mlflow          local/sb/mlflow:dev                                                       Up 11 minutes (healthy)     127.0.0.1:5000->5000/tcp
+mosquitto       local/mosquitto:2.0                                                       Up 21 minutes (healthy)     127.0.0.1:11883->1883/tcp
+node-exporter   local/node-exporter:latest                                                Up 21 minutes               
+postgres        local/postgres:16                                                         Up 21 minutes (healthy)     127.0.0.1:15432->5432/tcp
+prometheus      local/prometheus:latest                                                   Up 21 minutes (healthy)     127.0.0.1:9090->9090/tcp
+trainer         sha256:7a982c1e718e09a13f816309e28ac8b53703ad428f1fa00313df6b1eb33a06c9   Exited (0) 41 seconds ago   

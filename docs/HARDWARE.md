@@ -161,7 +161,7 @@ Full circuit with every module's printed pin order and the exact header position
 | 0.96" OLED JMD0.96A-2 (SSD1306, 0x3C) | energy meter: power, voltage, current, Wh since boot, fan, mode, temperature (refreshed every 1 s) | I2C SDA 9 / SCL 8, VCC 3.3 V |
 | MQ-135 AO / DO | raw environmental response / comparator output | AO → R1 10k → GPIO 1 (J3-4), R2 15k to GND / DO → R3 10k → GPIO 2 (J3-5), R4 22k to GND |
 | HC-SR501 PIR | motion (VCC 5 V, OUT 3.3 V) | OUT → GPIO 4 (J1-4) |
-| 5 V relay module (low-level trigger) | fan switching | GPIO 10 (J1-16) → R5 1k → BC547 Q1 base, R6 10k base to GND; Q1 collector → relay IN, emitter → GND. GPIO 10 HIGH = fan ON |
+| CW-020 5 V relay module (IN, VCC, GND) | fan switching | low-level input: GPIO 10 (J1-16) → R5 1k → BC547 Q1 base, R6 10k base to GND; Q1 collector → relay IN, emitter → GND. High-level input: GPIO 10 → IN direct. The relay test in the circuit page picks one. GPIO 10 HIGH = fan ON; fan + on NO |
 | 12 V two-wire fan | load, switched by relay | relay contacts; 12 V from the MT3608 boost |
 | Light LED (HW-478 RGB) | the AI's lighting decision, PWM white OFF / DIM / ON | R 6 / G 7 / B 5 through 150 / 68 / 68 ohm; common (-) to GND |
 | AC indicator RGB LED | what the AC would do: ECO green, LOW cyan, COOL blue, MAX magenta | R 11 / G 12 / B 13 through 150 / 68 / 68 ohm (on/off, no PWM) |

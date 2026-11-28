@@ -1,10 +1,7 @@
 """Synthetic data generation, scenarios, fault injection, fail-safe controller and episode runner."""
-import gzip
 import hashlib
-import math
 from datetime import datetime, timedelta
 
-import numpy as np
 import pytest
 
 from twin.controllers import Decision, Observation, ScheduleController

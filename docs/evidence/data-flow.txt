@@ -1,0 +1,66 @@
+# End-to-end data flow (simulated Room 101 board over MQTT)
+# Recorded 2026-11-28 10:56 UTC in the development workspace (Ubuntu 24.04, Docker 29.10.0, Compose 5.7.1).
+# Base images: local stand-ins built from Ubuntu 24.04 packages and official release binaries, because this
+# workspace cannot reach Docker Hub; the repository defaults (python:3.12-slim, postgres:16-alpine,
+# eclipse-mosquitto, prom/*) are what CI and a normal host use. Grafana could not be downloaded here: its
+# dashboards were checked query-by-query against this Prometheus (dashboards-check.txt).
+
+## edge brain /health hardware
+{
+ "age_s": 2.83,
+ "connected": true,
+ "last_seen": "2026-11-28T10:56:19.092",
+ "led_calibration": "none",
+ "led_calibration_lux": null,
+ "mean_interval_s": 3.0,
+ "readings_received": 84,
+ "real_board": false,
+ "room_id": "f2_office_a",
+ "room_name": "Office A",
+ "sender": "mqtt_device_sim",
+ "sender_detail": null,
+ "state": "connected",
+ "timeout_s": 10.0
+}
+
+## edge brain MQTT bridge
+{
+ "connected": true,
+ "auth": true,
+ "broker": "mosquitto:1883",
+ "stats": {
+  "accepted": 84,
+  "ack_timeouts": 0,
+  "acks": 84,
+  "commands_sent": 84,
+  "duplicates": 0,
+  "field_problems": 0,
+  "received": 84,
+  "reconnects": 0,
+  "rejected": 0
+ }
+}
+
+## PostgreSQL telemetry by provenance
+ provenance | count |              min              |              max              
+------------+-------+-------------------------------+-------------------------------
+ simulated  |   370 | 2026-11-28 10:37:55.651784+00 | 2026-11-28 10:56:22.096103+00
+(1 row)
+
+## predictions by model version
+   model_name   | model_version | count | mean_p 
+----------------+---------------+-------+--------
+ room-occupancy | 1             |   160 |  0.000
+ room-occupancy | 4             |   118 |  0.854
+(2 rows)
+
+## latest 5 rows
+          received_at          |   room_id   | provenance | temperature | humidity |  lux  | motion | power_mw | fan_on 
+-------------------------------+-------------+------------+-------------+----------+-------+--------+----------+--------
+ 2026-11-28 10:56:22.096103+00 | f2_office_a | simulated  |       28.74 |     65.5 |   377 | f      |     3060 | 
+ 2026-11-28 10:56:19.093321+00 | f2_office_a | simulated  |        28.8 |     65.1 | 378.7 | f      |     3060 | 
+ 2026-11-28 10:56:16.092919+00 | f2_office_a | simulated  |        28.7 |     64.8 | 380.4 | f      |     3060 | 
+ 2026-11-28 10:56:13.091923+00 | f2_office_a | simulated  |       28.63 |     64.8 | 384.6 | f      |     3060 | 
+ 2026-11-28 10:56:10.091589+00 | f2_office_a | simulated  |       28.77 |       65 | 381.5 | f      |     3060 | 
+(5 rows)
+

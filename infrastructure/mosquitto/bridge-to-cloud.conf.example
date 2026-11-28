@@ -1,0 +1,16 @@
+# On the Raspberry Pi (/etc/mosquitto/conf.d/bridge-to-cloud.conf): forward Room 101's topics to the cloud broker.
+# The Pi keeps its local broker and control loop; the bridge only copies messages out (and commands in, if wanted).
+# With cleansession false and QoS 1 the bridge queues while the Internet is down and delivers when it returns.
+connection cloud
+address CLOUD_VM_DNS_OR_IP:8883
+bridge_cafile /etc/mosquitto/certs/ca.crt
+bridge_tls_version tlsv1.2
+remote_username edge
+remote_password CHANGE_ME_FROM_YOUR_PASSWORD_MANAGER
+remote_clientid smartbuilding-pi-bridge
+cleansession false
+restart_timeout 5 60
+# out: readings, status and acks to the cloud;  commands stay local (the edge decides)
+topic sb/v1/room/+/telemetry out 1
+topic sb/v1/room/+/status out 1
+topic sb/v1/room/+/ack out 1

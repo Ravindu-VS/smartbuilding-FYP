@@ -1,0 +1,26 @@
+# Failure and recovery
+# Recorded 2026-11-28 10:56 UTC in the development workspace (Ubuntu 24.04, Docker 29.10.0, Compose 5.7.1).
+# Base images: local stand-ins built from Ubuntu 24.04 packages and official release binaries, because this
+# workspace cannot reach Docker Hub; the repository defaults (python:3.12-slim, postgres:16-alpine,
+# eclipse-mosquitto, prom/*) are what CI and a normal host use. Grafana could not be downloaded here: its
+# dashboards were checked query-by-query against this Prometheus (dashboards-check.txt).
+
+== A. crash of the ML API process
+10:53:46 ml-api health=healthy restarts=0; killing the server process
+10:53:54 ml-api health=healthy restarts=1, back after 7 s (restart: unless-stopped)
+  /predict after restart: version 4 P 0.9659
+== B. ingestion outage of 100 s
+10:53:55 telemetry rows=321, edge brain readings=36, up{job=ingestion}=1
+10:53:56 ingestion stopped
+10:54:21 Prometheus: up=0, alert ServiceDown is ['pending']
+10:55:37 Alertmanager has: [('EdgePiUnreachable', 'edge-brain-pi', 'active'), ('ServiceDown', 'ingestion', 'active'), ('HostDiskFilling', 'node', 'active'), ('HostDiskFilling', 'node', 'active'), ('HostDiskFilling', 'node', 'active')]
+10:55:37 edge brain kept running without ingestion: readings 70 (was 36) - edge-first
+10:55:37 last ingestion log lines:
+    {"ts": "2026-11-28T10:53:55.423Z", "level": "INFO", "service": "ingestion", "logger": "ingestion", "msg": "shutting down"}
+    {"ts": "2026-11-28T10:53:56.129Z", "level": "WARNING", "service": "ingestion", "logger": "ingestion", "msg": "MQTT disconnected (Normal disconnection)"}
+10:55:46 ingestion healthy again after 6 s
+10:55:55 during the window: board sent 39 readings (edge brain count), ingestion stored 39
+  no data lost: the broker kept the QoS 1 backlog for the persistent session
+RECOVERY TEST DONE
+
+Note: HostDiskFilling is genuine: this workspace's disk reports ~3 % available.

@@ -1,0 +1,23 @@
+# MLflow registry and runs (recorded 2026-11-28 10:56 UTC, container stack)
+
+## python -m mlops.promote status
+aliases: {'challenger': '4', 'previous_production': '1', 'production': '4'}
+v 1  promoted           test F1 0.9914  first production version; acceptance passed
+v 2  -                  test F1 -       
+v 3  -                  test F1 -       
+v 4  promoted_manually  test F1 0.9843  Drop the weekend flag: UCI office timetable does not transfer to Room 101 (-0.007 test F1, accepted)
+
+## runs in experiment room-occupancy (newest first)
+room101-20261128-104955      selected=random_forest          test_f1=0.9843 val_f1=0.9773 data=7f84fc99a679 git=ecfd5d5
+room101-20261128-104837      selected=random_forest          test_f1=0.9843 val_f1=0.9773 data=7f84fc99a679 git=ecfd5d5
+room101-20261128-104818      selected=random_forest          test_f1=0.9843 val_f1=0.9773 data=7f84fc99a679 git=ecfd5d5
+room101-20261128-103730      selected=logistic_regression    test_f1=0.9914 val_f1=0.9793 data=7f84fc99a679 git=ecfd5d5
+
+Notes
+* v2 and v3 were registered while the promotion gate still scored the old production model with the new
+  feature list (fixed: each model is now scored with the features stored in its own metadata, test
+  test_gate_scores_each_model_with_its_own_features). They never became production.
+* git=ecfd5d5 is the commit the images were built on in this workspace, with later changes not yet committed;
+  images built by CI come from a clean commit, so there the tag is exact.
+* v1 (with the weekend flag) predicted P(occupied) = 0.00 for every Saturday reading; v4 does not
+  (data-flow.txt, predictions by model version).

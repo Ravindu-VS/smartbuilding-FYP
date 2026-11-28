@@ -80,3 +80,25 @@ the PPO policy is a 24-64-64-12 network. The Pi 4B is expected to be a few times
 This is a research prototype. The tested design scope is a fused low-voltage DC fan and RGB LED switched
 by a relay; it is not certified. Do not connect mains equipment without a qualified installer, interlocks
 and protection designed for that equipment. Software tests do not make the system safe for real HVAC plant.
+
+
+## Container stack, Kubernetes and Azure (cloud side)
+
+The Pi keeps running the edge natively (above). The platform services run in containers anywhere else:
+
+| Where | How | Guide |
+|---|---|---|
+| Laptop / any Docker host | `cp .env.example .env` (set secrets) → `docker compose up -d` | [DEVOPS.md](DEVOPS.md#docker-compose) |
+| Kubernetes (k3s, kind, AKS) | `kubectl apply -k infrastructure/kubernetes/overlays/local` (or `azure`) | [DEVOPS.md](DEVOPS.md#kubernetes-infrastructurekubernetes) |
+| Azure VM | `terraform apply` in `infrastructure/terraform/azure`, then the gated `Deploy to Azure` workflow | [DEVOPS.md](DEVOPS.md#terraform-infrastructureterraformazure) |
+
+### Connect the Pi to the cloud side
+
+1. `/metrics` on the Pi: `python3 -m pip install prometheus-client==0.26.0`, restart `edge-brain`, check
+   `curl localhost:8001/metrics | head`. Add the Pi to `monitoring/prometheus/targets/edge-pi.yml`.
+2. MQTT bridge: copy `infrastructure/mosquitto/bridge-to-cloud.conf.example` to `/etc/mosquitto/conf.d/` on the Pi,
+   set the cloud address and the `edge` password, then `sudo systemctl restart mosquitto`. The bridge queues while
+   the link is down; Room 101 is controlled locally either way.
+3. Ingestion in the cloud stores every reading with provenance `physical` (sender `esp32_room101`) and asks the
+   ML API for a prediction.
+4. JSON logs on the Pi (optional): `LOG_FORMAT=json` in the service environment.

@@ -1,13 +1,11 @@
 """RL: PPO maths, environment API, shapes, rewards, constraints, save/load, inference, safety and failure."""
-import math
-import os
 from datetime import datetime, timedelta
 
 import numpy as np
 import pytest
 
-from rl.policy import ACTIONS, AC_DWELL_S, N_ACT, N_OBS, PPOController, action_command
-from rl.ppo import PPO, Policy, PPOConfig, _softmax, gae
+from rl.policy import AC_DWELL_S, N_ACT, N_OBS, PPOController, action_command
+from rl.ppo import Policy, _softmax, gae
 from twin.controllers import Observation
 from twin.runner import run_episode
 from twin.safety import SETPOINT_RANGE

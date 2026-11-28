@@ -1,0 +1,55 @@
+# Default deny ingress inside the namespace, then allow only the paths the services use.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-ingress}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: postgres-from-apps}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: postgres}}
+  ingress:
+    - from:
+        - podSelector: {matchExpressions: [{key: app.kubernetes.io/name, operator: In, values: [mlflow, ingestion]}]}
+      ports: [{port: 5432}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: mlflow-from-ml}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mlflow}}
+  ingress:
+    - from:
+        - podSelector: {matchExpressions: [{key: app.kubernetes.io/component, operator: In, values: [training, model-serving]}]}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}   # ingress controller
+      ports: [{port: 5000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: ml-api-from-ingestion-and-ingress}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: ml-api}}
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: ingestion}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: mqtt-from-anywhere}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: mqtt}}
+  ingress: [{ports: [{port: 1883}]}]          # the edge bridge connects from outside; auth + ACL apply
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: ingestion-metrics}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: ingestion}}
+  ingress:
+    - from: [{namespaceSelector: {}}]
+      ports: [{port: 8090}]

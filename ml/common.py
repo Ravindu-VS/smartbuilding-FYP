@@ -17,7 +17,7 @@ import os
 import platform
 import subprocess
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 

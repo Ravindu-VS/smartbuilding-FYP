@@ -54,7 +54,7 @@ from typing import Dict, List, Optional, Tuple
 
 from twin.building import TwinBuilding
 from twin.controllers import (FusionEstimator, MultiObjectiveController, Observation,
-                              RandomForestEstimator, load_rf_estimator, ScheduleController, ThresholdController,
+                              load_rf_estimator, ScheduleController, ThresholdController,
                               VISUAL_TARGET_LUX)
 from twin.safety import SafetyLayer
 from twin.spec import RoomSpec, build_spec

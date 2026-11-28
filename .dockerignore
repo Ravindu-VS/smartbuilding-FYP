@@ -1,0 +1,25 @@
+# Keep the build context small and secret-free.
+.git
+.github
+.env
+.env.*
+!.env.example
+**/__pycache__
+**/*.pyc
+.pytest_cache
+output/
+backups/
+Dataset/
+thesis/
+archive/
+dashboard_dist/
+dashboard/fyp-research-twin/node_modules
+dashboard/fyp-research-twin/.next
+dashboard/fyp-research-twin/out
+firmware/**/secrets.h
+infrastructure/terraform/.terraform
+**/*.tfstate*
+docs/
+tests/
+experiments/results/
+models/ppo_runs/

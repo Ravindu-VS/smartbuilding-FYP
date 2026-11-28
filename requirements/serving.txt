@@ -1,0 +1,10 @@
+# Model-serving API (mlops/serving/app.py): loads the production model from the MLflow registry over HTTP.
+mlflow-skinny==3.18.0
+scikit-learn==1.8.0      # must match the version the model was trained with (see the run's version_sklearn tag)
+numpy==2.5.3
+pandas==3.0.5
+fastapi==0.165.0
+uvicorn==0.54.0
+prometheus-client==0.26.0
+skops==0.16.0            # model format: safe to load (no pickle code execution)
+tzdata==2025.3            # time zone database for BUILDING_TZ on slim images

@@ -10,7 +10,14 @@ cd dashboard/fyp-research-twin && npx tsc --noEmit && npx eslint src && npx next
 python3 -m rl.cartpole_check               # PPO implementation check on CartPole-v1
 python3 firmware/tools/check_firmware.py    # firmware syntax / core-stub check (host g++, not an ESP32 compile)
 python3 scripts/check_hardware.py --actuators --ask   # bench check of the real room (board + edge brain running)
+TEST_DATABASE_URL=postgresql://u:p@127.0.0.1:5432/db python3 -m pytest tests/test_ingestion.py   # + PostgreSQL integration
+ruff check .                                # lint (ruff.toml)
+sh scripts/chaos/recovery_test.sh           # failure + recovery against the running Docker Compose stack
+sh scripts/backup/test_restore.sh           # backup -> data loss -> restore against the running stack
+python3 scripts/check_dashboards.py         # every Grafana query against a live Prometheus
 ```
+
+CI runs all of this on every push (`.github/workflows/ci.yml`, [DEVOPS.md](DEVOPS.md#cicd-githubworkflowsciyml)).
 
 | File | What it checks |
 |---|---|
@@ -27,6 +34,11 @@ python3 scripts/check_hardware.py --actuators --ask   # bench check of the real 
 | `tests/test_check_hardware.py` | the bench-check script against a real edge-brain process fed by the test sender: labelled a software check, sensors not sent are MISSING (never PASS), actuator round trip verified, override cleared, no energy label without INA226 data |
 | `tests/test_virtual_board.py` | the virtual board sends exactly the fields of the firmware's `buildTelemetry()` (parsed from the `.ino`), its MQ-135 millivolts give back the recorded UCI CO2 through the Pi's estimator, the relay fan, light, AC and status LEDs and the fail-safe behave like the firmware, dropped sensors are omitted, the room model responds to the AC; the edge brain labels it VIRTUAL BOARD, stores synthetic and estimates eCO2 after the warm-up; Room 101's vacancy rule |
 | `tests/test_firmware_check.py` | firmware syntax against local stubs for Arduino-ESP32 core 3.x and 2.x (skipped without g++; not a real library or board compile) |
+| `tests/test_observability.py` | edge brain `/metrics`: Prometheus format, rooms labelled physical / simulated_board / simulated (a simulated board is never `physical`), INA219 in SI units, MQ-135 as raw mV (no ppm), board link, request counter and latency, down without a brain; JSON log format and secret redaction |
+| `tests/test_mlops.py` | data validation stops on a missing column or bad labels, drops out-of-range rows and duplicates; chronological, disjoint, complete split; serving features equal training features; building time zone; humidity-ratio formula vs the data; MLflow run tags and artifacts; first version promoted; no-gain version kept out; manual promotion needs a reason; rollback; each model scored with its own stored features |
+| `tests/test_ml_api.py` | FastAPI against a real MLflow registry: health/live/ready, `/model/info`, `/predict` (probability, model version, request id), 422 on bad input, metrics incl. drift, reload needs the admin token, a new production version is picked up without a restart, not ready without a model |
+| `tests/test_ingestion.py` | same provenance rule and validation as the edge brain, queue drops the oldest; with `TEST_DATABASE_URL`: MQTT → PostgreSQL end to end (duplicates, invalid JSON, simulated sender, status events), database outage queued and written later, predictions from the real ML API stored |
+| `tests/test_backup.py` | online SQLite backup while the store is being written: integrity, retention |
 | `tests/e2e/twin_flows.py` | 3D twin in the real dashboard: building/floor/room views, selection, airflow, presentation mode (flows A-F) and provenance / room numbers / models panel (flow G) |
 
 Results: hardware in `docs/COMMISSIONING_REPORT.md`, experiments in `experiments/results/SUMMARY.md` and

@@ -1,0 +1,9 @@
+# Add to the broker that is reachable over the Internet (cloud VM, or the Pi if ever exposed):
+# MQTT over TLS on 8883 with the same users and ACL. Certificates: Let's Encrypt (certbot) for a DNS name,
+# or your own CA (docs/SECURITY.md). Keep 1883 bound to the private network only.
+listener 8883
+certfile /mosquitto/certs/server.crt
+keyfile  /mosquitto/certs/server.key
+cafile   /mosquitto/certs/ca.crt
+tls_version tlsv1.2
+require_certificate false

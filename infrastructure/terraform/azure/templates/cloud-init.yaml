@@ -1,0 +1,41 @@
+#cloud-config
+# First boot of the cloud VM: Docker + Compose, automatic security updates, the repository, and a helper that
+# writes .env from Key Vault with the VM's managed identity (no secret is stored in cloud-init or Terraform).
+package_update: true
+package_upgrade: true
+packages: [ca-certificates, curl, git, unattended-upgrades, fail2ban, jq]
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - usermod -aG docker ${admin_username}
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+  - git clone ${repo_url} /opt/smartbuilding
+  - chown -R ${admin_username}:${admin_username} /opt/smartbuilding
+  - systemctl enable --now fail2ban unattended-upgrades
+write_files:
+  - path: /usr/local/bin/sb-env-from-keyvault
+    permissions: "0750"
+    content: |
+      #!/bin/sh
+      # Builds /opt/smartbuilding/.env from Key Vault secrets (names: POSTGRES-PASSWORD -> POSTGRES_PASSWORD).
+      set -eu
+      az login --identity --allow-no-subscriptions >/dev/null
+      cd /opt/smartbuilding
+      cp .env.example .env
+      for name in $(az keyvault secret list --vault-name ${key_vault_name} --query "[].name" -o tsv); do
+        key=$(echo "$name" | tr '-' '_')
+        val=$(az keyvault secret show --vault-name ${key_vault_name} --name "$name" --query value -o tsv)
+        sed -i "s|^$key=.*|$key=$val|" .env
+      done
+      sed -i "s|^REGISTRY=.*|REGISTRY=${acr_server}/smartbuilding|; s|^BIND_ADDR=.*|BIND_ADDR=127.0.0.1|" .env
+      chmod 600 .env
+      echo ".env written from Key Vault ${key_vault_name}"
+  - path: /usr/local/bin/sb-deploy
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      # Pulls the images CI pushed (TAG = git SHA) and restarts the stack. Used by the GitHub Actions deploy job.
+      set -eu
+      cd /opt/smartbuilding && git pull --ff-only
+      az login --identity --allow-no-subscriptions >/dev/null && az acr login --name ${acr_server}
+      TAG=$${1:-latest} docker compose pull && TAG=$${1:-latest} docker compose up -d --no-build
+      docker compose ps

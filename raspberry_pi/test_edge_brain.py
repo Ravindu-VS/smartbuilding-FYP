@@ -274,7 +274,7 @@ def test_api_responses_are_strict_json():
     for path in ("/api/models", "/api/rooms/current-state", "/api/analytics", "/api/system/summary", "/health"):
         r = c.get(path)
         assert r.status_code == 200, path
-        _json.loads(r.get_data(as_text=True), parse_constant=lambda x: (_ for _ in ()).throw(ValueError(f"{path}: {x}")))
+        _json.loads(r.get_data(as_text=True), parse_constant=lambda x, path=path: (_ for _ in ()).throw(ValueError(f"{path}: {x}")))
     from ml.drift import DriftMonitor
     m = DriftMonitor(["flag"], {"flag": {"deciles": [0, 0, 0, 1, 1], "min": 0, "max": 1, "mean": 0.4, "missing_share": 0}},
                      min_rows=1)

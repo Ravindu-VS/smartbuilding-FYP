@@ -15,7 +15,7 @@ simulation mode and logs output states without GPIO access.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 logger = logging.getLogger("PhysicalOutput")
 

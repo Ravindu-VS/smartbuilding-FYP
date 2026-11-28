@@ -8,7 +8,6 @@ End-to-end flow checked by test_end_to_end_flow (the project's end-to-end flow):
  10 digital-twin payload complete  11 events and metrics logged (timeline + store)
  12 reset and repeat without duplicate loops, rooms or state.
 """
-import os
 import threading
 import time
 

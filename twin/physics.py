@@ -43,7 +43,7 @@ real building.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Optional
 
 RHO_AIR = 1.2        # kg/m3

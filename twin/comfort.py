@@ -15,7 +15,6 @@ Phase 3: Advanced metrics for occupant comfort assessment.
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional
 
 
 class ComfortLevel(Enum):

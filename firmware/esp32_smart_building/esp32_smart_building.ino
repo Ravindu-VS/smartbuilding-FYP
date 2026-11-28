@@ -48,8 +48,9 @@
 //   1      J3-4    MQ-135 AO through R1 10k; R2 15k from GPIO1 to GND (AO x 15/25, max 3.0 V)
 //   2      J3-5    MQ-135 DO through R3 10k; R4 22k from GPIO2 to GND (DO swings to 5 V on the module)
 //   4      J1-4    HC-SR501 PIR OUT (3.3 V output, no resistor)
-//   10     J1-16   R5 1k -> Q1 BC547 base; R6 10k base -> GND; Q1 collector -> relay IN, emitter -> GND
-//                  (GPIO10 HIGH = Q1 on = relay IN low = fan ON)
+//   10     J1-16   CW-020 relay IN (pins IN VCC GND). Option A, low-level input: R5 1k -> Q1 BC547 base;
+//                  R6 10k base -> GND; Q1 collector -> IN, emitter -> GND. Option B, high-level input: GPIO10 -> IN direct.
+//                  Both: GPIO10 HIGH = fan ON (relay test in docs/wiring/room101-wiring.html picks the option)
 //   6/7/5  J1-6/7/5     light LED HW-478 R/G/B through 150/68/68 ohm, common (-) to GND
 //   11/12/13 J1-17/18/19 AC indicator LED R/G/B through 150/68/68 ohm, long leg (-) to GND
 //   14/15/16 J1-20/8/9   status LED R/G/B through 150/68/68 ohm, long leg (-) to GND
@@ -97,9 +98,10 @@
 #define BLE_FRAME_UUID "7c6f0002-4f3b-4c1a-9b2d-8a8b2f010101"
 #define FW_VERSION "room101-2026.11.25"
 
-// The relay module (5 V coil, low-level trigger) is driven through NPN transistor Q1 (BC547, R5 1k to the base,
-// R6 10k base to GND; docs/wiring/room101-wiring.html): GPIO10 HIGH turns Q1 on, pulls IN low and closes the relay.
-// So the pin is active-HIGH, and the fan stays off while the board boots (GPIO10 floats, R6 holds Q1 off).
+// Relay K1 is a CW-020 module (5 V coil, pins IN VCC GND). A low-level-input module is driven through NPN
+// transistor Q1 (BC547, R5 1k to the base, R6 10k base to GND): GPIO10 HIGH turns Q1 on, pulls IN low and closes
+// the relay. A high-level-input module takes GPIO10 directly. Either way the pin is active-HIGH (GPIO10 HIGH = fan ON)
+// and the fan stays off while the board boots. docs/wiring/room101-wiring.html has the test that picks the option.
 const bool RELAY_ACTIVE_LOW = false;
 const bool RGB_COMMON_ANODE = false;
 const bool INDICATOR_COMMON_ANODE = false;   // the two indicator LEDs: common cathode, COM to GND

@@ -10,3 +10,4 @@ scikit-learn>=1.5     # continual learning of the occupancy model (ml/online_lea
                       # approved model keeps running and the dashboard shows learning as unavailable
 # GPIO output on the Pi (optional, raspberry_pi/physical_output.py): uncomment on the device
 # RPi.GPIO==0.7.1
+prometheus-client==0.26.0  # GET /metrics on the edge brain (optional: without it /metrics answers 503)

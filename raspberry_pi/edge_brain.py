@@ -66,8 +66,13 @@ from collections import deque
 from flask import Flask, request, jsonify, Response, abort, send_from_directory
 from flask.json.provider import DefaultJSONProvider
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-                    datefmt='%H:%M:%S')
+if os.environ.get("LOG_FORMAT", "text").lower() == "json":       # containers: one JSON object per line
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from sbops.logs import setup as _setup_logs
+    _setup_logs("edge-brain", fmt="json")
+else:
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+                        datefmt='%H:%M:%S')
 logger = logging.getLogger("EdgeBrain")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1023,6 +1028,9 @@ class StrictJSONProvider(DefaultJSONProvider):
 app = Flask(__name__)
 app.json = StrictJSONProvider(app)
 brain: Optional[EdgeBrain] = None
+
+from raspberry_pi import metrics as _metrics                      # noqa: E402  GET /metrics for Prometheus
+_metrics.install(app, lambda: brain, API_VERSION)
 
 
 @app.after_request

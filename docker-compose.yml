@@ -1,0 +1,287 @@
+# Smart Building software stack: edge brain + MQTT + ingestion + PostgreSQL + MLflow + ML API + monitoring.
+#
+#   cp .env.example .env        # then set every password in .env
+#   docker compose up -d        # builds the images on first run
+#   docker compose ps           # every service shows (healthy)
+#   docker compose logs -f ingestion
+#   docker compose down         # keeps the volumes;  down -v deletes the data
+#
+# Profiles (COMPOSE_PROFILES in .env): "simulator" adds a simulated Room 101 board, "monitoring" adds
+# Prometheus, Alertmanager, Grafana, node-exporter and cAdvisor, "backup" is the on-demand backup job.
+# On the Raspberry Pi the edge brain and Mosquitto keep running natively (BLE + GPIO); see docs/DEPLOYMENT.md.
+
+x-python-build: &python-build
+  context: .
+  args:
+    PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  mosquitto:
+    image: ${MOSQUITTO_IMAGE:-eclipse-mosquitto:2.0.20}
+    <<: [*restart, *logging]
+    entrypoint: ["/bin/sh", "/mosquitto/init/start.sh"]
+    environment:
+      MQTT_EDGE_PASSWORD: ${MQTT_EDGE_PASSWORD:?set MQTT_EDGE_PASSWORD in .env}
+      MQTT_DEVICE_PASSWORD: ${MQTT_DEVICE_PASSWORD:?set MQTT_DEVICE_PASSWORD in .env}
+      MQTT_INGEST_PASSWORD: ${MQTT_INGEST_PASSWORD:?set MQTT_INGEST_PASSWORD in .env}
+    volumes:
+      - ./infrastructure/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./infrastructure/mosquitto/acl:/mosquitto/config/acl:ro
+      - ./infrastructure/mosquitto/start.sh:/mosquitto/init/start.sh:ro
+      - mosquitto-data:/mosquitto/data
+    ports: ["${MQTT_BIND:-127.0.0.1}:${MQTT_PORT:-1883}:1883"]
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -u edge -P \"$$MQTT_EDGE_PASSWORD\" -t '$$SYS/broker/uptime' -C 1 -W 5 >/dev/null"]
+      interval: 10s
+      timeout: 8s
+      retries: 6
+      start_period: 5s
+    networks: [edge]
+
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    <<: [*restart, *logging]
+    environment:
+      POSTGRES_USER: sbadmin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: postgres
+      MLFLOW_DB_PASSWORD: ${MLFLOW_DB_PASSWORD:?set MLFLOW_DB_PASSWORD in .env}
+      INGEST_DB_PASSWORD: ${INGEST_DB_PASSWORD:?set INGEST_DB_PASSWORD in .env}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set GRAFANA_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports: ["127.0.0.1:${PG_PORT:-5432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sbadmin -d postgres -h 127.0.0.1"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+    networks: [backend]
+
+  mlflow:
+    build: {<<: *python-build, dockerfile: infrastructure/docker/mlflow.Dockerfile}
+    image: ${REGISTRY:-ghcr.io/ravindu-vs/smartbuilding}/mlflow:${TAG:-latest}
+    <<: [*restart, *logging]
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:${MLFLOW_DB_PASSWORD}@postgres:5432/mlflow
+      MLFLOW_ALLOWED_HOSTS: "mlflow,mlflow:5000,localhost,localhost:*,127.0.0.1,127.0.0.1:*"
+    volumes: [mlflow-artifacts:/mlartifacts]
+    ports: ["${BIND_ADDR:-127.0.0.1}:${MLFLOW_PORT:-5000}:5000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [backend]
+
+  trainer:              # one-shot: trains the first production model, then exits (retrain: see docs/MLOPS.md)
+    build:
+      <<: *python-build
+      dockerfile: infrastructure/docker/trainer.Dockerfile
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    image: ${REGISTRY:-ghcr.io/ravindu-vs/smartbuilding}/trainer:${TAG:-latest}
+    <<: *logging
+    restart: "no"
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    depends_on:
+      mlflow: {condition: service_healthy}
+    networks: [backend]
+
+  ml-api:
+    build: {<<: *python-build, dockerfile: infrastructure/docker/ml-api.Dockerfile}
+    image: ${REGISTRY:-ghcr.io/ravindu-vs/smartbuilding}/ml-api:${TAG:-latest}
+    <<: [*restart, *logging]
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_NAME: room-occupancy
+      MODEL_ALIAS: production
+      MODEL_POLL_SECONDS: "60"
+      ADMIN_TOKEN: ${ML_ADMIN_TOKEN:-}
+    ports: ["${BIND_ADDR:-127.0.0.1}:${ML_API_PORT:-8080}:8080"]
+    depends_on:
+      mlflow: {condition: service_healthy}
+      trainer: {condition: service_completed_successfully}
+    networks: [backend]
+
+  ingestion:
+    build: {<<: *python-build, dockerfile: infrastructure/docker/ingestion.Dockerfile}
+    image: ${REGISTRY:-ghcr.io/ravindu-vs/smartbuilding}/ingestion:${TAG:-latest}
+    <<: [*restart, *logging]
+    environment:
+      DATABASE_URL: postgresql://ingest:${INGEST_DB_PASSWORD}@postgres:5432/smartbuilding
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_USERNAME: ingest
+      MQTT_PASSWORD: ${MQTT_INGEST_PASSWORD}
+      ML_API_URL: http://ml-api:8080
+      INGEST_ROOMS: "*"
+    depends_on:
+      postgres: {condition: service_healthy}
+      mosquitto: {condition: service_healthy}
+      ml-api: {condition: service_started}
+    networks: [edge, backend]
+
+  edge-brain:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/edge-brain.Dockerfile
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
+    image: ${REGISTRY:-ghcr.io/ravindu-vs/smartbuilding}/edge-brain:${TAG:-latest}
+    <<: [*restart, *logging]
+    environment:
+      MQTT_ENABLED: "1"
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_USERNAME: edge
+      MQTT_PASSWORD: ${MQTT_EDGE_PASSWORD}
+      ADMIN_TOKEN: ${EDGE_ADMIN_TOKEN:-}
+    volumes: [edge-output:/app/output]
+    ports: ["${BIND_ADDR:-127.0.0.1}:${EDGE_PORT:-8001}:8001"]
+    depends_on:
+      mosquitto: {condition: service_healthy}
+    networks: [edge]
+
+  board-sim:            # simulated Room 101 board over MQTT (no hardware needed); stored as 'simulated'
+    image: ${REGISTRY:-ghcr.io/ravindu-vs/smartbuilding}/edge-brain:${TAG:-latest}
+    profiles: [simulator]
+    <<: [*restart, *logging]
+    command: ["python", "raspberry_pi/mqtt_device_sim.py", "--host", "mosquitto", "--interval", "3"]
+    environment:
+      MQTT_USERNAME: device
+      MQTT_PASSWORD: ${MQTT_DEVICE_PASSWORD}
+    healthcheck: {disable: true}
+    depends_on:
+      mosquitto: {condition: service_healthy}
+      edge-brain: {condition: service_started}
+    networks: [edge]
+
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.5.0}
+    profiles: [monitoring]
+    <<: [*restart, *logging]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./monitoring/prometheus/targets:/etc/prometheus/targets:ro
+      - prometheus-data:/prometheus
+    ports: ["${BIND_ADDR:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+    networks: [monitoring, edge, backend]
+
+  alertmanager:
+    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.28.1}
+    profiles: [monitoring]
+    <<: [*restart, *logging]
+    command: [--config.file=/etc/alertmanager/alertmanager.yml, --storage.path=/alertmanager]
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports: ["${BIND_ADDR:-127.0.0.1}:${ALERTMANAGER_PORT:-9093}:9093"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9093/-/ready"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+    networks: [monitoring]
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.2.1}
+    profiles: [monitoring]
+    <<: [*restart, *logging]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["${BIND_ADDR:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+    depends_on:
+      prometheus: {condition: service_healthy}
+    networks: [monitoring, backend]
+
+  node-exporter:
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.9.1}
+    profiles: [monitoring]
+    <<: [*restart, *logging]
+    command: [--path.rootfs=/host, --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+)($$|/)]
+    pid: host
+    volumes: ["/:/host:ro"]
+    networks: [monitoring]
+
+  cadvisor:
+    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:v0.52.1}
+    profiles: [monitoring]
+    <<: [*restart, *logging]
+    privileged: true
+    command: [--docker_only=true, --housekeeping_interval=15s, --store_container_labels=false,
+              "--whitelisted_container_labels=com.docker.compose.service,com.docker.compose.project"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [monitoring]
+
+  backup:               # on demand: docker compose --profile backup run --rm backup
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    profiles: [backup]
+    restart: "no"
+    entrypoint: ["/bin/sh", "/scripts/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: sbadmin
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+    volumes:
+      - ./scripts/backup:/scripts:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+      - mlflow-artifacts:/data/mlflow-artifacts:ro
+      - edge-output:/data/edge-output:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [backend]
+
+networks:
+  edge: {}
+  backend: {}
+  monitoring: {}
+
+volumes:
+  mosquitto-data: {}
+  pgdata: {}
+  mlflow-artifacts: {}
+  edge-output: {}
+  prometheus-data: {}
+  alertmanager-data: {}
+  grafana-data: {}

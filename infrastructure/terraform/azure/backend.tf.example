@@ -1,0 +1,10 @@
+# Remote state in Azure Storage with locking (create the storage account once, outside this configuration).
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "rg-tfstate"
+    storage_account_name = "sttfstatesbfyp"
+    container_name       = "tfstate"
+    key                  = "smartbuilding/azure.tfstate"
+    use_azuread_auth     = true
+  }
+}

@@ -96,7 +96,7 @@ def main():
 
     # ---------------- sensors
     r = room()
-    s, pm, ds, health = r["sensors"], r.get("power_measurement") or {}, r.get("device_state") or {}, r.get("sensor_health") or {}
+    s, pm, health = r["sensors"], r.get("power_measurement") or {}, r.get("sensor_health") or {}
     check("sensor health: every sensor detected", all(health.get(k) for k in ("bme280", "bh1750", "ina219")),
           json.dumps(health))
     t, rh = s.get("Temperature"), s.get("Humidity")

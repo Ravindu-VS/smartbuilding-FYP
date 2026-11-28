@@ -1,0 +1,98 @@
+# Every Grafana dashboard query run against Prometheus
+# Recorded 2026-11-28 10:56 UTC in the development workspace (Ubuntu 24.04, Docker 29.10.0, Compose 5.7.1).
+# Base images: local stand-ins built from Ubuntu 24.04 packages and official release binaries, because this
+# workspace cannot reach Docker Hub; the repository defaults (python:3.12-slim, postgres:16-alpine,
+# eclipse-mosquitto, prom/*) are what CI and a normal host use. Grafana could not be downloaded here: its
+# dashboards were checked query-by-query against this Prometheus (dashboards-check.txt).
+
+
+sb-application · Smart Building · Application
+  OK     Edge brain (container)  (1 series)
+  OK     Edge brain (Raspberry Pi)  (1 series)
+  OK     ML API  (1 series)
+  OK     Ingestion  (1 series)
+  OK     MLflow  (1 series)
+  OK     Requests per second  [edge {{endpoint}}]  (3 series)
+  OK     Requests per second  [ml {{endpoint}}]  (2 series)
+  OK     p95 latency  [edge {{endpoint}}]  (2 series)
+  OK     p95 latency  [ml {{endpoint}}]  (2 series)
+  OK     Errors (HTTP 5xx) per second  [edge brain]  (1 series)
+  OK     Errors (HTTP 5xx) per second  [ML API]  (1 series)
+  OK     Errors (HTTP 5xx) per second  [ML errors (all types)]  (1 series)
+  OK     PostgreSQL reachable  (1 series)
+  OK     Queue depth  (1 series)
+  OK     Rows written per second  [{{table}} {{provenance}}]  (3 series)
+  OK     DB write time p95  [p95]  (1 series)
+  OK     Alerts firing  [{{alertname}}]  (2 series)
+
+sb-building · Smart Building · Rooms
+  OK     Data source  (1 series)
+  OK     Temperature  (1 series)
+  OK     Humidity  (1 series)
+  OK     Light  (1 series)
+  OK     Fan  (1 series)
+  OK     Motion (PIR)  (1 series)
+  OK     Fan power (INA219)  (1 series)
+  OK     Temperature and humidity  [°C ({{source}})]  (1 series)
+  OK     Temperature and humidity  [% RH ({{source}})]  (1 series)
+  OK     Light and occupancy  [lux ({{source}})]  (1 series)
+  OK     Light and occupancy  [P(occupied) × 1000]  (1 series)
+  OK     Fan branch: power, current, voltage  [W ({{source}})]  (1 series)
+  EMPTY  Fan branch: power, current, voltage  [A {{source}}]
+  EMPTY  Fan branch: power, current, voltage  [V {{source}}]
+  OK     Fan relay and PIR  [fan on ({{source}})]  (1 series)
+  OK     Fan relay and PIR  [motion ({{source}})]  (1 series)
+  EMPTY  MQ-135 raw response  [mV at ADC ({{source}})]
+  OK     Simulated rooms  (1 series)
+  OK     Simulated building power  (1 series)
+  OK     Mean simulated temperature  (1 series)
+  OK     Rooms the AI thinks are occupied  (1 series)
+  OK     AI control  (1 series)
+  OK     Simulated power by floor  [floor {{floor}}]  (5 series)
+  OK     Simulated temperature by floor  [floor {{floor}}]  (5 series)
+  SKIP   Latest stored readings: SQL panel (checked against PostgreSQL by the stack test)
+
+sb-infrastructure · Smart Building · Infrastructure
+  OK     CPU busy  (1 series)
+  OK     Memory used  (1 series)
+  OK     Root disk free  (1 series)
+  OK     Uptime  (1 series)
+  OK     CPU by mode  [{{mode}}]  (7 series)
+  OK     Memory  [used]  (1 series)
+  OK     Memory  [total]  (1 series)
+  OK     Network  [receive]  (1 series)
+  OK     Network  [transmit]  (1 series)
+  EMPTY  CPU per service  [{{container_label_com_docker_compose_service}}]
+  EMPTY  Memory per service  [{{container_label_com_docker_compose_service}}]
+  EMPTY  Network per service  [{{container_label_com_docker_compose_service}} rx]
+  EMPTY  Container age (restarts reset it)  [{{container_label_com_docker_compose_service}}]
+
+sb-ml · Smart Building · Machine learning
+  OK     Model being served  (1 series)
+  OK     Model loaded  (1 series)
+  OK     Input drift  (1 series)
+  OK     Predictions per second  [{{outcome}}]  (1 series)
+  OK     Inference time  [p50]  (1 series)
+  OK     Inference time  [p95]  (1 series)
+  OK     P(occupied) distribution (last hour)  [{{le}}]  (12 series)
+  OK     PIR agrees with the model  [agreement]  (1 series)
+  OK     Input drift (PSI per feature)  [{{feature}}]  (6 series)
+  OK     Rolling input means  [{{feature}}]  (6 series)
+  OK     Live occupancy accuracy (simulated rooms vs simulator truth)  [{{model}}]  (2 series)
+  OK     Continual learning  [buffer rows]  (1 series)
+  OK     Continual learning  [rounds]  (1 series)
+
+sb-mqtt · Smart Building · MQTT and board link
+  OK     Edge brain ↔ broker  (1 series)
+  OK     Ingestion ↔ broker  (1 series)
+  OK     Room 101 board online  (1 series)
+  EMPTY  Bluetooth LE link
+  OK     Edge brain: messages per second  [{{kind}}]  (9 series)
+  OK     Ingestion: messages per second  [{{kind}}]  (3 series)
+  EMPTY  Rejected telemetry  [ingestion {{reason}}]
+  OK     Rejected telemetry  [ingestion (all)]  (1 series)
+  OK     Rejected telemetry  [edge brain]  (1 series)
+  OK     Seconds since the last board reading  [{{room_id}}]  (1 series)
+  OK     Commands waiting for an ack  [pending]  (1 series)
+
+78 queries: 69 with data, 9 empty, 0 failures

@@ -1,0 +1,59 @@
+# Trains the first production model when the registry has none (idempotent). Re-run for a retrain:
+#   kubectl -n smartbuilding create job --from=cronjob/retrain retrain-manual
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trainer
+  labels: {app.kubernetes.io/name: trainer}
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: trainer, app.kubernetes.io/component: training}
+    spec:
+      restartPolicy: OnFailure
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: trainer
+          image: ghcr.io/ravindu-vs/smartbuilding/trainer:latest
+          args: ["python", "-m", "mlops.train", "--if-no-production"]
+          envFrom: [{configMapRef: {name: smartbuilding-config}}]
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "2", memory: 2Gi}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, readOnlyRootFilesystem: true}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+# Weekly retraining; the promotion gate decides whether the new version becomes production.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: retrain
+  labels: {app.kubernetes.io/name: retrain}
+spec:
+  schedule: "17 2 * * 0"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: retrain, app.kubernetes.io/component: training}
+        spec:
+          restartPolicy: OnFailure
+          securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+          containers:
+            - name: trainer
+              image: ghcr.io/ravindu-vs/smartbuilding/trainer:latest
+              args: ["python", "-m", "mlops.train"]
+              envFrom: [{configMapRef: {name: smartbuilding-config}}]
+              resources:
+                requests: {cpu: 250m, memory: 512Mi}
+                limits: {cpu: "2", memory: 2Gi}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, readOnlyRootFilesystem: true}
+              volumeMounts: [{name: tmp, mountPath: /tmp}]
+          volumes: [{name: tmp, emptyDir: {}}]

@@ -30,7 +30,6 @@ Room types (assumed behaviour, not calibrated to measured data):
 """
 from __future__ import annotations
 
-import math
 from datetime import datetime
 from functools import lru_cache
 from typing import Dict

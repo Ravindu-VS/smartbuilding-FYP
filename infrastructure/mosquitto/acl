@@ -1,0 +1,18 @@
+# Least privilege per client (users are created by start.sh from the environment).
+# edge brain: everything under the versioned prefix, plus broker statistics for the health check
+user edge
+topic readwrite sb/v1/#
+topic read $SYS/#
+
+# boards (real or simulated): publish their readings, status and acks; receive commands
+user device
+topic write sb/v1/room/+/telemetry
+topic write sb/v1/room/+/status
+topic write sb/v1/room/+/ack
+topic read sb/v1/room/+/command
+
+# ingestion: read only
+user ingest
+topic read sb/v1/room/+/telemetry
+topic read sb/v1/room/+/status
+topic read sb/v1/room/+/ack

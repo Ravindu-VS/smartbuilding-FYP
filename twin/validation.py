@@ -15,7 +15,6 @@ validate_records(rows) checks one generated table and returns a list of problems
 """
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 from datetime import datetime
 from typing import Dict, Iterable, List

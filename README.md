@@ -38,6 +38,11 @@ ESP32-S3: BME280, BH1750, MQ-135, PIR, INA219,     MQTT + BLE      Mosquitto bro
 | Reinforcement learning (numpy PPO, environment, evaluation) | `rl/` |
 | Dashboard and 3D twin | `dashboard/fyp-research-twin/` |
 | Wiring, parts list, renders | `docs/wiring/` |
+| MLOps (training, MLflow registry gate, FastAPI serving) | `mlops/` |
+| Telemetry ingestion (MQTT → PostgreSQL) | `ingestion/` |
+| Containers, Kubernetes, Terraform, Mosquitto, PostgreSQL | `infrastructure/`, `docker-compose.yml` |
+| Prometheus, Alertmanager, Grafana | `monitoring/` |
+| CI/CD | `.github/workflows/` |
 
 ## 2. Room 101 hardware (final build)
 
@@ -49,7 +54,7 @@ ESP32-S3: BME280, BH1750, MQ-135, PIR, INA219,     MQTT + BLE      Mosquitto bro
 | 0.96" OLED (JMD0.96A-2, SSD1306) | energy meter: W, V, mA, Wh, fan, mode | I²C (0x3C) |
 | MQ-135 | gas response; the Pi estimates CO2 from it (labelled eCO2) | AO → 10k/15k divider → GPIO1, DO → 10k/22k divider → GPIO2 |
 | HC-SR501 PIR | motion / presence | GPIO4 |
-| 5 V relay + 12 V 40 mm fan | the room's cooling load (ON/OFF) | GPIO10 → BC547 driver → relay IN |
+| CW-020 5 V relay + 12 V 40 mm fan | the room's cooling load (ON/OFF) | GPIO10 → relay IN (through a BC547 driver if the module has a low-level input) |
 | Light RGB LED | the AI's lighting decision (white, OFF / DIM / ON) | GPIO6 / 7 / 5 (PWM) |
 | AC indicator RGB LED | what the AC would do (ECO green, LOW cyan, COOL blue, MAX magenta) | GPIO11 / 12 / 13 |
 | Status RGB LED | AI blue, schedule green, manual yellow, warning red, no controller blinking red | GPIO14 / 15 / 16 |
@@ -149,7 +154,32 @@ command over BLE; Pi reboot: everything back without touching the board. Details
 | estimate | Room 101 CO2 from the MQ-135 | eCO2 (MQ-135) |
 | `public_real` | UCI occupancy, BDG2 (training and evaluation only) | model cards |
 
-## 7. Tests and reproduction
+## 7. Platform: DevOps and MLOps
+
+The research system above is wrapped in a production-style platform. Every capability was run and tested, with the
+outputs recorded in [docs/evidence/](docs/evidence/):
+
+| Capability | What exists | Proof |
+|---|---|---|
+| Containers | 5 images (edge brain + dashboard, ML API, ingestion, trainer, MLflow); Compose with Mosquitto (auth + ACL), PostgreSQL (one role per service), health checks, volumes, networks, non-root | [compose-ps](docs/evidence/compose-ps.txt), [data flow](docs/evidence/data-flow.txt) |
+| CI/CD | GitHub Actions: lint → unit (3.12/3.13) + integration (PostgreSQL, MQTT, MLflow) + config checks → build, stack e2e, recovery, restore, Trivy, kind deploy → GHCR; gated Azure deploy | [.github/workflows](.github/workflows/) |
+| MLOps | Validated data, chronological split, 3 candidates, MLflow tracking + registry, promotion gate (never a silent replacement), manual promotion with a reason, rollback, FastAPI `/predict`, hot reload, PSI drift, weekly retraining | [MLOPS](docs/MLOPS.md), [registry](docs/evidence/mlops-registry.txt) |
+| Telemetry DB | MQTT → validation (same as the edge) → PostgreSQL, idempotent, outage queue, a prediction per reading | [ingestion](ingestion/service.py) |
+| Monitoring | Prometheus `/metrics` everywhere, 15 alert rules, Alertmanager, 5 Grafana dashboards (78 queries checked), JSON logs | [MONITORING](docs/MONITORING.md) |
+| Kubernetes | Kustomize base + local/azure overlays; probes, limits, PDB, NetworkPolicies, ingress; tested on k3s with zero failed requests through a pod kill and a rolling restart | [kubernetes](docs/evidence/kubernetes.txt) |
+| Azure | Terraform: VM + cloud-init, VNet/NSG, ACR, Key Vault, storage, Log Analytics, budget (validated, not applied) | [terraform](docs/evidence/terraform.txt) |
+| Recovery | Backup/restore test; crash → restart in 7 s; 100 s outage → alert fired, no reading lost | [restore](docs/evidence/restore-test.txt), [recovery](docs/evidence/recovery-test.txt) |
+
+```
+cp .env.example .env              # set every CHANGE_ME
+docker compose up -d              # http://localhost:8001 twin · :5000 MLflow · :8080 ML API docs · :3000 Grafana
+```
+
+Documentation: [ARCHITECTURE](docs/ARCHITECTURE.md) · [AUDIT](docs/AUDIT.md) · [DEPLOYMENT](docs/DEPLOYMENT.md) ·
+[DEVELOPMENT](docs/DEVELOPMENT.md) · [DEVOPS](docs/DEVOPS.md) · [MLOPS](docs/MLOPS.md) · [MONITORING](docs/MONITORING.md) ·
+[SECURITY](docs/SECURITY.md) · [TESTING](docs/TESTING.md) · [TROUBLESHOOTING](docs/TROUBLESHOOTING.md)
+
+## 8. Tests and reproduction
 
 ```
 python -m pytest -q                         # unit, integration and end-to-end tests (docs/TESTING.md)
@@ -158,7 +188,7 @@ python experiments/run.py --all             # experiments 1-11
 python experiments/exp12_learned_fusion/run_exp12.py mo_learned 1 7 7
 ```
 
-## 8. Known limitations
+## 9. Known limitations
 
 * The 25 simulated rooms use a 5R1C thermal model with synthetic weather and stochastic occupants; models trained
   on them learn the simulator.
@@ -166,3 +196,7 @@ python experiments/exp12_learned_fusion/run_exp12.py mo_learned 1 7 7
 * The real room has no labelled occupancy data, so its occupancy estimator does not retrain itself.
 * PPO is one policy shared by the simulated rooms, not a multi-agent system, and is trained offline.
 * Research prototype without safety certification; the 12 V fan branch is low-voltage DC only.
+* The cloud side (Terraform, the Azure deploy) is validated but has not been applied to a subscription. MLflow has no
+  login of its own and must stay private ([SECURITY](docs/SECURITY.md)).
+* The MLflow occupancy model is trained on one real office (UCI, 2015); Room 101 has no ground truth, so only input
+  drift and PIR agreement can be watched live.

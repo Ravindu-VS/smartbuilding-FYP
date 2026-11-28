@@ -1,0 +1,36 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths: ["infrastructure/terraform/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run: {working-directory: infrastructure/terraform/azure}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: {terraform_version: "1.13.3"}
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - name: Plan (only with Azure access configured)
+        if: vars.AZURE_DEPLOY_ENABLED == 'true'
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_ssh_public_key: ${{ vars.VM_SSH_PUBLIC_KEY }}
+          TF_VAR_admin_cidr: ${{ vars.ADMIN_CIDR }}
+          TF_VAR_edge_cidr: ${{ vars.EDGE_CIDR }}
+          TF_VAR_budget_email: ${{ vars.BUDGET_EMAIL }}
+        run: terraform plan -input=false -no-color | tee plan.txt

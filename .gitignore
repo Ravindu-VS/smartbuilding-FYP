@@ -115,3 +115,24 @@ models/*_features.json
 data/training_logs/
 # the original Random Forest pipeline: the baseline every comparison in the README uses
 !models/final_unified_occupancy_pipeline.pkl
+
+# Container stack secrets and local backups
+.env
+.env.*
+!.env.example
+backups/
+# Terraform
+infrastructure/terraform/**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl.bak
+# Local MLflow store (sqlite + artifacts) from python -m mlops.train without a server
+output/mlflow/
+mlruns/
+
+# Kubernetes secrets for kustomize secretGenerator
+infrastructure/kubernetes/overlays/*/secrets.env
+infrastructure/kubernetes/overlays/*/mqtt.env
+.terraform.lock.hcl

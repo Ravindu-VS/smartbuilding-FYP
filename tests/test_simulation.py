@@ -2,7 +2,6 @@
 import math
 from datetime import datetime
 
-import numpy as np
 import pytest
 
 from twin.building import LIGHT_LEVELS, TwinBuilding

@@ -25,7 +25,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime, timedelta
-from typing import Deque, Dict, List, Optional
+from typing import Deque, Dict, Optional
 
 import numpy as np
 

@@ -1,0 +1,5 @@
+# MLOps: training pipeline + MLflow tracking/registry (mlops/train.py, mlops/promote.py). Python 3.12-3.13.
+-r train.txt
+mlflow==3.18.0
+prometheus-client==0.26.0
+skops==0.16.0            # model format: safe to load (no pickle code execution)

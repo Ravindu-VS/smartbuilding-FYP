@@ -562,7 +562,7 @@
       ]
     },
     "occupancy_twin_fusion": {
-      "active": "v1",
+      "active": "v2",
       "history": [
         {
           "action": "promotion_rejected",
@@ -697,6 +697,71 @@
                 "check": "beats reference",
                 "passed": true,
                 "detail": "0.9620 vs reference 0.9321 (must beat the hand-built PIR+CO2 fusion estimator on the same synthetic test seed)"
+              }
+            ],
+            "passed": true
+          }
+        },
+        {
+          "action": "promote",
+          "version": "v2",
+          "previous": "v1",
+          "utc": "2026-11-25T06:09:24Z",
+          "forced": null,
+          "report": {
+            "task": "occupancy_twin_fusion",
+            "version": "v2",
+            "utc": "2026-11-25T06:09:24Z",
+            "checks": [
+              {
+                "check": "file model.json intact",
+                "passed": true,
+                "detail": "sha256 matches metadata"
+              },
+              {
+                "check": "portable self-test",
+                "passed": true,
+                "detail": "reference samples reproduced"
+              },
+              {
+                "check": "feature list matches metadata",
+                "passed": true,
+                "detail": "13 features"
+              },
+              {
+                "check": "finite output on perturbed inputs (5 % missing)",
+                "passed": true,
+                "detail": "256 rows"
+              },
+              {
+                "check": "probabilities in [0, 1]",
+                "passed": true,
+                "detail": ""
+              },
+              {
+                "check": "single-row latency",
+                "passed": true,
+                "detail": "0.69 ms per call, best of 20 (limit 5.0 ms)"
+              },
+              {
+                "check": "rejects wrong feature count",
+                "passed": true,
+                "detail": "ModelError raised"
+              },
+              {
+                "check": "metric present",
+                "passed": true,
+                "detail": "test_metrics.learned_fusion_hist_gbt.f1 = 0.974249"
+              },
+              {
+                "check": "beats reference",
+                "passed": true,
+                "detail": "0.9742 vs reference 0.9268 (must beat the hand-built PIR+CO2 fusion estimator on the same synthetic test seed)"
+              },
+              {
+                "check": "not worse than active",
+                "passed": true,
+                "detail": "0.9742 vs active v1 0.9719 on the same rows"
               }
             ],
             "passed": true

@@ -14,7 +14,7 @@ A drift report is a warning for the operator and an input to the retraining deci
 from __future__ import annotations
 
 from collections import deque
-from typing import Deque, Dict, List, Optional, Sequence
+from typing import Deque, Dict, Sequence
 
 import numpy as np
 

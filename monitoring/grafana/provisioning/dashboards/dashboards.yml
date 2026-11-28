@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: smart-building
+    folder: Smart Building
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

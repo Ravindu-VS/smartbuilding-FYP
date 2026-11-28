@@ -41,7 +41,6 @@ import argparse
 import csv
 import glob
 import json
-import math
 import os
 import random
 import sys
@@ -49,8 +48,8 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import replace
-from datetime import datetime, timedelta
-from typing import Dict, Iterator, List, Optional
+from datetime import datetime
+from typing import Dict, List, Optional
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)

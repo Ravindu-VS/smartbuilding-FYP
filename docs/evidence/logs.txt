@@ -1,0 +1,23 @@
+# Structured JSON logs (docker compose logs, 3 lines per service)
+# Recorded 2026-11-28 10:56 UTC in the development workspace (Ubuntu 24.04, Docker 29.10.0, Compose 5.7.1).
+# Base images: local stand-ins built from Ubuntu 24.04 packages and official release binaries, because this
+# workspace cannot reach Docker Hub; the repository defaults (python:3.12-slim, postgres:16-alpine,
+# eclipse-mosquitto, prom/*) are what CI and a normal host use. Grafana could not be downloaded here: its
+# dashboards were checked query-by-query against this Prometheus (dashboards-check.txt).
+
+## edge-brain
+{"ts": "2026-11-28T10:56:16.099Z", "level": "INFO", "service": "edge-brain", "logger": "EdgeBrain", "msg": "HARDWARE f2_office_a [AI]: T=28.7 Lux=380.4 CO2=625.0 Pres=False -> P=0.99 -> lights ON, AC NORMAL 25C (fan 200, LED 255, servo 0)"}
+{"ts": "2026-11-28T10:56:19.096Z", "level": "INFO", "service": "edge-brain", "logger": "EdgeBrain", "msg": "HARDWARE f2_office_a [AI]: T=28.8 Lux=378.7 CO2=626.0 Pres=False -> P=0.99 -> lights ON, AC NORMAL 25C (fan 200, LED 255, servo 0)"}
+{"ts": "2026-11-28T10:56:22.100Z", "level": "INFO", "service": "edge-brain", "logger": "EdgeBrain", "msg": "HARDWARE f2_office_a [AI]: T=28.74 Lux=377.0 CO2=619.0 Pres=False -> P=0.99 -> lights ON, AC NORMAL 25C (fan 200, LED 255, servo 0)"
+## ingestion
+{"ts": "2026-11-28T10:53:56.129Z", "level": "WARNING", "service": "ingestion", "logger": "ingestion", "msg": "MQTT disconnected (Normal disconnection)"}
+{"ts": "2026-11-28T10:55:40.667Z", "level": "INFO", "service": "ingestion", "logger": "ingestion", "msg": "MQTT connected to mosquitto:1883, subscribed to sb/v1/room/+/{telemetry,status,ack}"}
+{"ts": "2026-11-28T10:55:40.775Z", "level": "INFO", "service": "ingestion", "logger": "ingestion", "msg": "connected to PostgreSQL"}
+## ml-api
+{"ts": "2026-11-28T10:53:52.161Z", "level": "INFO", "service": "ml-api", "logger": "ml-api", "msg": "serving models:/room-occupancy/4", "model_version": "4"}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+## trainer
+{"skipped": true, "production_version": "4"}
+{"skipped": true, "production_version": "4"}
+{"ts": "2026-11-28T10:55:39.906Z", "level": "INFO", "service": "trainer", "logger": "mlops.train", "msg": "production is already v4: nothing to train (retrain: python -m mlops.train)"}

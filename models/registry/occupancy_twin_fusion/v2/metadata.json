@@ -1,0 +1,372 @@
+{
+  "kind": "classification",
+  "target": "true simulated head count > 0",
+  "features": [
+    "pir_2min",
+    "pir_10min",
+    "pir_20min",
+    "pir_log",
+    "CO2",
+    "CO2_d5",
+    "CO2_d15",
+    "CO2_std15",
+    "T_d15",
+    "HR_d15",
+    "hour_sin",
+    "hour_cos",
+    "weekday"
+  ],
+  "feature_set": "twin_fusion",
+  "model_family": "hist_gbt",
+  "estimator": "HistGradientBoostingClassifier",
+  "threshold": 0.5,
+  "seed": 42,
+  "selection": "online learning round: forward-in-time test on the newest 20 % of the live buffer",
+  "training": {
+    "dataset": "live digital twin, simulated rooms (one row per room and control step)",
+    "rows": 86420,
+    "first": "2026-03-02T06:00",
+    "last": "2026-03-04T15:36",
+    "positive_share": 0.564152,
+    "provenance": "synthetic (live twin)",
+    "split": "chronological: older 80 % train, newest 20 % test"
+  },
+  "test_metrics": {
+    "learned_fusion_hist_gbt": {
+      "n": 21605,
+      "positive_share": 0.465633,
+      "accuracy": 0.976024,
+      "balanced_accuracy": 0.975897,
+      "precision": 0.974443,
+      "recall": 0.974056,
+      "f1": 0.974249,
+      "roc_auc": 0.996515,
+      "average_precision": 0.996551,
+      "confusion": {
+        "tn": 11288,
+        "fp": 257,
+        "fn": 261,
+        "tp": 9799
+      },
+      "threshold": 0.5
+    },
+    "handbuilt_fusion_estimator": {
+      "n": 21605,
+      "positive_share": 0.465633,
+      "accuracy": 0.926961,
+      "balanced_accuracy": 0.931218,
+      "precision": 0.868783,
+      "recall": 0.993141,
+      "f1": 0.926809,
+      "roc_auc": 0.983451,
+      "average_precision": 0.969619,
+      "confusion": {
+        "tn": 10036,
+        "fp": 1509,
+        "fn": 69,
+        "tp": 9991
+      },
+      "threshold": 0.5
+    },
+    "approved_model_same_rows": {
+      "n": 21605,
+      "positive_share": 0.465633,
+      "accuracy": 0.973756,
+      "balanced_accuracy": 0.973903,
+      "precision": 0.967866,
+      "recall": 0.976044,
+      "f1": 0.971938,
+      "roc_auc": 0.996198,
+      "average_precision": 0.996161,
+      "confusion": {
+        "tn": 11219,
+        "fp": 326,
+        "fn": 241,
+        "tp": 9819
+      },
+      "threshold": 0.5
+    }
+  },
+  "compare_active_on_same_data": {
+    "version": "v1",
+    "f1": 0.971938
+  },
+  "feature_reference": {
+    "pir_2min": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.550764,
+      "std": 0.497416,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "pir_10min": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.635189,
+      "std": 0.481377,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "pir_20min": {
+      "deciles": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 0.679137,
+      "std": 0.466808,
+      "min": 0.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "pir_log": {
+      "deciles": [
+        2.772589,
+        2.772589,
+        2.772589,
+        3.433987,
+        3.433987,
+        4.330733,
+        5.70711,
+        7.372118,
+        8.531293,
+        9.502711,
+        10.855358
+      ],
+      "mean": 5.431499,
+      "std": 2.64555,
+      "min": 2.772589,
+      "max": 10.855358,
+      "missing_share": 0.0
+    },
+    "CO2": {
+      "deciles": [
+        380.0,
+        415.0,
+        425.0,
+        435.0,
+        445.0,
+        460.0,
+        484.0,
+        514.0,
+        545.0,
+        591.0,
+        869.0
+      ],
+      "mean": 486.585883,
+      "std": 75.324345,
+      "min": 380.0,
+      "max": 869.0,
+      "missing_share": 0.0
+    },
+    "CO2_d5": {
+      "deciles": [
+        -104.0,
+        -27.0,
+        -18.0,
+        -11.0,
+        -5.0,
+        0.0,
+        6.0,
+        11.0,
+        18.0,
+        27.0,
+        95.0
+      ],
+      "mean": 0.07924,
+      "std": 21.329819,
+      "min": -104.0,
+      "max": 95.0,
+      "missing_share": 0.001446
+    },
+    "CO2_d15": {
+      "deciles": [
+        -123.0,
+        -29.0,
+        -19.0,
+        -12.0,
+        -6.0,
+        0.0,
+        6.0,
+        12.0,
+        19.0,
+        30.0,
+        132.0
+      ],
+      "mean": 0.235005,
+      "std": 23.489546,
+      "min": -123.0,
+      "max": 132.0,
+      "missing_share": 0.004339
+    },
+    "CO2_std15": {
+      "deciles": [
+        1.732051,
+        11.115412,
+        12.281616,
+        13.178988,
+        13.922575,
+        14.668723,
+        15.435889,
+        16.288471,
+        17.339742,
+        18.857359,
+        36.952608
+      ],
+      "mean": 14.883767,
+      "std": 3.124537,
+      "min": 1.732051,
+      "max": 36.952608,
+      "missing_share": 0.000579
+    },
+    "T_d15": {
+      "deciles": [
+        -7.14,
+        -0.2,
+        -0.12,
+        -0.07,
+        -0.03,
+        0.01,
+        0.05,
+        0.09,
+        0.15,
+        0.23,
+        3.55
+      ],
+      "mean": -0.000776,
+      "std": 0.478917,
+      "min": -7.14,
+      "max": 3.55,
+      "missing_share": 0.004339
+    },
+    "HR_d15": {
+      "deciles": [
+        -0.003894,
+        -0.000458,
+        -0.000297,
+        -0.000187,
+        -9.4e-05,
+        -8e-06,
+        7.9e-05,
+        0.000174,
+        0.000286,
+        0.000442,
+        0.001668
+      ],
+      "mean": -1.5e-05,
+      "std": 0.000389,
+      "min": -0.003894,
+      "max": 0.001668,
+      "missing_share": 0.004339
+    },
+    "hour_sin": {
+      "deciles": [
+        -1.0,
+        -0.930418,
+        -0.746057,
+        -0.515038,
+        -0.237686,
+        0.061049,
+        0.358368,
+        0.619094,
+        0.824126,
+        0.95502,
+        1.0
+      ],
+      "mean": 0.039044,
+      "std": 0.694837,
+      "min": -1.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "hour_cos": {
+      "deciles": [
+        -1.0,
+        -0.968148,
+        -0.876727,
+        -0.728371,
+        -0.526214,
+        -0.25038,
+        0.061049,
+        0.426569,
+        0.728371,
+        0.930418,
+        1.0
+      ],
+      "mean": -0.119987,
+      "std": 0.708012,
+      "min": -1.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    },
+    "weekday": {
+      "deciles": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0,
+      "missing_share": 0.0
+    }
+  },
+  "inference": {
+    "runtime": "numpy only (ml/portable.py)",
+    "scope": "simulated rooms only"
+  },
+  "training_code": "ml/online_learning.py OnlineLearner.train_round",
+  "trained_utc": "2026-11-25T06:09:24Z",
+  "provenance": "prediction",
+  "extra_limitations": "Trained on simulator labels: valid for the simulated rooms only (sim-to-real gap).",
+  "task": "occupancy_twin_fusion",
+  "version": "v2",
+  "files": {
+    "model.json": {
+      "sha256": "c8649f5840d1def198755d968d3d5bb780084b34c4167250feb41d7112405083",
+      "bytes": 758090
+    }
+  }
+}

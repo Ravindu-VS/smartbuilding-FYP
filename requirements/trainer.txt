@@ -1,0 +1,6 @@
+# Training job image (infrastructure/docker/trainer.Dockerfile): talks to the MLflow server over HTTP.
+mlflow==3.18.0
+scikit-learn==1.8.0
+numpy==2.5.3
+pandas==3.0.5
+skops==0.16.0            # model format: safe to load (no pickle code execution)

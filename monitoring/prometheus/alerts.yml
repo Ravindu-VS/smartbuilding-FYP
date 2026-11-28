@@ -1,0 +1,105 @@
+groups:
+  - name: availability
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"edge-brain|ml-api|ingestion|mlflow"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "Prometheus cannot scrape {{ $labels.instance }} for 1 minute."
+      - alert: EdgePiUnreachable
+        expr: up{job="edge-brain-pi"} == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Raspberry Pi edge brain unreachable"
+          description: "{{ $labels.instance }} has not answered /metrics for 5 minutes."
+  - name: edge
+    rules:
+      - alert: BoardOffline
+        expr: sb_board_connected == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "Board in {{ $labels.room_id }} is offline"
+          description: "No reading from the room's board for 2 minutes."
+      - alert: MqttBridgeDisconnected
+        expr: sb_mqtt_enabled == 1 and sb_mqtt_connected == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Edge brain lost the MQTT broker"
+      - alert: MqttRejectsHigh
+        expr: rate(sb_mqtt_messages_total{kind="rejected"}[5m]) > 0.1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "MQTT telemetry is being rejected ({{ $value | humanize }}/s)"
+  - name: ingestion
+    rules:
+      - alert: TelemetryDatabaseDown
+        expr: sb_ingest_db_up == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Ingestion cannot reach PostgreSQL; readings are queued"
+      - alert: TelemetryStalled
+        expr: time() - max(sb_ingest_last_message_timestamp_seconds) > 120
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: "No telemetry for 2 minutes"
+      - alert: IngestQueueBacklog
+        expr: sb_ingest_queue_depth > 1000
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} readings waiting for the database"
+  - name: ml
+    rules:
+      - alert: ModelNotLoaded
+        expr: sb_ml_model_loaded == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "ML API has no model loaded"
+      - alert: InferenceSlow
+        expr: histogram_quantile(0.95, sum by (le) (rate(sb_ml_request_duration_seconds_bucket{endpoint="/predict"}[5m]))) > 0.25
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "p95 /predict latency {{ $value | humanizeDuration }}"
+      - alert: MlApiErrors
+        expr: sum(rate(sb_ml_requests_total{status=~"5.."}[5m])) > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "ML API is answering 5xx"
+      - alert: InputDrift
+        expr: sb_ml_drift_status == 2
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "Model inputs differ significantly from the training data (PSI > 0.25)"
+          description: "Check the inputs; consider retraining with data from this room."
+  - name: host
+    rules:
+      - alert: HostHighCpu
+        expr: 1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.9
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "CPU above 90% on {{ $labels.instance }}"
+      - alert: HostLowMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Less than 10% memory available"
+      - alert: HostDiskFilling
+        expr: node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} < 0.10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Disk {{ $labels.mountpoint }} below 10% free"

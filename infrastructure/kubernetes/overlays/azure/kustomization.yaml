@@ -1,0 +1,18 @@
+# Azure (AKS or the k3s VM from infrastructure/terraform/azure) with images in Azure Container Registry.
+# CI sets the registry and tag:  kustomize edit set image ghcr.io/ravindu-vs/smartbuilding/ml-api=<acr>.azurecr.io/smartbuilding/ml-api:<sha>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [../../base]
+namespace: smartbuilding
+secretGenerator:
+  - {name: smartbuilding-secrets, envs: [secrets.env]}
+  - {name: smartbuilding-mqtt, envs: [mqtt.env]}
+images:
+  - {name: ghcr.io/ravindu-vs/smartbuilding/mlflow, newName: sbacr.azurecr.io/smartbuilding/mlflow, newTag: latest}
+  - {name: ghcr.io/ravindu-vs/smartbuilding/trainer, newName: sbacr.azurecr.io/smartbuilding/trainer, newTag: latest}
+  - {name: ghcr.io/ravindu-vs/smartbuilding/ml-api, newName: sbacr.azurecr.io/smartbuilding/ml-api, newTag: latest}
+  - {name: ghcr.io/ravindu-vs/smartbuilding/ingestion, newName: sbacr.azurecr.io/smartbuilding/ingestion, newTag: latest}
+patches:
+  - target: {kind: Service, name: mqtt}
+    patch: |-
+      - {op: add, path: /spec/type, value: LoadBalancer}      # the Pi's Mosquitto bridge connects here (TLS: docs/SECURITY.md)

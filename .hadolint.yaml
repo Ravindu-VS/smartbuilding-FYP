@@ -1,0 +1,4 @@
+# Base images come from build ARGs (PYTHON_IMAGE, NODE_IMAGE) whose defaults are pinned tags, so the offline
+# build path can swap them; hadolint cannot see through ARGs (DL3006). Python packages are pinned in
+# requirements/*.txt (DL3013 does not read those files).
+ignored: [DL3006, DL3013]

@@ -1,0 +1,21 @@
+# Backup -> data loss -> restore
+# Recorded 2026-11-28 10:56 UTC in the development workspace (Ubuntu 24.04, Docker 29.10.0, Compose 5.7.1).
+# Base images: local stand-ins built from Ubuntu 24.04 packages and official release binaries, because this
+# workspace cannot reach Docker Hub; the repository defaults (python:3.12-slim, postgres:16-alpine,
+# eclipse-mosquitto, prom/*) are what CI and a normal host use. Grafana could not be downloaded here: its
+# dashboards were checked query-by-query against this Prometheus (dashboards-check.txt).
+
+1. write a marker row
+   telemetry rows: 306, MLflow model versions: 4
+2. backup
+  smartbuilding: 40423 bytes
+  manifest: 5 files
+backup complete: 20261128T105309Z
+3. simulate data loss: drop the telemetry table and the MLflow registry rows
+   telemetry table exists: f
+4. restore from ./backups/20261128T105309Z
+  mlflow restored (owner mlflow)
+  smartbuilding restored (owner ingest)
+restore complete from /backups/20261128T105309Z
+5. verify: telemetry rows 306 (marker found: 1), MLflow model versions 4
+RESTORE TEST PASSED

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import lru_cache
 
 import numpy as np

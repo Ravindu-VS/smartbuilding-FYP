@@ -1,0 +1,38 @@
+# Prometheus targets and firing alerts
+# Recorded 2026-11-28 10:56 UTC in the development workspace (Ubuntu 24.04, Docker 29.10.0, Compose 5.7.1).
+# Base images: local stand-ins built from Ubuntu 24.04 packages and official release binaries, because this
+# workspace cannot reach Docker Hub; the repository defaults (python:3.12-slim, postgres:16-alpine,
+# eclipse-mosquitto, prom/*) are what CI and a normal host use. Grafana could not be downloaded here: its
+# dashboards were checked query-by-query against this Prometheus (dashboards-check.txt).
+
+alertmanager    up    http://alertmanager:9093/metrics              
+cadvisor        up    http://cadvisor:8080/metrics                  
+edge-brain      up    http://edge-brain:8001/metrics                
+edge-brain-pi   down  http://172.16.0.57:8001/metrics               Get "http://172.16.0.57:8001/metrics": dial tcp 172.16.0.57:
+ingestion       up    http://ingestion:8090/metrics                 
+ml-api          up    http://ml-api:8080/metrics                    
+mlflow          up    http://mlflow:5000/metrics                    
+node            up    http://node-exporter:9100/metrics             
+prometheus      up    http://localhost:9090/metrics                 
+
+HostDiskFilling node firing
+HostDiskFilling node firing
+HostDiskFilling node firing
+EdgePiUnreachable edge-brain-pi firing
+
+## promtool / amtool
+Checking /etc/prometheus/prometheus.yml
+  SUCCESS: 1 rule files found
+ SUCCESS: /etc/prometheus/prometheus.yml is valid prometheus config file syntax
+
+Checking /etc/prometheus/alerts.yml
+  SUCCESS: 15 rules found
+
+Checking '/a/alertmanager.yml'  SUCCESS
+Found:
+ - global config
+ - route
+ - 1 inhibit rules
+ - 1 receivers
+ - 0 templates
+

@@ -1,0 +1,105 @@
+# Kubernetes: kustomize overlay "local" on a real single-node k3s cluster
+# Recorded 2026-11-28 11:42 UTC. k3s v1.33.5+k3s1 (containerd, Traefik ingress). Workspace-only settings (not in the manifests):
+# containerd restrict_oom_score_adj=true and lower kubelet eviction thresholds, because this workspace
+# lacks CAP_SYS_RESOURCE and reports ~3 % free disk; images = the locally built ones (Docker Hub unreachable).
+
+$ kubectl get nodes -o wide
+NAME       STATUS   ROLES                  AGE   VERSION        INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION    CONTAINER-RUNTIME
+sb-local   Ready    control-plane,master   41m   v1.33.5+k3s1   192.0.2.2     <none>        Ubuntu 24.04.5 LTS   6.18.44-fc-v880   containerd://2.1.4-k3s1
+
+$ kubectl -n smartbuilding get all,pvc,ingress,networkpolicy,pdb,secret,configmap
+NAME                             READY   STATUS      RESTARTS   AGE
+pod/ingestion-6db6445cdb-8kfkr   1/1     Running     0          20m
+pod/ml-api-569845767-mqrqc       1/1     Running     0          66s
+pod/ml-api-569845767-s55h6       1/1     Running     0          58s
+pod/mlflow-7479b4d8b-8hk52       1/1     Running     0          5m45s
+pod/mqtt-7995b9db7f-2kjtm        1/1     Running     0          20m
+pod/postgres-0                   1/1     Running     0          20m
+pod/trainer-bnxd5                0/1     Completed   3          20m
+
+NAME                TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/ingestion   ClusterIP   10.43.114.208   <none>        8090/TCP   39m
+service/ml-api      ClusterIP   10.43.96.162    <none>        8080/TCP   39m
+service/mlflow      ClusterIP   10.43.227.83    <none>        5000/TCP   39m
+service/mqtt        ClusterIP   10.43.95.50     <none>        1883/TCP   39m
+service/postgres    ClusterIP   None            <none>        5432/TCP   39m
+
+NAME                        READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/ingestion   1/1     1            1           39m
+deployment.apps/ml-api      2/2     2            2           39m
+deployment.apps/mlflow      1/1     1            1           39m
+deployment.apps/mqtt        1/1     1            1           39m
+
+NAME                                   DESIRED   CURRENT   READY   AGE
+replicaset.apps/ingestion-6db6445cdb   1         1         1       39m
+replicaset.apps/ml-api-569845767       2         2         2       66s
+replicaset.apps/ml-api-597dc5899f      0         0         0       2m1s
+replicaset.apps/ml-api-5d47fb6c99      0         0         0       3m1s
+replicaset.apps/ml-api-7494dbb7f9      0         0         0       39m
+replicaset.apps/ml-api-f794d64fc       0         0         0       6m8s
+replicaset.apps/mlflow-7479b4d8b       1         1         1       5m45s
+replicaset.apps/mlflow-7bb79d5f4b      0         0         0       39m
+replicaset.apps/mqtt-7995b9db7f        1         1         1       39m
+
+NAME                        READY   AGE
+statefulset.apps/postgres   1/1     39m
+
+NAME                    SCHEDULE     TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+cronjob.batch/retrain   17 2 * * 0   <none>     False     0        <none>          39m
+
+NAME                STATUS     COMPLETIONS   DURATION   AGE
+job.batch/trainer   Complete   1/1           34m        39m
+
+NAME                                     STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+persistentvolumeclaim/data-postgres-0    Bound    pvc-31bd8c0f-6b2e-4a7c-907e-6fb590087347   5Gi        RWO            local-path     <unset>                 39m
+persistentvolumeclaim/mlflow-artifacts   Bound    pvc-92ad6aec-f2a6-47df-910c-65987d6740a1   5Gi        RWO            local-path     <unset>                 39m
+
+NAME                                      CLASS     HOSTS                                               ADDRESS     PORTS   AGE
+ingress.networking.k8s.io/smartbuilding   traefik   ml.smartbuilding.local,mlflow.smartbuilding.local   192.0.2.2   80      39m
+
+NAME                                                                POD-SELECTOR                       AGE
+networkpolicy.networking.k8s.io/default-deny-ingress                <none>                             39m
+networkpolicy.networking.k8s.io/ingestion-metrics                   app.kubernetes.io/name=ingestion   39m
+networkpolicy.networking.k8s.io/ml-api-from-ingestion-and-ingress   app.kubernetes.io/name=ml-api      39m
+networkpolicy.networking.k8s.io/mlflow-from-ml                      app.kubernetes.io/name=mlflow      39m
+networkpolicy.networking.k8s.io/mqtt-from-anywhere                  app.kubernetes.io/name=mqtt        39m
+networkpolicy.networking.k8s.io/postgres-from-apps                  app.kubernetes.io/name=postgres    39m
+
+NAME                                MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+poddisruptionbudget.policy/ml-api   1               N/A               1                     2m1s
+
+NAME                                      TYPE     DATA   AGE
+secret/smartbuilding-mqtt-42mhdbtdf6      Opaque   3      39m
+secret/smartbuilding-secrets-8tghg9h4tb   Opaque   4      39m
+
+NAME                             DATA   AGE
+configmap/kube-root-ca.crt       1      39m
+configmap/mqtt-config            3      39m
+configmap/postgres-init          1      39m
+configmap/smartbuilding-config   10     39m
+
+$ resources and probes (ml-api)
+requests={"cpu":"100m","memory":"256Mi"} limits={"cpu":"1","memory":"768Mi"}
+readiness=/health/ready liveness=/health/live preStop={"sleep":{"seconds":8}}
+
+$ trainer job log (last 3 lines)
+
+$ through the Traefik ingress
+GET  ml.smartbuilding.local/health -> {"status":"ok","service":"ml-api","version":"1.0.0","model_loaded":true,"model_version":"1","last_error":null}
+POST ml.smartbuilding.local/predict -> {"room_id":null,"occupancy_probability":0.8743,"occupied":true,"threshold":0.5,"model":{"name":"room-occupancy","version":"1","alias":"production","run_id":"899173a3131c45c2a8fa80e3282a6a95"},"inputs_used":{"Temperature":24.2,"Humidity":57.0,"Light":380.0,"HumidityRatio":0.010728,"hour_sin":-0.978148,"hour_cos":-0.207912},"latency_ms":11.355}
+GET  mlflow.smartbuilding.local/health -> OK
+
+$ data flow in the cluster: simulated board -> mqtt service -> ingestion -> postgres (+ ml-api)
+ provenance | count 
+------------+-------
+ simulated  |    45
+(1 row)
+
+ model_version | count | mean_p 
+---------------+-------+--------
+ 1             |    45 |  0.274
+(1 row)
+
+$ availability under disruption (POST /predict every 0.1 s through the ingress)
+first run, no preStop drain: requests ok=508 failed=7 (pod deleted, then rollout restart)
+after adding preStop sleep 8 s + PodDisruptionBudget: requests ok=673 failed=0

@@ -35,7 +35,7 @@ import json
 import os
 import sys
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -43,7 +43,7 @@ import pandas as pd
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from ml.common import (PROCESSED, ROOT as _R, SYNTHETIC, classification_metrics, feature_reference,  # noqa: E402
+from ml.common import (PROCESSED, SYNTHETIC, classification_metrics, feature_reference,  # noqa: E402
                        git_commit, md_table, next_version, rounded, sha256_file, utc_now, versions, write_artifact)
 from ml.features import FEATURE_SETS, UNITS, add_features, matrix                                    # noqa: E402
 from ml.online import pir_features                                                                   # noqa: E402

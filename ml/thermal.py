@@ -30,7 +30,6 @@ Models: ridge regression and histogram gradient-boosted trees on the temperature
 """
 from __future__ import annotations
 
-import glob
 import json
 import os
 import sys
@@ -109,7 +108,7 @@ def twin_frame(names: List[str]) -> pd.DataFrame:
     h = df["timestamp"].dt.hour + df["timestamp"].dt.minute / 60.0
     df["hour_sin"], df["hour_cos"] = np.sin(2 * np.pi * h / 24), np.cos(2 * np.pi * h / 24)
     for k in ("area_m2", "ac_w_per_m3", "window_m2"):
-        df[k] = df["room_id"].map(lambda r: static[r][k])
+        df[k] = df["room_id"].map(lambda r, k=k: static[r][k])
     df["sp_active"] = sp
     for hmin in HORIZONS_MIN:
         df[f"y_true_{hmin}"] = g["t_air_c"].shift(-hmin // 5)            # simulator ground truth

@@ -1,0 +1,39 @@
+# Fresh clone -> docker compose build -> up, new secrets, empty volumes (recorded 2026-11-28 11:58 UTC)
+# Commit 4c3b236; same local stand-in base images as compose-ps.txt.
+
+$ docker compose ps
+SERVICE         STATUS
+alertmanager    Up 2 minutes (healthy)
+board-sim       Up 2 minutes
+cadvisor        Up 2 minutes
+edge-brain      Up 2 minutes (healthy)
+ingestion       Up About a minute (healthy)
+ml-api          Up About a minute (healthy)
+mlflow          Up 2 minutes (healthy)
+mosquitto       Up 2 minutes (healthy)
+node-exporter   Up 2 minutes
+postgres        Up 2 minutes (healthy)
+prometheus      Up 2 minutes (healthy)
+trainer         Exited (0) About a minute ago
+
+$ telemetry and predictions after ~2 min
+ provenance | count 
+------------+-------
+ simulated  |    34
+(1 row)
+
+ model_version | count 
+---------------+-------
+ 1             |    33
+(1 row)
+
+$ trainer (first start: trains, registers, gate)
+{"ts": "2026-11-28T11:56:45.007Z", "level": "INFO", "service": "trainer", "logger": "mlops.train", "msg": "no production model yet: training the first one"}
+{"ts": "2026-11-28T11:56:46.225Z", "level": "INFO", "service": "trainer", "logger": "mlops.train", "msg": "candidate logistic_regression: validation F1 0.9760, balanced accuracy 0.9912"}
+{"ts": "2026-11-28T11:56:47.738Z", "level": "INFO", "service": "trainer", "logger": "mlops.train", "msg": "candidate random_forest: validation F1 0.9773, balanced accuracy 0.9920"}
+{"ts": "2026-11-28T11:56:51.803Z", "level": "INFO", "service": "trainer", "logger": "mlops.train", "msg": "candidate hist_gradient_boosting: validation F1 0.9112, balanced accuracy 0.9779"}
+{"ts": "2026-11-28T11:56:59.894Z", "level": "INFO", "service": "trainer", "logger": "mlops.train", "msg": "registered room-occupancy version 1"}
+{"ts": "2026-11-28T11:57:00.666Z", "level": "INFO", "service": "trainer", "logger": "mlops.promote", "msg": "gate room-occupancy v1: promoted (first production version; acceptance passed)"}
+
+$ python scripts/check_dashboards.py
+78 queries: 65 with data, 13 empty, 0 failures

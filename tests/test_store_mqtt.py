@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from raspberry_pi.mqtt_bridge import MqttBridge, build_command, topic, validate_telemetry
+from raspberry_pi.mqtt_bridge import MqttBridge, topic, validate_telemetry
 from raspberry_pi.store import MIGRATIONS, Store
 from tests.conftest import wait_for
 

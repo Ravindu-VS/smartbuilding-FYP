@@ -1,0 +1,4 @@
+# Telemetry ingestion (ingestion/service.py): MQTT -> PostgreSQL. Python 3.12-3.13.
+paho-mqtt==2.1.0
+psycopg[binary]==3.2.13
+prometheus-client==0.26.0

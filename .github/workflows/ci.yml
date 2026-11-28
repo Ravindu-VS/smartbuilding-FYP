@@ -1,0 +1,232 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  lint:
+    name: Lint (Python, workflows, Dockerfiles, generated dashboards, compose)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "${{ env.PYTHON_VERSION }}"}
+      - run: pip install ruff==0.16.9 pyyaml==6.0.2
+      - name: ruff
+        run: ruff check --output-format github .
+      - name: actionlint
+        run: |
+          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+      - name: hadolint
+        run: |
+          curl -sSL -o hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          chmod +x hadolint && ./hadolint infrastructure/docker/*.Dockerfile
+      - name: Grafana dashboards match their generator
+        run: python monitoring/grafana/build_dashboards.py && git diff --exit-code monitoring/grafana/dashboards
+      - name: docker compose config
+        run: cp .env.example .env && docker compose config --quiet
+
+  unit:
+    name: Unit tests (Python ${{ matrix.python }})
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements/*.txt
+      - run: pip install -r requirements/dev.txt -r requirements/mlops.txt -r requirements/serving.txt -r requirements/ingestion.txt httpx
+      - name: pytest (everything except the minutes-long simulations and the database tests)
+        run: python -m pytest -m "not slow" -p no:cacheprovider --junitxml=junit-unit.xml -q
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: "junit-unit-${{ matrix.python }}", path: junit-unit.xml}
+
+  integration:
+    name: Integration tests (PostgreSQL, MQTT broker, MLflow, ML API)
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: {POSTGRES_USER: sbtest, POSTGRES_PASSWORD: sbtest-ci-only, POSTGRES_DB: sbtest}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sbtest" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://sbtest:sbtest-ci-only@127.0.0.1:5432/sbtest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements/*.txt
+      - run: pip install -r requirements/dev.txt -r requirements/mlops.txt -r requirements/serving.txt -r requirements/ingestion.txt httpx
+      - name: MQTT -> ingestion -> PostgreSQL, model API -> backend, MLflow registry, broker reconnect
+        run: >
+          python -m pytest -p no:cacheprovider --junitxml=junit-integration.xml -q
+          tests/test_ingestion.py tests/test_ml_api.py tests/test_mlops.py tests/test_store_mqtt.py
+          tests/test_observability.py tests/test_backup.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: junit-integration, path: junit-integration.xml}
+
+  config:
+    name: Validate Prometheus, Alertmanager, Kubernetes and Terraform
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: promtool and amtool
+        run: |
+          docker run --rm --entrypoint promtool -v "$PWD/monitoring/prometheus:/etc/prometheus:ro" prom/prometheus:v3.5.0 check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint amtool -v "$PWD/monitoring/alertmanager:/a:ro" prom/alertmanager:v0.28.1 check-config /a/alertmanager.yml
+      - name: kustomize render + kubeconform (local and azure overlays)
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
+          for o in local azure; do
+            cp infrastructure/kubernetes/secrets.env.example infrastructure/kubernetes/overlays/$o/secrets.env
+            cp infrastructure/kubernetes/mqtt.env.example infrastructure/kubernetes/overlays/$o/mqtt.env
+            kubectl kustomize infrastructure/kubernetes/overlays/$o > /tmp/$o.yaml
+            ./kubeconform -strict -summary -kubernetes-version 1.33.0 /tmp/$o.yaml
+          done
+      - uses: hashicorp/setup-terraform@v3
+        with: {terraform_version: "1.13.3"}
+      - name: terraform fmt + validate
+        working-directory: infrastructure/terraform/azure
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+
+  stack:
+    name: Build images, run the stack end to end, scan, deploy to Kubernetes, push
+    needs: [unit, integration, config]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space on the runner
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+      - name: Image names and stack secrets (random per run, never printed)
+        run: |
+          echo "REGISTRY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/smartbuilding" >> "$GITHUB_ENV"
+          echo "TAG=${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          cp .env.example .env
+          for k in POSTGRES_PASSWORD MLFLOW_DB_PASSWORD INGEST_DB_PASSWORD GRAFANA_DB_PASSWORD MQTT_EDGE_PASSWORD \
+                   MQTT_DEVICE_PASSWORD MQTT_INGEST_PASSWORD GRAFANA_ADMIN_PASSWORD ML_ADMIN_TOKEN; do
+            v=$(openssl rand -hex 16); echo "::add-mask::$v"; sed -i "s|^$k=.*|$k=$v|" .env
+          done
+          sed -i "s|^REGISTRY=.*|REGISTRY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/smartbuilding|; s|^TAG=.*|TAG=${GITHUB_SHA::12}|" .env
+          echo "GIT_COMMIT=${GITHUB_SHA::12}" >> .env
+      - name: docker compose build
+        run: docker compose build
+      - name: docker compose up (all profiles)
+        run: |
+          docker compose up -d
+          for _ in $(seq 1 60); do
+            unhealthy=$(docker compose ps --format '{{.Service}} {{.Status}}' | grep -E "health: starting|unhealthy" || true)
+            [ -z "$unhealthy" ] && break; sleep 5
+          done
+          docker compose ps
+          test -z "$(docker compose ps --format '{{.Service}} {{.Status}}' | grep -E 'unhealthy|starting')"
+      - name: End to end - board -> MQTT -> edge brain + ingestion -> PostgreSQL -> ML API -> Prometheus
+        run: |
+          sleep 60
+          pip install pyyaml==6.0.2 >/dev/null
+          P() { docker compose exec -T postgres psql -U sbadmin -d smartbuilding -tAc "$1"; }
+          rows=$(P "SELECT count(*) FROM telemetry"); preds=$(P "SELECT count(*) FROM predictions")
+          echo "telemetry rows: $rows, predictions: $preds"; test "$rows" -gt 5 && test "$preds" -gt 5
+          curl -fsS localhost:8001/health | python -c "import json,sys; h=json.load(sys.stdin)['hardware']; print(h); assert h['connected']"
+          curl -fsS -X POST localhost:8080/predict -H 'Content-Type: application/json' -d '{"temperature":24,"humidity":55,"lux":400}'
+          python scripts/check_dashboards.py --prometheus http://localhost:9090
+          curl -fsS -u "admin:$(grep ^GRAFANA_ADMIN_PASSWORD= .env | cut -d= -f2)" "localhost:3000/api/search?query=Smart%20Building" \
+            | python -c "import json,sys; d=json.load(sys.stdin); print([x['title'] for x in d]); assert len(d) >= 5"
+          curl -fsS -u "admin:$(grep ^GRAFANA_ADMIN_PASSWORD= .env | cut -d= -f2)" localhost:3000/api/datasources/uid/prometheus/health
+      - name: Failure and recovery
+        run: OUTAGE_S=90 sh scripts/chaos/recovery_test.sh
+      - name: Backup and restore
+        run: sh scripts/backup/test_restore.sh
+      - name: Logs (structured JSON)
+        if: always()
+        run: docker compose logs --no-color --tail 40 > compose-logs.txt; docker compose ps -a
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: compose-logs, path: compose-logs.txt}
+      - name: Image scan (Trivy, report)
+        run: |
+          for s in edge-brain ml-api ingestion trainer mlflow; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.65.0 image --quiet \
+              --severity CRITICAL,HIGH --ignore-unfixed --format table "$REGISTRY/$s:$TAG" | tee -a trivy.txt
+          done
+      - uses: actions/upload-artifact@v4
+        with: {name: trivy-report, path: trivy.txt}
+      - name: docker compose down
+        if: always()
+        run: docker compose down -v
+      - name: Kubernetes deployment (kind) and health check
+        uses: helm/kind-action@v1
+        with: {cluster_name: sb-ci, version: v0.29.0}
+      - name: kubectl apply + rollout + /predict
+        run: |
+          for s in mlflow trainer ml-api ingestion; do kind load docker-image "$REGISTRY/$s:$TAG" --name sb-ci; done
+          o=infrastructure/kubernetes/overlays/local
+          r() { openssl rand -hex 16; }
+          printf 'POSTGRES_PASSWORD=%s\nMLFLOW_DB_PASSWORD=%s\nINGEST_DB_PASSWORD=%s\nML_ADMIN_TOKEN=%s\n' "$(r)" "$(r)" "$(r)" "$(r)" > "$o/secrets.env"
+          printf 'MQTT_EDGE_PASSWORD=%s\nMQTT_DEVICE_PASSWORD=%s\nMQTT_INGEST_PASSWORD=%s\n' "$(r)" "$(r)" "$(r)" > "$o/mqtt.env"
+          mkdir -p /tmp/ci-overlay && cat > /tmp/ci-overlay/kustomization.yaml <<YAML
+          apiVersion: kustomize.config.k8s.io/v1beta1
+          kind: Kustomization
+          resources: [$(realpath --relative-to=/tmp/ci-overlay $o)]
+          images:
+            - {name: local/sb/mlflow, newName: $REGISTRY/mlflow, newTag: "$TAG"}
+            - {name: local/sb/trainer, newName: $REGISTRY/trainer, newTag: "$TAG"}
+            - {name: local/sb/ml-api, newName: $REGISTRY/ml-api, newTag: "$TAG"}
+            - {name: local/sb/ingestion, newName: $REGISTRY/ingestion, newTag: "$TAG"}
+          YAML
+          kubectl kustomize --load-restrictor LoadRestrictionsNone /tmp/ci-overlay | kubectl apply -f -
+          kubectl -n smartbuilding rollout status statefulset/postgres --timeout=300s
+          kubectl -n smartbuilding wait --for=condition=complete job/trainer --timeout=600s
+          kubectl -n smartbuilding rollout status deploy/ml-api --timeout=300s
+          kubectl -n smartbuilding rollout status deploy/ingestion --timeout=300s
+          kubectl -n smartbuilding get pods
+          kubectl -n smartbuilding port-forward svc/ml-api 18080:8080 & sleep 5
+          curl -fsS localhost:18080/health/ready
+          curl -fsS -X POST localhost:18080/predict -H 'Content-Type: application/json' -d '{"temperature":24,"humidity":55,"lux":400}'
+      - name: Push images to GHCR (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          for s in edge-brain ml-api ingestion trainer mlflow; do
+            docker push "$REGISTRY/$s:$TAG"
+            docker tag "$REGISTRY/$s:$TAG" "$REGISTRY/$s:latest" && docker push "$REGISTRY/$s:latest"
+          done
+          { echo "### Images pushed"; for s in edge-brain ml-api ingestion trainer mlflow; do echo "- \`$REGISTRY/$s:$TAG\`"; done; } >> "$GITHUB_STEP_SUMMARY"

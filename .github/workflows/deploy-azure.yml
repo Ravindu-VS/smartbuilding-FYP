@@ -1,0 +1,52 @@
+name: Deploy to Azure
+
+# Manual, gated: runs only when the repository variable AZURE_DEPLOY_ENABLED is "true" and the "production"
+# environment's reviewers approve. Needs: OIDC federated credential (secrets AZURE_CLIENT_ID, AZURE_TENANT_ID,
+# AZURE_SUBSCRIPTION_ID), the VM's SSH key (secret VM_SSH_KEY) and address (variable VM_HOST), ACR name (variable ACR_NAME).
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to deploy (git SHA, 12 characters, from a green CI run)
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+jobs:
+  deploy:
+    if: vars.AZURE_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Copy the images from GHCR to Azure Container Registry
+        env:
+          TAG: ${{ inputs.tag }}
+          ACR: ${{ vars.ACR_NAME }}
+        run: |
+          src="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/smartbuilding"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          az acr login --name "$ACR"
+          for s in edge-brain ml-api ingestion trainer mlflow; do
+            docker pull "$src/$s:$TAG"
+            docker tag "$src/$s:$TAG" "$ACR.azurecr.io/smartbuilding/$s:$TAG"
+            docker push "$ACR.azurecr.io/smartbuilding/$s:$TAG"
+          done
+      - name: Deploy on the VM and check health
+        env:
+          TAG: ${{ inputs.tag }}
+          VM_HOST: ${{ vars.VM_HOST }}
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          install -m 600 /dev/null key && printf '%s\n' "$VM_SSH_KEY" > key
+          ssh -i key -o StrictHostKeyChecking=accept-new "sbadmin@$VM_HOST" "sudo sb-env-from-keyvault && sb-deploy $TAG"
+          ssh -i key "sbadmin@$VM_HOST" 'for i in $(seq 1 40); do curl -fsS localhost:8080/health/ready && exit 0; sleep 5; done; exit 1'
+          rm -f key

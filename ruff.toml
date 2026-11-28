@@ -1,0 +1,13 @@
+# Lint settings used by CI (.github/workflows/ci.yml) and locally:  ruff check .
+target-version = "py311"
+line-length = 120
+extend-exclude = ["dashboard", "dashboard_dist", "Dataset", "output", "models", "archive", "thesis"]
+
+[lint]
+# syntax errors (E9), pyflakes (F) and likely bugs (B). Style rules (E4/E7: several statements per line,
+# imports after sys.path set-up) are not enforced on the existing research code.
+select = ["E9", "F", "B"]
+ignore = ["B007", "B008", "B019", "B904", "B905"]
+
+[lint.per-file-ignores]
+"tests/**" = ["B011", "B017"]
