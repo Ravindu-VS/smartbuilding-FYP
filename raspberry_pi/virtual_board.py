@@ -178,8 +178,8 @@ class VirtualBoard:
     # reference concentration; the edge brain does not know it and finds its own by baseline calibration.
     MQ_VCC_MV, MQ_RL_KOHM, MQ_DIVIDER, MQ_R0_KOHM = 5000.0, 1.0, 25.0 / 15.0, 12.0
     MQ_DO_THRESHOLD_PPM = 1000.0  # module comparator (potentiometer); DO is HIGH below it
-    # 12 V fan branch (INA219, 0.1 ohm shunt) after the 1N5822 and the fuse
-    RAIL_V, FAN_MA = 11.7, 150.0
+    # 12 V fan branch (INA219, 0.1 ohm shunt) fed by the MT3608 boost set to 12.0 V (power bank, rev F)
+    RAIL_V, FAN_MA = 12.0, 150.0
 
     def __init__(self, source, seed: int = 1, interval_s: float = 3.0, drop: Optional[List[str]] = None,
                  sensor_model: Optional[Dict[str, float]] = None, profile: str = "room101",

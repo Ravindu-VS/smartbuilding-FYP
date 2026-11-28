@@ -55,11 +55,13 @@
 //   14/15/16 J1-20/8/9   status LED R/G/B through 150/68/68 ohm, long leg (-) to GND
 //   48     J3-16         onboard RGB LED of the DevKitC-1 v1.0 (no wire): Wi-Fi/MQTT link state
 // I2C addresses: INA219 0x40, BME280 0x76, BH1750 0x23 (ADDR to GND), OLED SSD1306 0x3C (JMD0.96A-2: GND VCC SCL SDA)
-// Power: 12 V in -> F1 1 A -> D1 1N5822 -> C1 470 uF -> LM2596 (5.0 V) -> C2 470 uF = +5 V rail
-//        +5 V rail -> relay VCC, PIR VCC, MQ-135 VCC, and D3 1N5819 -> ESP32 5V pin (J1-21, C3 100 nF to GND)
+// Power (rev F): power bank PB1 Baseus PPADM205 (2 x USB-A, 5 V 3 A total with two ports in use)
+//        PB1 USB 1 -> J1 USB-A plug (VBUS, GND; D-/D+ open) -> F1 PTC 1.6 A -> +5 V rail (C1 470 uF 25 V)
+//        +5 V rail -> relay VCC, PIR VCC, MQ-135 VCC, U1 MT3608 VIN+, and D3 1N5819 -> ESP32 5V pin (J1-21, C3 100 nF)
+//        U1 MT3608 boost set to 12.0 V -> C2 470 uF 25 V = +12 V fan branch
 //        ESP32 3V3 (J1-1) -> INA219, BME280, BH1750, OLED VCC
-// Raspberry Pi 4B: no wire to this board (Wi-Fi/MQTT + Bluetooth LE), own 5.1 V 3 A USB-C supply
-// Fan branch: +12 V (after D1) -> INA219 VIN+ -> VIN- -> relay COM -> NO -> fan + ; fan - -> GND; D2 1N4007 across the fan
+// Raspberry Pi 4B: no wire to this board (Wi-Fi/MQTT + Bluetooth LE), powered from PB1 USB 2 (USB-A to USB-C, 3 A)
+// Fan branch: +12 V (U1 VOUT+) -> INA219 VIN+ -> VIN- -> relay COM -> NO -> fan + ; fan - -> GND; D2 1N4007 across the fan
 // ===================================================================================================
 #define PIN_SDA 9
 #define INA219_SAMPLES 16

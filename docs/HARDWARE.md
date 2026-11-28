@@ -88,7 +88,7 @@ rooms are unchanged (their controller is not affected).
    current-limiting resistors, so install one series resistor (220-330 ohm) on each R/G/B channel before
    connecting it to the ESP32. Confirm the RGB polarity and relay active level before actuator tests;
    firmware polarity flags are configuration, not proof. The INA219 logic VCC is not connected to the
-   12 V fan supply. Verify the fused fan path with a meter before energizing it.
+   12 V fan supply. Set the MT3608 boost to 12.0 V with a meter before connecting the fan branch.
 5. Compile and flash the production `.ino` in Arduino IDE; Serial Monitor is 115200 baud. After flashing,
    record the boot log, sensor presence, Wi-Fi IP/RSSI and MQTT connection. A verified flash and valid
    telemetry do not prove that physical actuator wiring works.
@@ -162,7 +162,7 @@ Full circuit with every module's printed pin order and the exact header position
 | MQ-135 AO / DO | raw environmental response / comparator output | AO → R1 10k → GPIO 1 (J3-4), R2 15k to GND / DO → R3 10k → GPIO 2 (J3-5), R4 22k to GND |
 | HC-SR501 PIR | motion (VCC 5 V, OUT 3.3 V) | OUT → GPIO 4 (J1-4) |
 | 5 V relay module (low-level trigger) | fan switching | GPIO 10 (J1-16) → R5 1k → BC547 Q1 base, R6 10k base to GND; Q1 collector → relay IN, emitter → GND. GPIO 10 HIGH = fan ON |
-| 12 V two-wire fan | load, switched by relay | relay contacts; fused 12 V branch |
+| 12 V two-wire fan | load, switched by relay | relay contacts; 12 V from the MT3608 boost |
 | Light LED (HW-478 RGB) | the AI's lighting decision, PWM white OFF / DIM / ON | R 6 / G 7 / B 5 through 150 / 68 / 68 ohm; common (-) to GND |
 | AC indicator RGB LED | what the AC would do: ECO green, LOW cyan, COOL blue, MAX magenta | R 11 / G 12 / B 13 through 150 / 68 / 68 ohm (on/off, no PWM) |
 | Status RGB LED | AI blue, schedule green, manual yellow, warning red, test white; blinking red = no controller | R 14 / G 15 / B 16 through 150 / 68 / 68 ohm (on/off, no PWM) |
@@ -181,8 +181,21 @@ colours on/off because the S3 has 8 LEDC channels and the light LED uses three f
 status topic now also carries `detail`: booting (first 60 s), running, or error with `failed` sensors.
 Pin numbers differ from the requirements document (SDA 8 / SCL 9, RGB 5/6/7); the owner chose to keep the
 wired and tested board as the reference (23 Nov 2026). The full wiring page with the INA219/relay/fan branch
-is `docs/wiring/room101-wiring.html` (final circuit with the OLED, D1 1N5822 reverse-polarity diode, C1/C2 470 uF,
-C3 100 nF, LED resistors red 150 ohm / green and blue 68 ohm; PNG: `docs/wiring/room101-final-circuit.png`).
+is `docs/wiring/room101-wiring.html` (final circuit with the OLED, C1/C2 470 uF, C3 100 nF, LED resistors red 150 ohm /
+green and blue 68 ohm, parts list with part numbers; PNG: `docs/wiring/room101-final-circuit.png`).
+
+Power (revision F, 28 Nov 2026): the whole system runs from one Baseus Adaman Metal 22.5 W 20000 mAh power bank
+(PPADM205). With two ports in use it gives 5 V and 3 A in total, so everything runs at 5 V:
+
+| Bank port | Goes to | Load |
+|---|---|---|
+| USB 1 (A) | J1 USB-A plug (VBUS, GND; D-/D+ open) -> F1 PTC 1.6 A -> +5 V rail (C1 470 uF) | ESP32 via D3, MQ-135, PIR, relay, MT3608 boost (12.0 V, C2 470 uF) -> INA219 -> relay -> fan; ~0.4 A typical, ~1.3 A peak |
+| USB 2 (A) | USB-A to USB-C cable (3 A, <= 1 m) -> Raspberry Pi 4B | ~0.6 A typical, ~1.3 A busy |
+| USB-C | recharging the bank only, not during a demo | - |
+
+The 12 V adapter, D1 1N5822 and the LM2596 are no longer used. Plug both cables in before pressing the bank's
+button (a running bank may reset its outputs when a second device is connected), and check
+`vcgencmd get_throttled` on the Pi reads `0x0`. Runtime is about 7-8 h at the typical load.
 Firmware `room101-2026.11.24` (OLED energy page; relay driven through Q1, GPIO 10 active-HIGH); a missing OLED is probed again every 30 s like the sensors.
 
 ## Data path (sensor to twin)
